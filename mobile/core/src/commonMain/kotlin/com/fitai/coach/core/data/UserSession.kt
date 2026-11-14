@@ -35,6 +35,7 @@ public class UserSession internal constructor(
     public val coach: CoachRepository = CoachRepository(api)
     public val nutrition: NutritionRepository = NutritionRepository(api, cache)
     public val analytics: AnalyticsRepository = AnalyticsRepository(api, cache)
+    public val mafTests: MafTestRepository = MafTestRepository(api, cache)
     public val account: AccountRepository = AccountRepository(api, cache)
     public val athleteCard: AthleteCardRepository = AthleteCardRepository(api, cache)
     public val recycleBin: RecycleBinRepository = RecycleBinRepository(api, cache)

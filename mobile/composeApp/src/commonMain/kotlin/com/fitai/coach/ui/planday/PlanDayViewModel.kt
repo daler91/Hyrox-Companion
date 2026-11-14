@@ -325,8 +325,11 @@ class PlanDayViewModel(private val session: UserSession, private val entryId: St
 }
 
 /** What reading text or a photo into sets found: "Found 6 sets", or that it found none. */
-fun parseResult(result: PlanDayReparseResponse): String = when {
-    !result.saved || result.setCount == 0L -> "No sets found in that"
-    result.setCount == 1L -> "Found 1 set"
-    else -> "Found ${result.setCount} sets"
+fun parseResult(result: PlanDayReparseResponse): String = parseResult(result.saved, result.setCount)
+
+/** The same for any read: a plan day's or a logged workout's. */
+fun parseResult(saved: Boolean, setCount: Long): String = when {
+    !saved || setCount == 0L -> "No sets found in that"
+    setCount == 1L -> "Found 1 set"
+    else -> "Found $setCount sets"
 }

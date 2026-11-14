@@ -221,3 +221,11 @@ private const val METERS_PER_KM = 1000.0
 private const val SECONDS_PER_MINUTE = 60
 private const val SECONDS_PER_HOUR = 3600.0
 private const val TENTHS = 10.0
+
+/**
+ * Whether the workout has text to read into sets: the server reads its
+ * prescription, else what was written as its description.
+ */
+fun hasReadableText(workout: WorkoutLogDetail): Boolean =
+    (workout.prescribedMainWorkout ?: workout.mainWorkout).isNotBlank() ||
+        !(workout.prescribedAccessory ?: workout.accessory).isNullOrBlank()

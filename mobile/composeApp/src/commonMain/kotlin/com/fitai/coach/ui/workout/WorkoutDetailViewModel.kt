@@ -11,11 +11,14 @@ import com.fitai.coach.core.api.generated.SessionGrade
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.api.generated.UpdateWorkoutRequest
 import com.fitai.coach.core.api.generated.WorkoutLogDetail
+import com.fitai.coach.core.api.generated.WorkoutReparseResponse
+import com.fitai.coach.core.data.EncodedImage
 import com.fitai.coach.core.data.SyncEvent
 import com.fitai.coach.core.data.UserSession
 import com.fitai.coach.core.exercises.NextTarget
 import com.fitai.coach.core.exercises.generated.EXERCISE_DEFINITIONS
 import com.fitai.coach.ui.format.userMessage
+import com.fitai.coach.ui.planday.parseResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -50,6 +53,12 @@ data class WorkoutDetailState(
     val fuelling: GetNutritionSessionFuellingByWorkoutIdResponse? = null,
     /** The fuelling panel shows: loaded, or loading. It hides when it can't load (nutrition off, offline with nothing kept). */
     val showsFuelling: Boolean = false,
+    /** Its text or a photo is being read into sets. */
+    val parsing: Boolean = false,
+    /** The MAF test row; null when it doesn't show (not a MAF athlete). */
+    val maf: MafTag? = null,
+    /** A MAF tag, correction or removal is in flight. */
+    val mafSaving: Boolean = false,
 ) {
     /** The plan day it counts towards, when the timeline has it. */
     val linkedPlanDay: PlanDayOption? get() = workout?.planDayId?.let { id -> planDayOptions.firstOrNull { it.planDayId == id } }
@@ -96,15 +105,20 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
     val messages: Flow<String> = toasts.receiveAsFlow()
 
     private val fuellingLoading = MutableStateFlow(false)
-    private val fuelling = combine(session.nutrition.fuelling.aroundWorkout(workoutId), fuellingLoading, ::Pair)
+    private val panels = combine(
+        session.nutrition.fuelling.aroundWorkout(workoutId),
+        fuellingLoading,
+        session.preferences.preferences,
+        session.mafTests.tests,
+    ) { around, aroundLoading, prefs, tests -> Panels(around, aroundLoading, mafTag(prefs, tests, workoutId)) }
 
     val state: StateFlow<WorkoutDetailState> = combine(
         session.workouts.workout(workoutId),
         session.timeline.entries,
         status,
         extras,
-        fuelling,
-    ) { workout, entries, current, more, (around, aroundLoading) ->
+        panels,
+    ) { workout, entries, current, more, panel ->
         WorkoutDetailState(
             workout = workout,
             loading = workout == null && current.loading,
@@ -114,8 +128,11 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
             histories = more.histories,
             busy = more.busy,
             planDayOptions = workout?.let { planDayOptions(entries, it.date, linked = it.planDayId) }.orEmpty(),
-            fuelling = around,
-            showsFuelling = around != null || aroundLoading,
+            fuelling = panel.around,
+            showsFuelling = panel.around != null || panel.aroundLoading,
+            parsing = more.parsing,
+            maf = panel.maf,
+            mafSaving = more.mafSaving,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), WorkoutDetailState())
 
@@ -134,6 +151,17 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
                 .map { workout -> workout?.exerciseSets?.map { it.exerciseName }?.distinct().orEmpty() }
                 .distinctUntilChanged()
                 .collect { names -> names.filter { it != CUSTOM_EXERCISE && requestedHistory.add(it) }.forEach { loadHistory(it) } }
+        }
+        // Whether the run is tagged, once the athlete is one the MAF row shows for.
+        viewModelScope.launch {
+            session.preferences.preferences.first(::isMafAthlete)
+            try {
+                session.mafTests.refresh()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // The row reads the kept list.
+            }
         }
     }
 
@@ -288,6 +316,40 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
         }
     }
 
+    /** Reads the workout's text into sets, replacing the ones it has. */
+    fun parseText() = parse("Couldn't read that into sets") { session.workouts.reparse(workoutId) }
+
+    /** Reads a photo of the session into sets, replacing the ones it has. */
+    fun parsePhoto(photo: EncodedImage) =
+        parse("Couldn't read that photo — try a clearer shot.") { session.workouts.reparseFromImage(workoutId, photo) }
+
+    /** Tags the run as a MAF test, or corrects the tag it has, from [form]; [onSaved] closes the form. */
+    fun saveMaf(form: MafForm, distanceUnit: String?, onSaved: () -> Unit) {
+        val tagged = state.value.maf?.tagged ?: return
+        val metrics = form.metrics(distanceUnit)
+        mafWrite(if (tagged) "Couldn't update MAF test" else "Couldn't tag as MAF test") {
+            if (tagged) session.mafTests.update(workoutId, metrics) else session.mafTests.tag(workoutId, metrics)
+            toasts.send(if (tagged) "Updated MAF test" else "Tagged as MAF test")
+            onSaved()
+        }
+    }
+
+    /** Takes the run out of the MAF trend, its compliance score too. */
+    fun untagMaf() = mafWrite("Couldn't remove MAF test") {
+        session.mafTests.untag(workoutId)
+        toasts.send("Removed from MAF trend")
+    }
+
+    /** A read replaces every set, so it waits for, and holds off, anything else that changes them. */
+    private fun parse(failure: String, read: suspend () -> WorkoutReparseResponse) =
+        oneAtATime(failure, running = { it.busy }, mark = { copy(busy = it, parsing = it) }) {
+            val result = read()
+            toasts.send(parseResult(result.saved, result.setCount))
+        }
+
+    private fun mafWrite(failure: String, block: suspend () -> Unit) =
+        oneAtATime(failure, running = { it.mafSaving }, mark = { copy(mafSaving = it) }, block)
+
     /** Only a workout that completed a plan day is graded. */
     private fun loadGrade() {
         viewModelScope.launch {
@@ -310,9 +372,13 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
     }
 
     /** Runs a write that must reach the server (it answers with ids); one at a time. */
-    private fun online(failure: String, block: suspend () -> Unit) {
-        if (extras.value.busy) return
-        extras.update { it.copy(busy = true) }
+    private fun online(failure: String, block: suspend () -> Unit) =
+        oneAtATime(failure, running = { it.busy }, mark = { copy(busy = it) }, block)
+
+    /** Runs [block] unless [running] says one is already; [mark] flags it while it runs. */
+    private fun oneAtATime(failure: String, running: (Extras) -> Boolean, mark: Extras.(Boolean) -> Extras, block: suspend () -> Unit) {
+        if (running(extras.value)) return
+        extras.update { it.mark(true) }
         viewModelScope.launch {
             try {
                 block()
@@ -321,7 +387,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
             } catch (e: Exception) {
                 toasts.send(e.userMessage(failure))
             } finally {
-                extras.update { it.copy(busy = false) }
+                extras.update { it.mark(false) }
             }
         }
     }
@@ -344,6 +410,14 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
         val grade: SessionGrade? = null,
         val histories: Map<String, ExerciseHistory> = emptyMap(),
         val busy: Boolean = false,
+        val parsing: Boolean = false,
+        val mafSaving: Boolean = false,
+    )
+
+    private data class Panels(
+        val around: GetNutritionSessionFuellingByWorkoutIdResponse?,
+        val aroundLoading: Boolean,
+        val maf: MafTag?,
     )
 
     private companion object {
