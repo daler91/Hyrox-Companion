@@ -175,8 +175,9 @@ private fun GoalSheet(plan: TrainingPlan, onSave: (String) -> Unit, onDismiss: (
     }
 }
 
+/** Picks the plan's start date; also opened from the empty timeline. */
 @Composable
-private fun ScheduleSheet(plan: TrainingPlan, today: String, onSchedule: (String) -> Unit, onDismiss: () -> Unit) {
+fun ScheduleSheet(plan: TrainingPlan, today: String, onSchedule: (String) -> Unit, onDismiss: () -> Unit) {
     var startDate by remember(plan.id) { mutableStateOf(plan.startDate ?: nextPlanStartDate(today)) }
     ToolSheet("Schedule your training plan", onDismiss) {
         Text(

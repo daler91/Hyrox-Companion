@@ -66,7 +66,10 @@ private fun EntrySummary(entry: TimelineEntry, dayLabel: String) {
     Text(entry.focus, style = type.h2, color = colors.text, modifier = Modifier.semantics { heading() })
     if (entry.mainWorkout.isNotBlank()) Text(entry.mainWorkout, style = type.body, color = colors.text)
     entry.accessory?.takeIf { it.isNotBlank() }?.let { Labelled("Accessory", it) }
-    entry.notes?.takeIf { it.isNotBlank() }?.let { Labelled("Notes", it) }
+    coachNotesOf(entry)?.let { notes ->
+        notes.athleteText.takeIf { it.isNotBlank() }?.let { Labelled("Notes", it) }
+        if (notes.cues.isNotEmpty()) CoachCues(notes.cues)
+    }
     entry.aiRationale?.takeIf { it.isNotBlank() }?.let { CoachNote(entry, it) }
 }
 

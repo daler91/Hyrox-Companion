@@ -585,6 +585,25 @@ function registerTimelineEntry(registry: OpenAPIRegistry, entities: EntityCompon
           "On upcoming planned days: the duration and effort the prescription implies, personalised by the athlete's recent run pace. What a fuelling target uses when the athlete hasn't set expectedDurationMin or expectedRpe. Not AI-refined; GET /api/v1/nutrition/planned-session-estimate/{planDayId} is.",
       }),
   );
+  const TimelineCoachNotes = registry.register(
+    "TimelineCoachNotes",
+    z
+      .object({
+        athleteText: z.string().openapi({ description: "What the athlete (or their plan) wrote, without the coach's cues; empty when the notes are only cues" }),
+        cues: z
+          .array(
+            z.object({
+              label: z.string().nullable().openapi({ description: "A short leading label, e.g. \"Pacing\", for the card to emphasise; null without one" }),
+              text: z.string().openapi({ description: "The cue, after its label" }),
+            }),
+          )
+          .openapi({ description: "The coach's cues, oldest first, each once and on one line" }),
+      })
+      .openapi({
+        description:
+          "On entries with notes: `notes` split as the web's timeline card shows it (shared/coachNotes.ts parseCoachNotes and splitCoachCueLabel). The coach appends one `[AI Coach]` line per cue; repeats are dropped and a newer load-governor cue replaces an older one.",
+      }),
+  );
   const omittedOtherwise = (text: string) => z.literal(true).optional().openapi({ description: `${text}; omitted otherwise` });
 
   return registry.register(
@@ -654,6 +673,7 @@ function registerTimelineEntry(registry: OpenAPIRegistry, entities: EntityCompon
         exerciseSets: z.array(TimelineExerciseSet).optional().openapi({ description: "The log's sets, or the plan day's prescription; empty on a race-derived day" }),
         structureBlocks: z.array(TimelineStructureBlock).optional(),
         sessionEstimate: TimelineSessionEstimate.optional(),
+        coachNotes: TimelineCoachNotes.optional(),
       })
       .openapi({
         description:

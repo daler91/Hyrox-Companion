@@ -26,6 +26,7 @@ import com.fitai.coach.ui.fuelling.EstimateResult
 import com.fitai.coach.ui.fuelling.then
 import com.fitai.coach.ui.review.ReviewPrompt
 import com.fitai.coach.ui.review.reviewPrompt
+import com.fitai.coach.ui.workout.isMafAthlete
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -75,7 +76,20 @@ data class TimelineUiState(
     val bodyweightKg: Double? = null,
     /** Picking workouts to delete together; null when not picking. */
     val selection: Selection? = null,
+    /** The plan days and workouts with changes still to send: their cards say "Pending sync". */
+    val pending: Set<String> = emptySet(),
+    /** The athlete's MAF ceiling, shown on planned runs; null unless they train the MAF method. */
+    val mafCeiling: Int? = null,
+    /** Setting a start date, after the template plan was created (or from the empty timeline). */
+    val planStart: PlanStart = PlanStart(),
 )
+
+/** Starting a plan from the empty timeline: the template being created, and the plan whose start date is being set. */
+data class PlanStart(val creatingSample: Boolean = false, val schedulingPlanId: String? = null)
+
+/** Whether a card's plan day or workout has changes still to send. */
+fun TimelineUiState.isPending(entry: TimelineEntry): Boolean =
+    entry.planDayId?.let { it in pending } == true || entry.workoutLogId?.let { it in pending } == true
 
 /** The recovery sheet for a missed day: loading, the options, or why they couldn't load. */
 sealed interface RecoveryState {
@@ -102,6 +116,7 @@ class TimelineViewModel(
     private val status = MutableStateFlow(RefreshStatus())
     private val filter = MutableStateFlow(Filter())
     private val selection = MutableStateFlow<Selection?>(null)
+    private val planStart = MutableStateFlow(PlanStart())
     private val toasts = Channel<String>(Channel.BUFFERED)
     private val undoOffers = Channel<UndoOffer>(Channel.BUFFERED)
 
@@ -132,8 +147,9 @@ class TimelineViewModel(
         combine(timeline.plans, timeline.weekSummary, ::Pair),
         session.preferences.preferences,
         combine(selectedPlan, expanded, filter, timeline.olderCursor, ::Shown),
-        combine(status, selection, ::Pair),
-    ) { (entries, more, fuelling), (plans, summary), prefs, shown, (refresh, picking) ->
+        combine(status, selection, session.sync.pendingIds, planStart, ::Activity),
+    ) { (entries, more, fuelling), (plans, summary), prefs, shown, activity ->
+        val (refresh, picking) = activity
         val today = todayIn(prefs?.userTimezone)
         TimelineUiState(
             loaded = true,
@@ -162,6 +178,9 @@ class TimelineViewModel(
             fuelling = fuelling,
             bodyweightKg = prefs?.bodyweightKg,
             selection = picking,
+            pending = activity.pending,
+            mafCeiling = prefs?.takeIf(::isMafAthlete)?.mafHr,
+            planStart = activity.planStart,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), TimelineUiState())
 
@@ -414,10 +433,34 @@ class TimelineViewModel(
 
     /** Lays the plan out from [startDate] and shows it. */
     fun schedulePlan(planId: String, startDate: String) = act("Couldn't schedule the plan") {
+        planStart.update { it.copy(schedulingPlanId = null) }
         session.plans.schedule(planId, startDate)
         selectedPlan.value = planId
         toasts.send("Training plan scheduled")
     }
+
+    /** "Use 8-week template": creates the template plan, then asks for its start date (usePlanImport's samplePlanMutation). */
+    fun useSamplePlan() {
+        if (planStart.value.creatingSample) return
+        planStart.value = PlanStart(creatingSample = true)
+        viewModelScope.launch {
+            try {
+                val planId = session.plans.createSample()
+                planStart.value = PlanStart(schedulingPlanId = planId)
+                toasts.send("Sample plan created! Now set a start date.")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                planStart.value = PlanStart()
+                toasts.send(e.userMessage("Couldn't create the sample plan"))
+            }
+        }
+    }
+
+    /** Opens the start-date sheet for [planId] (the empty timeline's "Set start date"). */
+    fun startScheduling(planId: String) = planStart.update { it.copy(schedulingPlanId = planId) }
+
+    fun stopScheduling() = planStart.update { it.copy(schedulingPlanId = null) }
 
     /** Archives the plan from today, or restores an archived one. */
     fun setPlanArchived(plan: TrainingPlan, archived: Boolean) {
@@ -524,6 +567,8 @@ class TimelineViewModel(
 
     /** What the list shows: the plan, how many days each way, the filter, and where older history starts. */
     private data class Shown(val planId: String?, val days: Pair<Int, Int>, val filter: Filter, val olderCursor: String?)
+
+    private data class Activity(val refresh: RefreshStatus, val picking: Selection?, val pending: Set<String>, val planStart: PlanStart)
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L

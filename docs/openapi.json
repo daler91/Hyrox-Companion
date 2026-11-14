@@ -9739,6 +9739,42 @@
         ],
         "description": "On upcoming planned days: the duration and effort the prescription implies, personalised by the athlete's recent run pace. What a fuelling target uses when the athlete hasn't set expectedDurationMin or expectedRpe. Not AI-refined; GET /api/v1/nutrition/planned-session-estimate/{planDayId} is."
       },
+      "TimelineCoachNotes": {
+        "type": "object",
+        "properties": {
+          "athleteText": {
+            "type": "string",
+            "description": "What the athlete (or their plan) wrote, without the coach's cues; empty when the notes are only cues"
+          },
+          "cues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "A short leading label, e.g. \"Pacing\", for the card to emphasise; null without one"
+                },
+                "text": {
+                  "type": "string",
+                  "description": "The cue, after its label"
+                }
+              },
+              "required": [
+                "label",
+                "text"
+              ]
+            },
+            "description": "The coach's cues, oldest first, each once and on one line"
+          }
+        },
+        "required": [
+          "athleteText",
+          "cues"
+        ],
+        "description": "On entries with notes: `notes` split as the web's timeline card shows it (shared/coachNotes.ts parseCoachNotes and splitCoachCueLabel). The coach appends one `[AI Coach]` line per cue; repeats are dropped and a newer load-governor cue replaces an older one."
+      },
       "TimelineEntry": {
         "type": "object",
         "properties": {
@@ -10086,6 +10122,9 @@
           },
           "sessionEstimate": {
             "$ref": "#/components/schemas/TimelineSessionEstimate"
+          },
+          "coachNotes": {
+            "$ref": "#/components/schemas/TimelineCoachNotes"
           }
         },
         "required": [

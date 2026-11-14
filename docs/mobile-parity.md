@@ -155,11 +155,15 @@ reuse endpoints the app already calls, or need none.
 - [x] Where each exercise differed from its plan ("planned 5 reps, 60 kg"), with adherence insights on.
 
 ### Timeline
-- [ ] Coach cues on cards and in the session sheets (the athlete's note apart from the `[AI Coach]` lines).
-- [ ] Jump back to today after scrolling away.
-- [ ] Offline banner and a "Pending sync" mark on cards with changes still to send.
-- [ ] The MAF ceiling on planned runs, for MAF athletes.
-- [ ] Empty states: start from the 8-week template; set a start date for a plan with no dates.
+- [x] Coach cues on cards and in the session sheets (the athlete's note apart from the `[AI Coach]` lines).
+  `GET /api/v1/timeline` now sends each entry's notes split as `coachNotes` (API field 6 in
+  docs/mobile-shared-logic.md), so the app doesn't port the parser.
+- [x] Jump back to today after scrolling away.
+- [x] Offline banner and a "Pending sync" mark on cards with changes still to send. Every change
+  goes through the outbox, so "Sync pending" shows only for writes still waiting after a few seconds
+  online, and "Back online — N changes synced" only for what waited while offline.
+- [x] The MAF ceiling on planned runs, for MAF athletes.
+- [x] Empty states: start from the 8-week template; set a start date for a plan with no dates.
 
 ### Nutrition
 - [ ] The log-food sheet's preview: the macro split, the effect on today's goals, and the serving's micronutrients.

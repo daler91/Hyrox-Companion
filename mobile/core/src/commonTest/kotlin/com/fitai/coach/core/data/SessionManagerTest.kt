@@ -60,6 +60,18 @@ class SessionManagerTest {
     }
 
     @Test
+    fun theSessionSaysWhetherThePhoneHasANetwork() = runTest {
+        val network = MutableStateFlow(true)
+        val manager = SessionManager(auth, store, server.api, online = network).also { it.start(backgroundScope) }
+        val session = signIn(manager, "user_a")
+
+        network.value = false
+
+        withTimeout(5.seconds) { session.online.first { !it } }
+        assertFalse(session.online.value)
+    }
+
+    @Test
     fun signingInOpensTheUsersOwnDatabase() = runTest {
         val manager = manager()
 

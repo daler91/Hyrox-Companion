@@ -7,6 +7,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -43,6 +46,11 @@ public class UserSession internal constructor(
     public val recycleBin: RecycleBinRepository = RecycleBinRepository(api, cache)
     public val onboarding: OnboardingRepository = OnboardingRepository(api, cache, preferences, timeline)
 
+    private val connected = MutableStateFlow(true)
+
+    /** Whether the phone has a network. Writes wait in the outbox while it doesn't. */
+    public val online: StateFlow<Boolean> = connected.asStateFlow()
+
     private var job: Job? = null
     private var scope: CoroutineScope? = null
 
@@ -72,6 +80,7 @@ public class UserSession internal constructor(
     internal fun start(scope: CoroutineScope, online: Flow<Boolean>) {
         this.scope = scope
         job = scope.launch {
+            launch { online.collect { connected.value = it } }
             sync.start(this, online)
             // After writes went (or were dropped), the timeline shows the server's version.
             launch { sync.events.collect { bestEffort { timeline.refresh() } } }

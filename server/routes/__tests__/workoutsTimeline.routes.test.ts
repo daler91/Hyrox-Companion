@@ -123,6 +123,20 @@ describe("GET /api/v1/timeline", () => {
     });
   });
 
+  describe("coach notes", () => {
+    it("splits each entry's notes into the athlete's text and the coach's cues", async () => {
+      const logged = { id: "log-w1", date: "2026-11-10", type: "logged", status: "completed", notes: "Felt strong\n[AI Coach] Pacing: ease off" };
+      vi.mocked(storage.timeline.getTimelinePage).mockResolvedValue({ entries: [logged, ...mockEntries], nextCursor: null } as never);
+
+      const res = await request(app).get("/api/v1/timeline");
+
+      expect(res.status).toBe(200);
+      expect(res.body[0].coachNotes).toEqual({ athleteText: "Felt strong", cues: [{ label: "Pacing", text: "ease off" }] });
+      expect(res.body[0].notes).toBe(logged.notes);
+      expect(res.body[1]).toEqual(mockEntries[0]);
+    });
+  });
+
   describe("Error cases", () => {
     it.each([
       { name: "invalid limit", query: "?limit=-5", expectedError: "Invalid limit" },

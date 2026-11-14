@@ -155,7 +155,10 @@ private object NoScheduler : HealthSyncScheduler {
 class AppHarness(val auth: FakeAuth, val api: FakeApi, pushOnFor: String? = null) : AutoCloseable, ViewModelStoreOwner {
     private val directory = Files.createTempDirectory("fitai-ui").toFile()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    val sessions = SessionManager(auth, JvmUserDatabaseStore(directory), api.client)
+
+    /** Whether the phone has a network; a test turns it off to work offline. */
+    val network = MutableStateFlow(true)
+    val sessions = SessionManager(auth, JvmUserDatabaseStore(directory), api.client, online = network)
     val koin = startKoin {
         modules(
             module {

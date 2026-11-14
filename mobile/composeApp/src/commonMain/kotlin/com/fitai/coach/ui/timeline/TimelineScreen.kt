@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,9 +25,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -65,6 +69,7 @@ import com.fitai.coach.ui.review.ReviewPrompt
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
+import kotlinx.coroutines.launch
 
 /** Which sheet is open, by entry id (so it survives the entry being refreshed). */
 private sealed interface OpenSheet {
@@ -118,7 +123,15 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
             when {
                 !state.loaded -> LoadingState(Modifier.fillMaxSize())
                 state.loadFailed -> ErrorState("Couldn't load your timeline", Modifier.fillMaxSize(), onRetry = vm::refresh)
-                !state.hasAnyEntries && state.plans.isEmpty() && !state.refreshing -> Welcome(generator::open, navigation.logWorkout)
+                !state.hasAnyEntries && state.plans.isEmpty() && !state.refreshing -> Welcome(
+                    WelcomeActions(
+                        generatePlan = generator::open,
+                        useTemplate = vm::useSamplePlan,
+                        logWorkout = navigation.logWorkout,
+                        logNote = { noteSheet = NoteSheet(state.today) },
+                    ),
+                    creatingTemplate = state.planStart.creatingSample,
+                )
                 else -> TimelineList(
                     state,
                     vm,
@@ -134,6 +147,9 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
         FitaiToastHost(toasts, Modifier.align(Alignment.BottomCenter))
     }
     GeneratePlanSheet(generatorState, generator)
+    state.planStart.schedulingPlanId?.let { id -> state.plans.firstOrNull { it.id == id } }?.let { plan ->
+        ScheduleSheet(plan, state.today, onSchedule = { date -> vm.schedulePlan(plan.id, date) }, onDismiss = vm::stopScheduling)
+    }
     state.selection?.takeIf { confirmingDelete }?.let { picked ->
         FitaiDialog(
             title = "Delete selected workouts?",
@@ -264,107 +280,139 @@ private fun TimelineList(
     val listState = rememberLazyListState()
     var scrolledToToday by rememberSaveable { mutableStateOf(false) }
     val header = 1 + (if (state.rows.hiddenPast > 0 || state.hasOlder) 1 else 0)
-    LaunchedEffect(state.rows.todayIndex) {
-        if (!scrolledToToday && state.rows.todayIndex >= 0) {
+    // While a plan waits for its start date, its card stands in for the days: scroll once they come.
+    val readyPlan = state.planReadyToStart()
+    LaunchedEffect(state.rows.todayIndex, readyPlan) {
+        if (!scrolledToToday && state.rows.todayIndex >= 0 && readyPlan == null) {
             listState.scrollToItem(state.rows.todayIndex + header)
             scrolledToToday = true
         }
     }
     val tomorrow = addDaysToIsoDate(state.today, 1)
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = Spacing.Lg, vertical = Spacing.Md),
-        verticalArrangement = Arrangement.spacedBy(Spacing.Md),
-    ) {
-        item(key = "header") {
-            Header(
-                state,
-                vm::selectPlan,
-                vm::filterBy,
-                PlanToolActions(vm::renamePlan, vm::setPlanGoal, vm::schedulePlan, vm::setPlanArchived, vm::deletePlan),
-                onNewAiPlan,
-                onSelect = if (state.selection == null) vm::startSelecting else vm::stopSelecting,
-            )
-            state.reviewPrompt?.let { prompt ->
-                ReviewPromptCard(prompt, onOpen = {
-                    navigation.openReview(prompt.weekStart)
-                }, onDismiss = { vm.dismissReviewPrompt(prompt.weekStart) })
-            }
+    // Today's row, counting the items above the days (the sticky selection bar is one).
+    val todayItem = if (readyPlan == null && state.rows.todayIndex >= 0) {
+        header + (if (state.selection != null) 1 else 0) + state.rows.todayIndex
+    } else {
+        -1
+    }
+    val todayAway by remember(todayItem) {
+        derivedStateOf {
+            todayDirection(todayItem, listState.firstVisibleItemIndex, listState.layoutInfo.visibleItemsInfo.map { it.index }.toSet())
         }
-        state.selection?.let { picked ->
-            stickyHeader(key = "selection") {
-                SelectionBar(
-                    picked,
-                    selectableCount = selectable(state.rows).size,
-                    SelectionActions(vm::selectAll, vm::clearSelection, onDeleteSelected, vm::stopSelecting),
+    }
+    val scope = rememberCoroutineScope()
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = Spacing.Lg, vertical = Spacing.Md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Md),
+        ) {
+            item(key = "header") {
+                Header(
+                    state,
+                    vm::selectPlan,
+                    vm::filterBy,
+                    PlanToolActions(vm::renamePlan, vm::setPlanGoal, vm::schedulePlan, vm::setPlanArchived, vm::deletePlan),
+                    onNewAiPlan,
+                    onSelect = if (state.selection == null) vm::startSelecting else vm::stopSelecting,
                 )
+                state.reviewPrompt?.let { prompt ->
+                    ReviewPromptCard(prompt, onOpen = {
+                        navigation.openReview(prompt.weekStart)
+                    }, onDismiss = { vm.dismissReviewPrompt(prompt.weekStart) })
+                }
             }
-        }
-        if (state.rows.hiddenPast > 0) {
-            item(key = "more-past") {
-                MoreButton("Show ${state.rows.hiddenPast} more past ${plural(state.rows.hiddenPast)}", vm::showMorePast)
-            }
-        } else if (state.hasOlder) {
-            item(key = "more-past") {
-                MoreButton(if (state.loadingOlder) "Loading older workouts…" else "Load older workouts", vm::loadOlder)
-            }
-        }
-        if (state.rows.days.isEmpty() && state.statusFilter != null) {
-            item(key = "no-matches") { NoMatches(state, onShowAll = { vm.filterBy(null) }) }
-        }
-        items(state.rows.days, key = { "day-${it.date}" }) { day ->
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                DayHeader(day, state.today, onAddNote = { onNote(day.date, null) })
-                state.fuelling[day.date]?.let { fuelling -> FuellingDayChip(fuelling, onClick = { navigation.openNutrition(day.date) }) }
-                day.annotations.forEach { annotation ->
-                    AnnotationCard(
-                        annotation,
-                        onEdit = { onNote(annotation.startDate, annotation.id) },
-                        onDelete = { vm.deleteAnnotation(annotation.id) },
+            state.selection?.let { picked ->
+                stickyHeader(key = "selection") {
+                    SelectionBar(
+                        picked,
+                        selectableCount = selectable(state.rows).size,
+                        SelectionActions(vm::selectAll, vm::clearSelection, onDeleteSelected, vm::stopSelecting),
                     )
                 }
-                if (day.entries.isEmpty() && day.annotations.isEmpty()) {
-                    Text("Rest day — nothing scheduled.", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
+            }
+            if (state.rows.hiddenPast > 0) {
+                item(key = "more-past") {
+                    MoreButton("Show ${state.rows.hiddenPast} more past ${plural(state.rows.hiddenPast)}", vm::showMorePast)
                 }
-                day.entries.forEach { entry ->
-                    val picking = state.selection
-                    if (picking != null) {
-                        SelectableTimelineCard(entry, picked = picking.picks(entry), enabled = !picking.deleting) {
-                            vm.toggleSelected(entry)
-                        }
-                        return@forEach
+            } else if (state.hasOlder) {
+                item(key = "more-past") {
+                    MoreButton(if (state.loadingOlder) "Loading older workouts…" else "Load older workouts", vm::loadOlder)
+                }
+            }
+            if (state.rows.days.isEmpty() && state.statusFilter != null) {
+                item(key = "no-matches") { NoMatches(state, onShowAll = { vm.filterBy(null) }) }
+            }
+            readyPlan?.let { planId ->
+                item(key = "ready") {
+                    ReadyToStart(onSetStartDate = { vm.startScheduling(planId) }, onLogNote = { onNote(state.today, null) })
+                }
+            }
+            items(if (readyPlan == null) state.rows.days else emptyList(), key = { "day-${it.date}" }) { day ->
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                    DayHeader(day, state.today, onAddNote = { onNote(day.date, null) })
+                    state.fuelling[day.date]?.let { fuelling ->
+                        FuellingDayChip(fuelling, onClick = { navigation.openNutrition(day.date) })
                     }
-                    TimelineCard(
-                        entry = entry,
-                        quickComplete = canQuickComplete(entry, tomorrow),
-                        onOpen = { onOpen(entry) },
-                        actions = CardActions(
-                            onComplete = { vm.markDone(entry) },
-                            onUndoRecovery = { vm.undoRecovery(entry) },
-                            moves = quickMoves(entry, state.today),
-                            onMove = { date -> vm.move(entry, date) },
-                            onPickDate = if (canMove(entry)) ({ onPickDate(entry) }) else null,
-                        ),
-                        chips = remember(entry, state.records) { exerciseChips(entry, state.records) },
-                        fuelling = remember(entry, state.bodyweightKg) { FuellingTarget.of(entry, state.bodyweightKg) },
-                        strava = stravaControls(
-                            entry,
-                            day.entries,
-                            onLink = { target -> vm.linkRecording(entry, target) },
-                            onUnlink = { vm.unlinkRecording(entry) },
-                            onDismissSuggestion = { vm.dismissSuggestion(entry) },
-                        ),
-                    )
+                    day.annotations.forEach { annotation ->
+                        AnnotationCard(
+                            annotation,
+                            onEdit = { onNote(annotation.startDate, annotation.id) },
+                            onDelete = { vm.deleteAnnotation(annotation.id) },
+                        )
+                    }
+                    if (day.entries.isEmpty() && day.annotations.isEmpty()) {
+                        Text("Rest day — nothing scheduled.", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
+                    }
+                    day.entries.forEach { entry ->
+                        val picking = state.selection
+                        if (picking != null) {
+                            SelectableTimelineCard(entry, picked = picking.picks(entry), enabled = !picking.deleting) {
+                                vm.toggleSelected(entry)
+                            }
+                            return@forEach
+                        }
+                        TimelineCard(
+                            entry = entry,
+                            quickComplete = canQuickComplete(entry, tomorrow),
+                            onOpen = { onOpen(entry) },
+                            actions = CardActions(
+                                onComplete = { vm.markDone(entry) },
+                                onUndoRecovery = { vm.undoRecovery(entry) },
+                                moves = quickMoves(entry, state.today),
+                                onMove = { date -> vm.move(entry, date) },
+                                onPickDate = if (canMove(entry)) ({ onPickDate(entry) }) else null,
+                            ),
+                            chips = remember(entry, state.records) { exerciseChips(entry, state.records) },
+                            fuelling = remember(entry, state.bodyweightKg) { FuellingTarget.of(entry, state.bodyweightKg) },
+                            pending = state.isPending(entry),
+                            mafCeiling = state.mafCeiling,
+                            strava = stravaControls(
+                                entry,
+                                day.entries,
+                                onLink = { target -> vm.linkRecording(entry, target) },
+                                onUnlink = { vm.unlinkRecording(entry) },
+                                onDismissSuggestion = { vm.dismissSuggestion(entry) },
+                            ),
+                        )
+                    }
                 }
             }
-        }
-        if (state.rows.hiddenUpcoming > 0) {
-            item(key = "more-upcoming") {
-                MoreButton("Show ${state.rows.hiddenUpcoming} more upcoming ${plural(state.rows.hiddenUpcoming)}", vm::showMoreUpcoming)
+            if (state.rows.hiddenUpcoming > 0) {
+                item(key = "more-upcoming") {
+                    MoreButton("Show ${state.rows.hiddenUpcoming} more upcoming ${plural(state.rows.hiddenUpcoming)}", vm::showMoreUpcoming)
+                }
             }
+            item(key = "log") { MoreButton("Log a workout", navigation.logWorkout) }
         }
-        item(key = "log") { MoreButton("Log a workout", navigation.logWorkout) }
+        todayAway?.let { direction ->
+            TodayPill(
+                direction,
+                onClick = { scope.launch { listState.animateScrollToItem(todayItem) } },
+                modifier = Modifier.align(Alignment.BottomStart).padding(Spacing.Lg),
+            )
+        }
     }
 }
 
@@ -504,19 +552,36 @@ private fun MoreButton(label: String, onClick: () -> Unit) {
     }
 }
 
+/** What the first-run timeline offers (WelcomeEmptyState). */
+private class WelcomeActions(
+    val generatePlan: () -> Unit,
+    val useTemplate: () -> Unit,
+    val logWorkout: () -> Unit,
+    val logNote: () -> Unit,
+)
+
 @Composable
-private fun Welcome(generatePlan: () -> Unit, logWorkout: () -> Unit) {
+private fun Welcome(actions: WelcomeActions, creatingTemplate: Boolean) {
     Column(
-        Modifier.fillMaxSize().padding(Spacing.Lg),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.Lg),
         verticalArrangement = Arrangement.spacedBy(Spacing.Md, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         EmptyState(
             title = "Welcome to fitai.coach",
             message = "Your plan and logged workouts will show here, day by day. Start with an AI plan built around your goal, " +
-                "or log a workout.",
+                "the 8-week template, or log a workout.",
         )
-        FitaiButton("Generate an AI plan", onClick = generatePlan, leadingIcon = LucideIcons.Sparkles)
-        FitaiButton("Log a workout", onClick = logWorkout, variant = ButtonVariant.Secondary)
+        FitaiButton("Generate an AI plan", onClick = actions.generatePlan, leadingIcon = LucideIcons.Sparkles)
+        FitaiButton(
+            "Use 8-week template",
+            onClick = actions.useTemplate,
+            variant = ButtonVariant.Secondary,
+            loading = creatingTemplate,
+            enabled = !creatingTemplate,
+            leadingIcon = LucideIcons.ClipboardList,
+        )
+        FitaiButton("Log a workout", onClick = actions.logWorkout, variant = ButtonVariant.Ghost, leadingIcon = LucideIcons.Dumbbell)
+        FitaiButton("Log a note", onClick = actions.logNote, variant = ButtonVariant.Ghost, leadingIcon = LucideIcons.StickyNote)
     }
 }

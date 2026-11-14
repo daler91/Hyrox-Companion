@@ -152,77 +152,80 @@ fun AppShell() {
             ) { Icon(LucideIcons.MessageSquare, contentDescription = null) }
         },
     ) { padding ->
-        NavDisplay(
-            backStack = backStack.entries,
-            onBack = { backStack.pop() },
-            modifier = Modifier.padding(padding),
-            entryProvider = entryProvider {
-                entry<Route.Training> {
-                    TimelineScreen(
-                        TimelineNavigation(
-                            openWorkout = { backStack.push(Route.WorkoutDetail(it)) },
-                            askCoach = { openCoach(CoachThread.of(it)) },
-                            logWorkout = { backStack.select(TopLevel.LogWorkout) },
-                            editPlanDay = { backStack.push(Route.PlanDay(it)) },
-                            openReview = { backStack.push(Route.WeeklyReview(it)) },
-                            openNutrition = { showNutrition(DeepLink.Nutrition(it)) },
-                        ),
-                        openPlanDayId = openPlanDayId,
-                        onPlanDayOpened = { openPlanDayId = null },
-                    )
-                }
-                entry<Route.WorkoutDetail> { route ->
-                    WorkoutDetailScreen(
-                        route.workoutId,
-                        onBack = { backStack.pop() },
-                        onAskCoach = { openCoach(it) },
-                        onOpenNutrition = { date, meal -> showNutrition(DeepLink.Nutrition(date, meal)) },
-                        onDeleted = { binId ->
-                            backStack.pop()
-                            scope.launch {
-                                offerUndo(toasts, "Workout deleted") { session.timeline.restore(binId) }
-                            }
-                        },
-                        onCombined = { combinedId ->
-                            // Both workouts are gone; the combined one takes this one's place.
-                            backStack.pop()
-                            backStack.push(Route.WorkoutDetail(combinedId))
-                            scope.launch { toasts.showSnackbar("Workouts combined") }
-                        },
-                    )
-                }
-                entry<Route.PlanDay> { route -> PlanDayScreen(route.entryId, onBack = { backStack.pop() }) }
-                entry<Route.WeeklyReview> { route -> WeeklyReviewScreen(route.week, onBack = { backStack.pop() }) }
-                entry<Route.LogWorkout> { LogWorkoutScreen(onSaved = { backStack.select(TopLevel.Training) }) }
-                entry<Route.Nutrition> {
-                    NutritionScreen(
-                        open = openNutrition,
-                        onOpened = { openNutrition = null },
-                        openSettings = { backStack.select(TopLevel.Settings) },
-                    )
-                }
-                entry<Route.Analytics> {
-                    AnalyticsScreen(
-                        AnalyticsNavigation(
-                            logWorkout = { backStack.select(TopLevel.LogWorkout) },
-                            openReview = { backStack.push(Route.WeeklyReview()) },
-                            openWorkout = { backStack.push(Route.WorkoutDetail(it)) },
+        Column(Modifier.padding(padding)) {
+            SyncStatusBanner(session)
+            NavDisplay(
+                backStack = backStack.entries,
+                onBack = { backStack.pop() },
+                modifier = Modifier.weight(1f),
+                entryProvider = entryProvider {
+                    entry<Route.Training> {
+                        TimelineScreen(
+                            TimelineNavigation(
+                                openWorkout = { backStack.push(Route.WorkoutDetail(it)) },
+                                askCoach = { openCoach(CoachThread.of(it)) },
+                                logWorkout = { backStack.select(TopLevel.LogWorkout) },
+                                editPlanDay = { backStack.push(Route.PlanDay(it)) },
+                                openReview = { backStack.push(Route.WeeklyReview(it)) },
+                                openNutrition = { showNutrition(DeepLink.Nutrition(it)) },
+                            ),
+                            openPlanDayId = openPlanDayId,
+                            onPlanDayOpened = { openPlanDayId = null },
+                        )
+                    }
+                    entry<Route.WorkoutDetail> { route ->
+                        WorkoutDetailScreen(
+                            route.workoutId,
+                            onBack = { backStack.pop() },
+                            onAskCoach = { openCoach(it) },
+                            onOpenNutrition = { date, meal -> showNutrition(DeepLink.Nutrition(date, meal)) },
+                            onDeleted = { binId ->
+                                backStack.pop()
+                                scope.launch {
+                                    offerUndo(toasts, "Workout deleted") { session.timeline.restore(binId) }
+                                }
+                            },
+                            onCombined = { combinedId ->
+                                // Both workouts are gone; the combined one takes this one's place.
+                                backStack.pop()
+                                backStack.push(Route.WorkoutDetail(combinedId))
+                                scope.launch { toasts.showSnackbar("Workouts combined") }
+                            },
+                        )
+                    }
+                    entry<Route.PlanDay> { route -> PlanDayScreen(route.entryId, onBack = { backStack.pop() }) }
+                    entry<Route.WeeklyReview> { route -> WeeklyReviewScreen(route.week, onBack = { backStack.pop() }) }
+                    entry<Route.LogWorkout> { LogWorkoutScreen(onSaved = { backStack.select(TopLevel.Training) }) }
+                    entry<Route.Nutrition> {
+                        NutritionScreen(
+                            open = openNutrition,
+                            onOpened = { openNutrition = null },
                             openSettings = { backStack.select(TopLevel.Settings) },
-                        ),
-                    )
-                }
-                entry<Route.Settings> {
-                    SettingsScreen(
-                        onRunSetup = {
-                            setupRun++
-                            setupOpen = true
-                        },
-                        stravaReturn = stravaReturn,
-                        onStravaReturnHandled = { stravaReturn = null },
-                    )
-                }
-            },
-        )
+                        )
+                    }
+                    entry<Route.Analytics> {
+                        AnalyticsScreen(
+                            AnalyticsNavigation(
+                                logWorkout = { backStack.select(TopLevel.LogWorkout) },
+                                openReview = { backStack.push(Route.WeeklyReview()) },
+                                openWorkout = { backStack.push(Route.WorkoutDetail(it)) },
+                                openSettings = { backStack.select(TopLevel.Settings) },
+                            ),
+                        )
+                    }
+                    entry<Route.Settings> {
+                        SettingsScreen(
+                            onRunSetup = {
+                                setupRun++
+                                setupOpen = true
+                            },
+                            stravaReturn = stravaReturn,
+                            onStravaReturnHandled = { stravaReturn = null },
+                        )
+                    }
+                },
+            )
+        }
     }
 
     if (coachOpen) CoachPanel(onClose = { coachOpen = false }, thread = coachThread)

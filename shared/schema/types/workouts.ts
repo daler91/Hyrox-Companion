@@ -1,4 +1,5 @@
-﻿import type { PlannedSessionEstimate } from "../../plannedSessionEstimate";
+﻿import type { CoachCueParts } from "../../coachNotes";
+import type { PlannedSessionEstimate } from "../../plannedSessionEstimate";
 import type {
   DeviceLinkSource,
   PlanDayPriority,
@@ -344,6 +345,12 @@ export const insertExerciseSetSchema = createInsertSchema(exerciseSets).omit({
 export type InsertExerciseSet = z.infer<typeof insertExerciseSetSchema>;
 export type ExerciseSet = typeof exerciseSets.$inferSelect;
 
+/** A day's notes as the timeline card shows them: the athlete's text, then each coach cue once (shared/coachNotes.ts). */
+export type TimelineCoachNotes = {
+  athleteText: string;
+  cues: CoachCueParts[];
+};
+
 export type TimelineEntry = {
   id: string;
   date: string;
@@ -469,6 +476,8 @@ export type TimelineEntry = {
   structureBlocks?: StructureBlockInput[];
   /** Upcoming planned days only: the prescription's estimated duration and RPE (GET /api/v1/timeline). */
   sessionEstimate?: PlannedSessionEstimate;
+  /** On entries with notes: `notes` split into the athlete's text and the coach's cues (GET /api/v1/timeline). */
+  coachNotes?: TimelineCoachNotes;
   calories?: number | null;
   distanceMeters?: number | null;
   elevationGain?: number | null;

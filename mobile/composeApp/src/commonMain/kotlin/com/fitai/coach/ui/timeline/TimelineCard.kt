@@ -77,6 +77,10 @@ fun TimelineCard(
     strava: StravaControls? = null,
     /** A planned session's fuel plan; null on other cards. */
     fuelling: FuellingTarget? = null,
+    /** Changes to it are still waiting to be sent. */
+    pending: Boolean = false,
+    /** The athlete's MAF ceiling, for a planned run's chip; null for an athlete who doesn't train to one. */
+    mafCeiling: Int? = null,
 ) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
@@ -87,6 +91,7 @@ fun TimelineCard(
                     val (label, tone) = statusBadge(entry)
                     FitaiBadge(label, tone = tone)
                     tierBadge(entry)?.let { FitaiBadge(it, tone = BadgeTone.Neutral) }
+                    if (pending) PendingSyncBadge()
                     strava?.let { StravaBadge(entry, it) }
                 }
                 Text(entry.focus, style = type.h3, color = colors.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -96,7 +101,9 @@ fun TimelineCard(
                     Text(entry.mainWorkout, style = type.body, color = colors.textMuted, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
                 metricsLine(entry)?.let { Text(it, style = type.bodySm, color = colors.textMuted) }
+                coachNotesOf(entry)?.let { CardNotes(it) }
                 fuelling?.let { FuellingTargetChip(it) }
+                mafCeilingFor(entry, mafCeiling)?.let { MafCeilingChip(it) }
                 recoveryNote(entry)?.let { note ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(note, style = type.bodySm, color = colors.textMuted, modifier = Modifier.weight(1f))
