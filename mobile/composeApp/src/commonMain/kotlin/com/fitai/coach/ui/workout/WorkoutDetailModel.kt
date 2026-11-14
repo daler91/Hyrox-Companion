@@ -1,15 +1,20 @@
 package com.fitai.coach.ui.workout
 
+import com.fitai.coach.core.api.Patch
+import com.fitai.coach.core.api.generated.ExerciseSetRow
 import com.fitai.coach.core.api.generated.GetExercisesByExerciseNameHistoryResponseItem
+import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetsBySetIdRequest
 import com.fitai.coach.core.api.generated.SessionGradeIntent
 import com.fitai.coach.core.api.generated.SessionGradeVerdict
 import com.fitai.coach.core.api.generated.WorkoutLogDetail
 import com.fitai.coach.core.exercises.NextTarget
 import com.fitai.coach.core.exercises.NextTargetStep
 import com.fitai.coach.core.exercises.ProgressionSet
+import com.fitai.coach.core.exercises.generated.EXERCISE_DEFINITIONS
 import com.fitai.coach.core.exercises.isRunningExerciseName
 import com.fitai.coach.core.exercises.suggestNextTarget
 import com.fitai.coach.core.units.KM_TO_MILES
+import com.fitai.coach.core.units.convertWeight
 import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.format.formatClock
 import com.fitai.coach.ui.format.formatNumber
@@ -32,6 +37,8 @@ data class ExerciseHistory(
     /** The suggested next prescription; strength exercises only. */
     val next: NextTarget?,
     val weightUnit: String,
+    /** Last time's sets in order, for "Use last". */
+    val lastSets: List<HistorySet> = emptyList(),
 )
 
 /**
@@ -63,7 +70,12 @@ fun exerciseHistory(
             exerciseName = exerciseName,
         )
     }
-    return ExerciseHistory(lastTime = last.takeIf { it.isNotEmpty() }?.let(::lastTimeSummary), next = next, weightUnit = weightUnit)
+    return ExerciseHistory(
+        lastTime = last.takeIf { it.isNotEmpty() }?.let(::lastTimeSummary),
+        next = next,
+        weightUnit = weightUnit,
+        lastSets = last,
+    )
 }
 
 private fun progressionSet(set: HistorySet) =
@@ -85,6 +97,88 @@ private fun historySetSummary(set: HistorySet): String = buildList {
     set.distance?.let { add(formatSetDistance(it, set.distanceUnit)) }
     set.time?.let { add(formatClock(it)) }
 }.ifEmpty { listOf("—") }.joinToString(" · ")
+
+/**
+ * "Use last" (buildUseLastPatches): each set takes the values of the same set
+ * last time, pairwise, as far as both go. A weight logged in the other unit is
+ * converted to this set's; a distance in another unit is left alone.
+ */
+fun useLastPatches(current: List<ExerciseSetRow>, last: List<HistorySet>): List<Pair<String, PatchWorkoutsByIdSetsBySetIdRequest>> =
+    current.zip(last).mapNotNull { (set, before) ->
+        val weight = before.weight?.let { value ->
+            if (set.weightUnit == null || before.weightUnit == null) value else convertWeight(value, before.weightUnit, set.weightUnit)
+        }
+        val distance = before.distance?.takeIf {
+            set.distanceUnit == null || before.distanceUnit == null ||
+                set.distanceUnit == before.distanceUnit
+        }
+        val patch = PatchWorkoutsByIdSetsBySetIdRequest(
+            reps = before.reps?.let { Patch.of(it) } ?: Patch.Absent,
+            weight = weight?.let { Patch.of(it) } ?: Patch.Absent,
+            distance = distance?.let { Patch.of(it) } ?: Patch.Absent,
+            time = before.time?.let { Patch.of(it) } ?: Patch.Absent,
+        )
+        (set.id to patch).takeIf { patch != PatchWorkoutsByIdSetsBySetIdRequest() }
+    }
+
+/** What a set becomes when its exercise is changed: a library exercise, or a custom one by its label. */
+data class ExerciseIdentity(val exerciseName: String, val category: String, val customLabel: String?) {
+    companion object {
+        fun of(exerciseName: String, customLabel: String?): ExerciseIdentity {
+            val definition = EXERCISE_DEFINITIONS[exerciseName]
+            return ExerciseIdentity(
+                exerciseName = if (definition != null) exerciseName else CUSTOM_EXERCISE,
+                category = definition?.category ?: CUSTOM_EXERCISE_CATEGORY,
+                customLabel = customLabel,
+            )
+        }
+    }
+}
+
+/** Swaps a logged set's exercise (Change exercise), keeping its values. */
+fun changeExercisePatch(exerciseName: String, customLabel: String?): PatchWorkoutsByIdSetsBySetIdRequest {
+    val identity = ExerciseIdentity.of(exerciseName, customLabel)
+    return PatchWorkoutsByIdSetsBySetIdRequest(
+        exerciseName = identity.exerciseName,
+        category = identity.category,
+        customLabel = identity.customLabel?.let { Patch.of(it) } ?: Patch.clear(),
+    )
+}
+
+/** A custom exercise's category, as adding one gives it. */
+const val CUSTOM_EXERCISE_CATEGORY = "conditioning"
+
+/**
+ * "planned 5 reps, 60 kg" where the sets differ from their plan
+ * (buildPlannedDiffSummary); a planned value that differs between sets reads
+ * "reps varied". Null when every set went to plan.
+ */
+fun plannedDiffSummary(sets: List<ExerciseSetRow>): String? {
+    val parts = PlannedField.entries
+        .filter { field -> sets.any { set -> field.planned(set)?.let { it != field.actual(set) } == true } }
+        .mapNotNull { field -> plannedFieldSummary(sets, field) }
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = "planned ")
+}
+
+private enum class PlannedField(val label: String, val planned: (ExerciseSetRow) -> Double?, val actual: (ExerciseSetRow) -> Double?) {
+    Reps("reps", { it.plannedReps?.toDouble() }, { it.reps?.toDouble() }),
+    Weight("weight", { it.plannedWeight }, { it.weight }),
+    Distance("distance", { it.plannedDistance }, { it.distance }),
+    Time("time", { it.plannedTime }, { it.time }),
+}
+
+private fun plannedFieldSummary(sets: List<ExerciseSetRow>, field: PlannedField): String? {
+    val values = sets.mapNotNull(field.planned)
+    val first = values.firstOrNull() ?: return null
+    val unitOf = sets.first()
+    return when {
+        values.any { it != first } -> "${field.label} varied"
+        field == PlannedField.Weight -> formatWeight(first, unitOf.weightUnit)
+        field == PlannedField.Distance -> formatSetDistance(first, unitOf.distanceUnit)
+        field == PlannedField.Time -> "${formatNumber(first)} min"
+        else -> "${formatNumber(first)} reps"
+    }
+}
 
 /** "3 × 11 reps · 60 kg (+1 rep)": the target, and the one thing that moved. */
 fun nextTargetLabel(target: NextTarget, weightUnit: String): String {

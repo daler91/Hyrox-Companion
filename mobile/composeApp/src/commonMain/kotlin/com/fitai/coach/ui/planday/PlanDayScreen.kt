@@ -44,10 +44,13 @@ import com.fitai.coach.ui.media.rememberPhotoPicker
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
+import com.fitai.coach.ui.workout.ExerciseGroup
 import com.fitai.coach.ui.workout.ExerciseGroupCard
 import com.fitai.coach.ui.workout.ExercisePickerSheet
+import com.fitai.coach.ui.workout.GroupMenu
 import com.fitai.coach.ui.workout.GroupMove
 import com.fitai.coach.ui.workout.SetEditorSheet
+import com.fitai.coach.ui.workout.deleteExerciseText
 import com.fitai.coach.ui.workout.exerciseGroups
 import kotlinx.coroutines.launch
 
@@ -67,6 +70,8 @@ fun PlanDayScreen(entryId: String, onBack: () -> Unit) {
     var editing by remember { mutableStateOf<ExerciseSetRow?>(null) }
     var picking by remember { mutableStateOf(false) }
     var replacing by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var changing by remember { mutableStateOf<ExerciseGroup?>(null) }
+    var deleting by remember { mutableStateOf<ExerciseGroup?>(null) }
 
     Box(Modifier.fillMaxSize()) {
         val entry = state.entry
@@ -81,6 +86,7 @@ fun PlanDayScreen(entryId: String, onBack: () -> Unit) {
                 // Reading text or a photo replaces the sets, so ask first when there are some.
                 onParse = { parse -> if (state.sets.isEmpty()) parse() else replacing = parse },
                 pickPhoto = pickPhoto,
+                menuFor = { group -> GroupMenu(onChange = { changing = group }, onDelete = { deleting = group }) },
             )
             !state.loaded -> LoadingState(Modifier.fillMaxSize())
             else -> ErrorState("This session is no longer on your plan", Modifier.fillMaxSize(), onRetry = onBack, retryLabel = "Back")
@@ -111,6 +117,31 @@ fun PlanDayScreen(entryId: String, onBack: () -> Unit) {
             onDismiss = { picking = false },
         )
     }
+    changing?.let { group ->
+        ExercisePickerSheet(
+            onPick = { name, label ->
+                vm.changeExercise(group, name, label)
+                changing = null
+            },
+            onDismiss = { changing = null },
+            title = "Change exercise",
+            description = "Replace ${group.label} with another exercise. Your reps, weight, and other set values stay the same.",
+            customRow = { "Use \"$it\" as a custom exercise" },
+        )
+    }
+    deleting?.let { group ->
+        FitaiDialog(
+            title = "Delete exercise?",
+            text = deleteExerciseText(group, "this session"),
+            confirmLabel = "Delete",
+            onConfirm = {
+                deleting = null
+                vm.deleteExercise(group)
+            },
+            onDismiss = { deleting = null },
+            destructive = true,
+        )
+    }
     replacing?.let { parse ->
         FitaiDialog(
             title = "Replace the sets?",
@@ -136,6 +167,7 @@ private fun PlanDayContent(
     onAddExercise: () -> Unit,
     onParse: (parse: () -> Unit) -> Unit,
     pickPhoto: (() -> Unit)?,
+    menuFor: (ExerciseGroup) -> GroupMenu,
 ) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
@@ -192,6 +224,7 @@ private fun PlanDayContent(
                         up = if (index > 0) ({ vm.moveExercise(groups, index, -1) }) else null,
                         down = if (index < groups.lastIndex) ({ vm.moveExercise(groups, index, 1) }) else null,
                     ),
+                    menu = menuFor(group),
                 )
             }
         }

@@ -65,13 +65,15 @@ data class WorkoutDetailState(
     val scoring: Boolean = false,
     /** The other logged workouts on its day, which it can be combined with. */
     val combineCandidates: List<TimelineEntry> = emptyList(),
+    /** "Show adherence insights" is on: each exercise says where it differed from its plan. */
+    val showsPlannedDiffs: Boolean = false,
 ) {
     /** The plan day it counts towards, when the timeline has it. */
     val linkedPlanDay: PlanDayOption? get() = workout?.planDayId?.let { id -> planDayOptions.firstOrNull { it.planDayId == id } }
 }
 
 /** Values typed into the set editor; blank clears a value. */
-data class SetEdit(val reps: String, val weight: String, val distance: String, val time: String)
+data class SetEdit(val reps: String, val weight: String, val distance: String, val time: String, val notes: String = "")
 
 /**
  * The workout's own fields, as the details editor holds them. Blank clears
@@ -116,7 +118,9 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
         fuellingLoading,
         session.preferences.preferences,
         session.mafTests.tests,
-    ) { around, aroundLoading, prefs, tests -> Panels(around, aroundLoading, mafTag(prefs, tests, workoutId)) }
+    ) { around, aroundLoading, prefs, tests ->
+        Panels(around, aroundLoading, mafTag(prefs, tests, workoutId), plannedDiffs = prefs?.showAdherenceInsights == true)
+    }
 
     val state: StateFlow<WorkoutDetailState> = combine(
         session.workouts.workout(workoutId),
@@ -141,6 +145,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
             mafSaving = more.mafSaving,
             scoring = more.scoring,
             combineCandidates = workout?.let { combineCandidates(entries, it) }.orEmpty(),
+            showsPlannedDiffs = panel.plannedDiffs,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), WorkoutDetailState())
 
@@ -153,12 +158,17 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
             }
         }
         // History for each exercise on the workout, fetched once per name (and
-        // again for an exercise added here).
+        // again for an exercise added here). The category comes with the name:
+        // the screen's state can still hold the workout without its sets.
         viewModelScope.launch {
             session.workouts.workout(workoutId)
-                .map { workout -> workout?.exerciseSets?.map { it.exerciseName }?.distinct().orEmpty() }
+                .map { workout -> workout?.exerciseSets?.map { it.exerciseName to it.category }?.distinctBy { it.first }.orEmpty() }
                 .distinctUntilChanged()
-                .collect { names -> names.filter { it != CUSTOM_EXERCISE && requestedHistory.add(it) }.forEach { loadHistory(it) } }
+                .collect { exercises ->
+                    exercises
+                        .filter { (name, _) -> name != CUSTOM_EXERCISE && requestedHistory.add(name) }
+                        .forEach { (name, category) -> loadHistory(name, category) }
+                }
         }
         // Whether the run is tagged, once the athlete is one the MAF row shows for.
         viewModelScope.launch {
@@ -216,8 +226,34 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
             weight = edit.weight.toDoublePatch(),
             distance = edit.distance.toDoublePatch(),
             time = edit.time.toDoublePatch(),
+            notes = edit.notes.toNotePatch(),
         )
         launchSafely("Couldn't save that set") { session.workouts.updateSet(workoutId, setId, patch) }
+    }
+
+    /** Saves the RPE the heart rate suggests, when the athlete takes it. */
+    fun saveRpe(rpe: Int) {
+        launchSafely("Couldn't save that RPE") { session.workouts.updateWorkout(workoutId, UpdateWorkoutRequest(rpe = Patch.of(rpe))) }
+    }
+
+    /** Swaps an exercise for another (Change exercise); its sets keep their values. */
+    fun changeExercise(group: ExerciseGroup, exerciseName: String, customLabel: String?) {
+        val patch = changeExercisePatch(exerciseName, customLabel)
+        group.sets.forEach { set ->
+            launchSafely("Couldn't change that exercise") { session.workouts.updateSet(workoutId, set.id, patch) }
+        }
+    }
+
+    /** Deletes an exercise and all its sets (online, like deleting a set). */
+    fun deleteExercise(group: ExerciseGroup) = online("Couldn't delete that exercise") {
+        group.sets.forEach { session.workouts.deleteSet(workoutId, it.id) }
+    }
+
+    /** Fills the sets from last time's (Use last). */
+    fun useLast(sets: List<ExerciseSetRow>, history: ExerciseHistory) {
+        useLastPatches(sets, history.lastSets).forEach { (setId, patch) ->
+            launchSafely("Couldn't fill in last time") { session.workouts.updateSet(workoutId, setId, patch) }
+        }
     }
 
     /** Saves the title, duration, RPE, notes and whether it counts as training. */
@@ -279,7 +315,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
                 PostWorkoutsByIdSetsRequest(
                     exerciseName = if (definition != null) exerciseName else CUSTOM_EXERCISE,
                     customLabel = customLabel?.let { Patch.of(it) } ?: Patch.Absent,
-                    category = definition?.category ?: CUSTOM_CATEGORY,
+                    category = definition?.category ?: CUSTOM_EXERCISE_CATEGORY,
                     setNumber = 1,
                 ),
             )
@@ -393,11 +429,14 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
         }
     }
 
-    private fun loadHistory(exerciseName: String) {
+    /** A failed fetch is let go, so the next time the sets change it's asked for again. */
+    private fun loadHistory(exerciseName: String, category: String) {
         viewModelScope.launch {
-            val workout = state.value.workout ?: session.workouts.workout(workoutId).first() ?: return@launch
-            val category = workout.exerciseSets.firstOrNull { it.exerciseName == exerciseName }?.category ?: return@launch
-            val history = runCatching { session.workouts.exerciseHistory(exerciseName) }.getOrNull() ?: return@launch
+            val history = runCatching { session.workouts.exerciseHistory(exerciseName) }.getOrNull()
+            if (history == null) {
+                requestedHistory.remove(exerciseName)
+                return@launch
+            }
             val defaultUnit = session.preferences.preferences.first()?.weightUnit ?: "kg"
             val summary = exerciseHistory(history, workoutId, category, exerciseName, defaultUnit)
             extras.update { it.copy(histories = it.histories + (exerciseName to summary)) }
@@ -452,11 +491,11 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
         val around: GetNutritionSessionFuellingByWorkoutIdResponse?,
         val aroundLoading: Boolean,
         val maf: MafTag?,
+        val plannedDiffs: Boolean,
     )
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L
-        const val CUSTOM_CATEGORY = "conditioning"
     }
 }
 
