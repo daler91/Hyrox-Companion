@@ -223,7 +223,13 @@
               }
             ]
           }
-        ]
+        ],
+        "sessionEstimate": {
+          "durationMin": 1.5,
+          "rpe": 1.5,
+          "source": "none",
+          "clamped": true
+        }
       }
     ],
     "future": [
@@ -476,6 +482,15 @@
             }
           }
         ],
+        "sessionEstimate": {
+          "durationMin": 1.5,
+          "rpe": 1.5,
+          "source": "zz_value_from_a_newer_server",
+          "clamped": true,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
         "zzPropertyFromANewerServer": {
           "added": true
         }

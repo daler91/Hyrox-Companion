@@ -7,9 +7,13 @@ import com.fitai.coach.core.api.generated.NutritionEffectiveTarget
 import com.fitai.coach.core.api.generated.NutritionMacroTotals
 import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdRequest
 import com.fitai.coach.core.api.generated.TimelineEntry
+import com.fitai.coach.core.api.generated.TimelineSessionEstimate
+import com.fitai.coach.core.nutrition.SessionFuellingTargetInput
+import com.fitai.coach.core.nutrition.computeSessionFuellingTarget
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -141,6 +145,33 @@ class FuellingModelTest {
         assertEquals(PatchPlansDaysByDayIdRequest(plannedTimeOfDayMin = Patch.Value(405)), draft.typeTime("6:45"))
         assertFalse(draft.timeInvalid)
         assertEquals(PatchPlansDaysByDayIdRequest(plannedTimeOfDayMin = Patch.Value(null)), draft.typeTime(""))
+    }
+
+    @Test
+    fun aPlannedCardsFuelComesFromTheAthletesExpectationsElseTheServersEstimate() {
+        val estimate = TimelineSessionEstimate(durationMin = 95.0, rpe = 8.0, source = TimelineSessionEstimate.Source.Sets, clamped = false)
+        fun expected(durationMin: Double?, rpe: Double?) =
+            computeSessionFuellingTarget(SessionFuellingTargetInput(durationMin = durationMin, rpe = rpe, bodyweightKg = 70.0))
+
+        // The athlete's own numbers win.
+        val own = assertNotNull(FuellingTarget.of(entry(45, 4, null).copy(sessionEstimate = estimate), 70.0))
+        assertEquals(expected(45.0, 4.0).postCarbG, own.postCarbG)
+        assertEquals(expected(45.0, 4.0).explanation, own.explanation)
+        // Else the prescription's estimate: a long hard session wants carbs before.
+        val estimated = assertNotNull(FuellingTarget.of(entry(null, null, null).copy(sessionEstimate = estimate), 70.0))
+        assertEquals(expected(95.0, 8.0).preCarbG, estimated.preCarbG)
+        assertTrue(estimated.hasPre && estimated.hasPost)
+        // Neither: an hour at moderate effort, as the web assumes.
+        val assumed = assertNotNull(FuellingTarget.of(entry(null, null, null), 70.0))
+        assertEquals(expected(null, null).explanation, assumed.explanation)
+    }
+
+    @Test
+    fun onlyAnUpcomingPlanDayGetsAFuelPlan() {
+        assertNull(FuellingTarget.of(entry(60, 6, null).copy(status = TimelineEntry.Status.Completed), null))
+        assertNull(FuellingTarget.of(entry(60, 6, null).copy(status = TimelineEntry.Status.Missed), null))
+        assertNull(FuellingTarget.of(entry(60, 6, null).copy(planDayId = null), null))
+        assertNotNull(FuellingTarget.of(entry(60, 6, null), null))
     }
 
     private fun entry(expectedDurationMin: Int?, expectedRpe: Int?, plannedTimeOfDayMin: Int?) = TimelineEntry(

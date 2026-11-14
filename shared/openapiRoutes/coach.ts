@@ -571,6 +571,20 @@ function registerTimelineEntry(registry: OpenAPIRegistry, entities: EntityCompon
 
   const log = createSelectSchema(workoutLogs).shape;
   const day = createSelectSchema(planDays).shape;
+  const TimelineSessionEstimate = registry.register(
+    "TimelineSessionEstimate",
+    z
+      .object({
+        durationMin: z.number().nullable().openapi({ description: "Estimated minutes; null when the prescription has nothing to estimate from" }),
+        rpe: z.number().nullable().openapi({ description: "Estimated effort, 1-10; null when nothing signals it" }),
+        source: z.enum(["structure", "sets", "structure_and_sets", "none"]).openapi({ description: "What the duration was estimated from" }),
+        clamped: z.boolean().openapi({ description: "The duration hit the 10 or 180 minute bound, so it is a bound rather than an estimate" }),
+      })
+      .openapi({
+        description:
+          "On upcoming planned days: the duration and effort the prescription implies, personalised by the athlete's recent run pace. What a fuelling target uses when the athlete hasn't set expectedDurationMin or expectedRpe. Not AI-refined; GET /api/v1/nutrition/planned-session-estimate/{planDayId} is.",
+      }),
+  );
   const omittedOtherwise = (text: string) => z.literal(true).optional().openapi({ description: `${text}; omitted otherwise` });
 
   return registry.register(
@@ -639,6 +653,7 @@ function registerTimelineEntry(registry: OpenAPIRegistry, entities: EntityCompon
         // Hydrated on every entry with a log or plan day
         exerciseSets: z.array(TimelineExerciseSet).optional().openapi({ description: "The log's sets, or the plan day's prescription; empty on a race-derived day" }),
         structureBlocks: z.array(TimelineStructureBlock).optional(),
+        sessionEstimate: TimelineSessionEstimate.optional(),
       })
       .openapi({
         description:

@@ -18,6 +18,16 @@ exclude_patterns = [
   # Emitted by script/race-benchmarks — not hand-edited.
   "**/*.generated.ts",
   "script/race-benchmarks/output/**",
+  # Kotlin generated from docs/openapi.json, the exercise catalogue and the
+  # icon set (`pnpm mobile:models`, `pnpm mobile:catalogue`, `pnpm
+  # mobile:icons`), never hand-edited; .sonarcloud.properties excludes it
+  # too (mobile/**/generated/**). Its files sit in model/ and operation/
+  # under one package, so the package-matches-path check flags every new
+  # one. Spelled out per directory, in the prefix-then-`**` form the other
+  # entries use: `mobile/**/generated/**` (a mid-path `**`) left it flagged.
+  "mobile/core/src/commonMain/kotlin/com/fitai/coach/core/api/generated/**",
+  "mobile/core/src/commonMain/kotlin/com/fitai/coach/core/exercises/generated/**",
+  "mobile/composeApp/src/commonMain/kotlin/com/fitai/coach/ui/icons/generated/**",
   # Build/tooling config. eslint.config.js ignores `*.config.js` and
   # `*.config.ts` globally because they sit outside tsconfig.eslint.json and so
   # can't be type-checked; DeepSource was still analysing vite.config.ts,

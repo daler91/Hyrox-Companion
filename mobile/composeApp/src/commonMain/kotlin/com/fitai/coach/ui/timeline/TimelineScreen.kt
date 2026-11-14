@@ -54,6 +54,7 @@ import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.components.offerUndo
 import com.fitai.coach.ui.format.dayLabel
 import com.fitai.coach.ui.fuelling.FuellingDayChip
+import com.fitai.coach.ui.fuelling.FuellingTarget
 import com.fitai.coach.ui.fuelling.PlanFuelling
 import com.fitai.coach.ui.fuelling.timelineFuellingWindow
 import com.fitai.coach.ui.icons.generated.LucideIcons
@@ -312,6 +313,7 @@ private fun TimelineList(
                             onPickDate = if (canMove(entry)) ({ onPickDate(entry) }) else null,
                         ),
                         chips = remember(entry, state.records) { exerciseChips(entry, state.records) },
+                        fuelling = remember(entry, state.bodyweightKg) { FuellingTarget.of(entry, state.bodyweightKg) },
                         strava = stravaControls(
                             entry,
                             day.entries,

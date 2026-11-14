@@ -35,6 +35,8 @@ import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.FitaiBadge
 import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.format.shortDate
+import com.fitai.coach.ui.fuelling.FuellingTarget
+import com.fitai.coach.ui.fuelling.FuellingTargetChip
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Radius
@@ -73,6 +75,8 @@ fun TimelineCard(
     actions: CardActions,
     chips: List<ExerciseChip> = emptyList(),
     strava: StravaControls? = null,
+    /** A planned session's fuel plan; null on other cards. */
+    fuelling: FuellingTarget? = null,
 ) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
@@ -92,6 +96,7 @@ fun TimelineCard(
                     Text(entry.mainWorkout, style = type.body, color = colors.textMuted, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
                 metricsLine(entry)?.let { Text(it, style = type.bodySm, color = colors.textMuted) }
+                fuelling?.let { FuellingTargetChip(it) }
                 recoveryNote(entry)?.let { note ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(note, style = type.bodySm, color = colors.textMuted, modifier = Modifier.weight(1f))
