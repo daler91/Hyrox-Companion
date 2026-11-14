@@ -18,6 +18,11 @@ exclude_patterns = [
   # Emitted by script/race-benchmarks — not hand-edited.
   "**/*.generated.ts",
   "script/race-benchmarks/output/**",
+  # Kotlin generated from docs/openapi.json and the exercise catalogue
+  # (`pnpm mobile:models`, `pnpm mobile:catalogue`), never hand-edited;
+  # .sonarcloud.properties excludes it too. Its files sit in model/ and operation/ under one package, so the
+  # package-matches-path check flags every new one.
+  "mobile/**/generated/**",
   # Build/tooling config. eslint.config.js ignores `*.config.js` and
   # `*.config.ts` globally because they sit outside tsconfig.eslint.json and so
   # can't be type-checked; DeepSource was still analysing vite.config.ts,
