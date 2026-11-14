@@ -131,16 +131,8 @@ fun WorkoutDetailScreen(
                         pickPhoto?.let(replaceSets)
                     }
 
-                    override fun removeMaf() {
-                        confirm = Confirm.RemoveMaf
-                    }
-
-                    override fun reopen() {
-                        confirm = Confirm.Reopen
-                    }
-
-                    override fun delete() {
-                        confirm = Confirm.Delete
+                    override fun confirm(asked: Confirm) {
+                        confirm = asked
                     }
                 },
             )
@@ -301,12 +293,8 @@ private interface WorkoutActions {
     /** Picks a photo of the session to read into sets, asking first when it has sets to replace. */
     fun readPhoto()
 
-    /** Asks before taking the run out of the MAF trend. */
-    fun removeMaf()
-
-    fun reopen()
-
-    fun delete()
+    /** Asks before reopening the plan day, deleting the workout or taking it out of the MAF trend. */
+    fun confirm(asked: Confirm)
 }
 
 @Composable
@@ -329,7 +317,11 @@ private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState,
         item { Stats(workout, distanceUnit) }
         item { PlanDayRow(state.linkedPlanDay, linked = workout.planDayId != null, onChange = { actions.open(DetailSheet.PlanDay) }) }
         state.maf?.let { tag ->
-            item { MafTagRow(tag, state.mafSaving, onOpenForm = { actions.open(DetailSheet.Maf) }, onRemove = actions::removeMaf) }
+            item {
+                MafTagRow(tag, state.mafSaving, onOpenForm = {
+                    actions.open(DetailSheet.Maf)
+                }, onRemove = { actions.confirm(Confirm.RemoveMaf) })
+            }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
@@ -381,10 +373,14 @@ private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState,
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                if (state.planEntry != null) FitaiButton("Reopen", onClick = actions::reopen, variant = ButtonVariant.Secondary)
+                if (state.planEntry !=
+                    null
+                ) {
+                    FitaiButton("Reopen", onClick = { actions.confirm(Confirm.Reopen) }, variant = ButtonVariant.Secondary)
+                }
                 FitaiButton(
                     "Delete workout",
-                    onClick = actions::delete,
+                    onClick = { actions.confirm(Confirm.Delete) },
                     variant = ButtonVariant.Danger,
                     enabled = !state.busy,
                     leadingIcon = LucideIcons.Trash,

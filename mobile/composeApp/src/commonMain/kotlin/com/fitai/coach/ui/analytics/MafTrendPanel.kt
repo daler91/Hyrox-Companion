@@ -19,7 +19,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitai.coach.core.api.generated.GetMafTestsResponse
-import com.fitai.coach.core.data.AnalyticsRepository
+import com.fitai.coach.core.data.MafTestRepository
 import com.fitai.coach.ui.components.EmptyState
 import com.fitai.coach.ui.components.ErrorState
 import com.fitai.coach.ui.components.FitaiBadge
@@ -40,10 +40,10 @@ data class MafTrendState(val tests: GetMafTestsResponse? = null, val loading: Bo
 
 /** The MAF tests, shown from the device at once and refreshed (MafTrendTab). */
 @Suppress("TooGenericExceptionCaught")
-class MafTrendViewModel(private val analytics: AnalyticsRepository) : ViewModel() {
+class MafTrendViewModel(private val mafTests: MafTestRepository) : ViewModel() {
     private val status = MutableStateFlow(Status(loading = true))
 
-    val state: StateFlow<MafTrendState> = combine(analytics.mafTests, status) { tests, st ->
+    val state: StateFlow<MafTrendState> = combine(mafTests.tests, status) { tests, st ->
         // A failed fetch is not "no tests yet": with nothing on the device it shows as an error.
         MafTrendState(tests, loading = tests == null && st.loading, failed = tests == null && st.failed)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), MafTrendState())
@@ -56,7 +56,7 @@ class MafTrendViewModel(private val analytics: AnalyticsRepository) : ViewModel(
         status.value = Status(loading = true)
         viewModelScope.launch {
             val ok = try {
-                analytics.refreshMafTests()
+                mafTests.refresh()
                 true
             } catch (e: CancellationException) {
                 throw e
@@ -78,7 +78,7 @@ class MafTrendViewModel(private val analytics: AnalyticsRepository) : ViewModel(
 @Composable
 fun MafTrendPanel(timeZone: String?, distanceUnit: String?) {
     val session = LocalUserSession.current
-    val vm = viewModel(key = "maf-trend-${session.userId}") { MafTrendViewModel(session.analytics) }
+    val vm = viewModel(key = "maf-trend-${session.userId}") { MafTrendViewModel(session.mafTests) }
     val state by vm.state.collectAsStateWithLifecycle()
     val tests = state.tests
     when {

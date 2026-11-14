@@ -109,7 +109,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
         session.nutrition.fuelling.aroundWorkout(workoutId),
         fuellingLoading,
         session.preferences.preferences,
-        session.analytics.mafTests,
+        session.mafTests.tests,
     ) { around, aroundLoading, prefs, tests -> Panels(around, aroundLoading, mafTag(prefs, tests, workoutId)) }
 
     val state: StateFlow<WorkoutDetailState> = combine(
@@ -156,7 +156,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
         viewModelScope.launch {
             session.preferences.preferences.first(::isMafAthlete)
             try {
-                session.analytics.refreshMafTests()
+                session.mafTests.refresh()
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -327,24 +327,16 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
     fun saveMaf(form: MafForm, distanceUnit: String?, onSaved: () -> Unit) {
         val tagged = state.value.maf?.tagged ?: return
         val metrics = form.metrics(distanceUnit)
-        if (tagged) {
-            mafWrite("Couldn't update MAF test") {
-                session.analytics.updateMafTest(workoutId, metrics)
-                toasts.send("Updated MAF test")
-                onSaved()
-            }
-        } else {
-            mafWrite("Couldn't tag as MAF test") {
-                session.analytics.tagMafTest(workoutId, metrics)
-                toasts.send("Tagged as MAF test")
-                onSaved()
-            }
+        mafWrite(if (tagged) "Couldn't update MAF test" else "Couldn't tag as MAF test") {
+            if (tagged) session.mafTests.update(workoutId, metrics) else session.mafTests.tag(workoutId, metrics)
+            toasts.send(if (tagged) "Updated MAF test" else "Tagged as MAF test")
+            onSaved()
         }
     }
 
     /** Takes the run out of the MAF trend, its compliance score too. */
     fun untagMaf() = mafWrite("Couldn't remove MAF test") {
-        session.analytics.untagMafTest(workoutId)
+        session.mafTests.untag(workoutId)
         toasts.send("Removed from MAF trend")
     }
 

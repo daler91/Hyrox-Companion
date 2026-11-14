@@ -99,15 +99,6 @@ class AnalyticsInsightsTest {
     }
 
     @Test
-    fun mafTestsAreKeptOnTheDevice() = runTest {
-        server.on("GET", "/api/v1/maf-tests", 200, """{"tests":[],"analysis":[],"workoutDates":{"w1":"2026-11-02"}}""")
-
-        analytics.refreshMafTests()
-
-        assertEquals(mapOf("w1" to "2026-11-02"), analytics.mafTests.first()?.workoutDates)
-    }
-
-    @Test
     fun theFuellingBlockCoversTheRangeAndAllTimeIsHeldToAYear() = runTest {
         server.on("GET", "/api/v1/nutrition/block", 200, """{"from":"2026-08-13","to":"2026-11-10","points":[]}""")
 
