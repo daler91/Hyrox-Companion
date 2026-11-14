@@ -22,7 +22,7 @@ export function AiCoachCard({
     <Card>
       <CardHeader>
         <CardTitle as="h2" className="flex items-center gap-2">
-          <BrainCircuit className="h-5 w-5 text-primary" />
+          <BrainCircuit className="h-5 w-5 text-primary" aria-hidden="true" />
           AI Coach
         </CardTitle>
         <CardDescription>Coaching powered by the configured AI provider, off until you turn it on</CardDescription>
