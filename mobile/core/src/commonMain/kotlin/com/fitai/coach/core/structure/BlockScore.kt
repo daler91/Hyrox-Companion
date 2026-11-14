@@ -40,16 +40,16 @@ public sealed interface BlockScore {
         public fun of(json: JsonElement?): BlockScore? {
             val fields = json as? JsonObject ?: return null
             fun int(name: String) = (fields[name] as? JsonPrimitive)?.intOrNull
-            val notes = (fields["notes"] as? JsonPrimitive)?.takeIf { it.isString }?.content
-            return when ((fields["type"] as? JsonPrimitive)?.content) {
-                "emom" -> Emom(
-                    (fields["completed"] as? JsonPrimitive)?.booleanOrNull ?: false,
-                    int("completedMinutes"),
-                    int("missedReps"),
+            val notes = (fields[NOTES] as? JsonPrimitive)?.takeIf { it.isString }?.content
+            return when ((fields[TYPE] as? JsonPrimitive)?.content) {
+                TYPE_EMOM -> Emom(
+                    (fields[COMPLETED] as? JsonPrimitive)?.booleanOrNull ?: false,
+                    int(COMPLETED_MINUTES),
+                    int(MISSED_REPS),
                     notes,
                 )
-                "amrap" -> Amrap(int("rounds") ?: 0, int("reps"), notes)
-                "rounds" -> Rounds(int("completedRounds") ?: 0, int("elapsedSeconds"), notes)
+                TYPE_AMRAP -> Amrap(int(ROUNDS) ?: 0, int(REPS), notes)
+                TYPE_ROUNDS -> Rounds(int(COMPLETED_ROUNDS) ?: 0, int(ELAPSED_SECONDS), notes)
                 else -> null
             }
         }
@@ -60,22 +60,36 @@ public sealed interface BlockScore {
 public fun blockScoreJson(score: BlockScore?): JsonElement = when (score) {
     null -> JsonNull
     is BlockScore.Emom -> buildJsonObject {
-        put("type", "emom")
-        put("completed", score.completed)
-        put("completedMinutes", score.completedMinutes)
-        put("missedReps", score.missedReps)
-        put("notes", score.notes)
+        put(TYPE, TYPE_EMOM)
+        put(COMPLETED, score.completed)
+        put(COMPLETED_MINUTES, score.completedMinutes)
+        put(MISSED_REPS, score.missedReps)
+        put(NOTES, score.notes)
     }
     is BlockScore.Amrap -> buildJsonObject {
-        put("type", "amrap")
-        put("rounds", score.rounds)
-        put("reps", score.reps)
-        put("notes", score.notes)
+        put(TYPE, TYPE_AMRAP)
+        put(ROUNDS, score.rounds)
+        put(REPS, score.reps)
+        put(NOTES, score.notes)
     }
     is BlockScore.Rounds -> buildJsonObject {
-        put("type", "rounds")
-        put("completedRounds", score.completedRounds)
-        put("elapsedSeconds", score.elapsedSeconds)
-        put("notes", score.notes)
+        put(TYPE, TYPE_ROUNDS)
+        put(COMPLETED_ROUNDS, score.completedRounds)
+        put(ELAPSED_SECONDS, score.elapsedSeconds)
+        put(NOTES, score.notes)
     }
 }
+
+// The score's wire names, shared by the reader and the writer.
+private const val TYPE = "type"
+private const val NOTES = "notes"
+private const val TYPE_EMOM = "emom"
+private const val TYPE_AMRAP = "amrap"
+private const val TYPE_ROUNDS = "rounds"
+private const val COMPLETED = "completed"
+private const val COMPLETED_MINUTES = "completedMinutes"
+private const val MISSED_REPS = "missedReps"
+private const val ROUNDS = "rounds"
+private const val REPS = "reps"
+private const val COMPLETED_ROUNDS = "completedRounds"
+private const val ELAPSED_SECONDS = "elapsedSeconds"

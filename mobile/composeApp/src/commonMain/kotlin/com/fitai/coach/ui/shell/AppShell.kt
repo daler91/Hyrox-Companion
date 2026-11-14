@@ -183,6 +183,12 @@ fun AppShell() {
                                 offerUndo(toasts, "Workout deleted") { session.timeline.restore(binId) }
                             }
                         },
+                        onCombined = { combinedId ->
+                            // Both workouts are gone; the combined one takes this one's place.
+                            backStack.pop()
+                            backStack.push(Route.WorkoutDetail(combinedId))
+                            scope.launch { toasts.showSnackbar("Workouts combined") }
+                        },
                     )
                 }
                 entry<Route.PlanDay> { route -> PlanDayScreen(route.entryId, onBack = { backStack.pop() }) }

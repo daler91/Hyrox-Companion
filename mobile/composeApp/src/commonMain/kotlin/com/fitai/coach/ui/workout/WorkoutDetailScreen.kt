@@ -76,6 +76,7 @@ fun WorkoutDetailScreen(
     onAskCoach: (CoachThread) -> Unit,
     onDeleted: (recycleBinItemId: String) -> Unit,
     onOpenNutrition: (date: String, meal: Meal?) -> Unit = { _, _ -> },
+    onCombined: (workoutId: String) -> Unit = {},
 ) {
     val session = LocalUserSession.current
     val vm = viewModel(key = "workout-$workoutId") { WorkoutDetailViewModel(session, workoutId) }
@@ -196,6 +197,15 @@ fun WorkoutDetailScreen(
             onScore = { blockId, score -> vm.scoreBlock(blockId, score) { if (sheet == open) close() } },
             onDismiss = close,
         )
+        DetailSheet.Combine -> state.workout?.let { workout ->
+            CombineSheet(
+                workout = workout,
+                candidates = state.combineCandidates,
+                busy = state.busy,
+                onCombine = { other, draft -> vm.combine(other, draft, onCombined) },
+                onDismiss = close,
+            )
+        }
         DetailSheet.AddExercise -> ExercisePickerSheet(
             onPick = { name, label ->
                 vm.addExercise(name, label)
@@ -268,6 +278,8 @@ private sealed interface DetailSheet {
     data object AddExercise : DetailSheet
 
     data object Maf : DetailSheet
+
+    data object Combine : DetailSheet
 
     data class BlockResult(val blockId: String) : DetailSheet
 
@@ -394,6 +406,17 @@ private fun WorkoutContent(
             }
             itemsIndexed(blocks, key = { _, block -> "block-${block.id}" }) { index, block ->
                 StructureBlockCard(block, index, weightUnit, busy = state.scoring) { actions.open(DetailSheet.BlockResult(block.id)) }
+            }
+        }
+        if (state.combineCandidates.isNotEmpty()) {
+            item {
+                FitaiButton(
+                    "Combine with another workout",
+                    onClick = { actions.open(DetailSheet.Combine) },
+                    variant = ButtonVariant.Secondary,
+                    enabled = !state.busy,
+                    leadingIcon = LucideIcons.CopyPlus,
+                )
             }
         }
         item {

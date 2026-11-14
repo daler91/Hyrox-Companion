@@ -234,6 +234,19 @@ public class TimelineRepository(
     }
 
     /**
+     * Takes deleted workouts and plan days off the timeline here (a bulk
+     * delete or a combine), for older pages a refresh doesn't reach. A plan
+     * day whose workout went stays: the server puts it back to planned.
+     */
+    public suspend fun forgetDeleted(workoutLogIds: Collection<String>, planDayIds: Collection<String>) {
+        val logs = workoutLogIds.toSet()
+        val days = planDayIds.toSet()
+        db.writeTransaction {
+            removeLocal { (it.planDayId == null && it.workoutLogId in logs) || it.planDayId in days }
+        }
+    }
+
+    /**
      * Puts a deleted workout, plan day or plan back from the recycle bin
      * (an Undo), then refreshes the timeline.
      *

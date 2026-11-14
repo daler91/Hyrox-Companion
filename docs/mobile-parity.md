@@ -130,9 +130,9 @@ An audit of the API against the app after Wave 4 found these still unused.
   of the trend. MAF-method athletes with a ceiling only — `POST`, `PATCH`, `DELETE /workouts/{id}/maf-test`.
 - [x] Structure blocks on workout detail (rounds, EMOMs, AMRAPs): each block's setup and steps, and a result for each
   EMOM, AMRAP or rounds block, recorded, corrected or cleared — `PATCH /workouts/{id}/structure-blocks/{blockId}/score`.
-- [ ] Select several workouts and delete them together, with one undo — `POST /workouts/bulk-delete`,
+- [x] Select several workouts on the timeline and delete them together, with one undo — `POST /workouts/bulk-delete`,
   `POST /recycle-bin/batches/{batchId}/restore`.
-- [ ] Combine workouts into one — `POST /workouts/combine`.
+- [x] Combine a workout with another logged the same day, choosing what to keep — `POST /workouts/combine`.
 
 Deferred: the structure-block **editor**. The plan-day version is behind a flag on the web, and it is a large editor.
 

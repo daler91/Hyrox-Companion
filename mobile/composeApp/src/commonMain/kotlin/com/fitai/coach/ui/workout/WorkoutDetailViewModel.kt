@@ -12,6 +12,7 @@ import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.api.generated.UpdateWorkoutRequest
 import com.fitai.coach.core.api.generated.WorkoutLogDetail
 import com.fitai.coach.core.api.generated.WorkoutReparseResponse
+import com.fitai.coach.core.data.CombineSource
 import com.fitai.coach.core.data.EncodedImage
 import com.fitai.coach.core.data.SyncEvent
 import com.fitai.coach.core.data.UserSession
@@ -62,6 +63,8 @@ data class WorkoutDetailState(
     val mafSaving: Boolean = false,
     /** A block's result is being saved. */
     val scoring: Boolean = false,
+    /** The other logged workouts on its day, which it can be combined with. */
+    val combineCandidates: List<TimelineEntry> = emptyList(),
 ) {
     /** The plan day it counts towards, when the timeline has it. */
     val linkedPlanDay: PlanDayOption? get() = workout?.planDayId?.let { id -> planDayOptions.firstOrNull { it.planDayId == id } }
@@ -137,6 +140,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
             maf = panel.maf,
             mafSaving = more.mafSaving,
             scoring = more.scoring,
+            combineCandidates = workout?.let { combineCandidates(entries, it) }.orEmpty(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), WorkoutDetailState())
 
@@ -342,6 +346,23 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
     fun untagMaf() = mafWrite("Couldn't remove MAF test") {
         session.mafTests.untag(workoutId)
         toasts.send("Removed from MAF trend")
+    }
+
+    /**
+     * Combines the workout with [other] as [draft] picks; [onCombined] gets the
+     * combined workout, which replaces both.
+     */
+    fun combine(other: TimelineEntry, draft: CombineDraft, onCombined: (workoutId: String) -> Unit) {
+        val workout = state.value.workout ?: return
+        val otherId = other.workoutLogId ?: return
+        online("Couldn't combine those workouts") {
+            val combinedId = session.workoutBatches.combine(
+                listOf(CombineSource(workout.id, workout.planDayId), CombineSource(otherId, other.planDayId)),
+                combinedWorkout(workout, other, draft),
+            )
+            runCatching { session.timeline.refresh() }
+            onCombined(combinedId)
+        }
     }
 
     /** Records a block's result, or (null) clears it; [onSaved] closes the form. */
