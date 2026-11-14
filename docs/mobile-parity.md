@@ -166,8 +166,8 @@ reuse endpoints the app already calls, or need none.
 - [x] Empty states: start from the 8-week template; set a start date for a plan with no dates.
 
 ### Nutrition
-- [ ] The log-food sheet's preview: the macro split, the effect on today's goals, and the serving's micronutrients.
-- [ ] A first-meal prompt on an empty log.
+- [x] The log-food sheet's preview: the macro split, the effect on today's goals, and the serving's micronutrients.
+- [x] A first-meal prompt on an empty log.
 
 ### Onboarding and coach
 - [ ] A fuelling step in onboarding (height, age, activity, weight goal, daily targets).

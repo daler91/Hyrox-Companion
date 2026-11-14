@@ -58,6 +58,8 @@ data class LogSheetState(
     val saving: Boolean = false,
     val newPortion: PortionDraft? = null,
     val addingPortion: Boolean = false,
+    /** Per 100 g, for the Nutrients preview: the detail fetch's (USDA micros are filled in on it), else the food's. */
+    val micros: Map<String, Double>? = food.micros,
 ) {
     val units: List<PortionUnit> get() = portionUnits(food, servings)
     val quantityG: Double? get() = amount.trim().toDoubleOrNull()?.takeIf { it > 0 }?.let { it * unit.grams }
@@ -179,7 +181,8 @@ class NutritionViewModel(
     fun startLog(food: NutritionFood, meal: Meal? = null) {
         val remembered = quickAdd.value.portions[food.id]
         viewModelScope.launch {
-            val servings = runCatching { nutrition.food(food.id).servings }.getOrDefault(emptyList())
+            val detail = runCatching { nutrition.food(food.id) }.getOrNull()
+            val servings = detail?.servings.orEmpty()
             val units = portionUnits(food, servings)
             val (unit, amount) = remembered?.let { units.first() to it.quantityG } ?: defaultPortion(units)
             _logSheet.value = LogSheetState(
@@ -188,6 +191,7 @@ class NutritionViewModel(
                 unit = unit,
                 amount = trim(amount),
                 meal = meal ?: remembered?.meal ?: preferredMeal ?: mealForHour(currentHour()),
+                micros = detail?.food?.micros ?: food.micros,
             )
         }
     }

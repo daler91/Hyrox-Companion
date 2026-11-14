@@ -22,10 +22,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.fitai.coach.core.api.generated.GetNutritionSummaryResponse
 import com.fitai.coach.core.api.generated.NutritionFood
 import com.fitai.coach.core.data.Meal
-import com.fitai.coach.core.nutrition.roundMacros
-import com.fitai.coach.core.nutrition.scaleNutrition
 import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.FitaiBottomSheet
 import com.fitai.coach.ui.components.FitaiButton
@@ -96,7 +95,7 @@ private fun SearchResult(food: NutritionFood, onPick: (NutritionFood) -> Unit, m
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LogSheet(state: LogSheetState, favorite: Boolean, vm: NutritionViewModel) {
+fun LogSheet(state: LogSheetState, favorite: Boolean, vm: NutritionViewModel, day: GetNutritionSummaryResponse? = null) {
     FitaiBottomSheet(onDismissRequest = vm::closeLog) {
         Column(
             Modifier.padding(horizontal = Spacing.Lg).verticalScroll(rememberScrollState()),
@@ -129,12 +128,15 @@ fun LogSheet(state: LogSheetState, favorite: Boolean, vm: NutritionViewModel) {
                 }
             }
             state.quantityG?.let { grams ->
-                val macros = roundMacros(scaleNutrition(state.food.per100g(), grams))
-                Text(
-                    "${formatNumber(grams)} g · ${formatNumber(macros.calories)} kcal · P ${formatNumber(macros.protein)} " +
-                        "C ${formatNumber(macros.carb)} F ${formatNumber(macros.fat)}",
-                    style = FitaiTheme.typography.body,
-                    color = FitaiTheme.colors.text,
+                val serving = state.servingAt(grams)
+                Text("${formatNumber(grams)} g", style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
+                LogPreview(
+                    serving,
+                    goals = day?.let {
+                        projectGoalContribution(it.totals, serving, MacroGoals.of(it.effectiveTarget), state.replacedServing())
+                    }
+                        .orEmpty(),
+                    micros = buildPreviewMicroRows(previewMicrosScaled(state.micros, grams)),
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {

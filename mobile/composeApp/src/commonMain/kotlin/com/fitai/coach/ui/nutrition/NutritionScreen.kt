@@ -176,15 +176,21 @@ fun NutritionScreen(open: DeepLink.Nutrition? = null, onOpened: () -> Unit = {},
                         val meals = summary.visibleMeals()
                         // With no history there's nothing to repeat, so the shortcuts stay hidden (Nutrition.tsx isFirstRun).
                         val canRepeat = !quickAdd.firstRun
+                        // A first-run athlete gets the first-meal prompt wherever the repeat shortcut would show.
+                        val setTargets = if (summary.effectiveTarget == null) targetsVm::openDaily else null
                         if (meals.isEmpty()) {
                             item {
-                                Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                                    Text(
-                                        "Nothing logged for ${dayLabel(state.date, state.today).lowercase()}.",
-                                        style = FitaiTheme.typography.body,
-                                        color = FitaiTheme.colors.textMuted,
-                                    )
-                                    if (canRepeat) RepeatPreviousDay(state.repeating, vm::repeatPreviousDay)
+                                if (canRepeat) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                                        Text(
+                                            "Nothing logged for ${dayLabel(state.date, state.today).lowercase()}.",
+                                            style = FitaiTheme.typography.body,
+                                            color = FitaiTheme.colors.textMuted,
+                                        )
+                                        RepeatPreviousDay(state.repeating, vm::repeatPreviousDay)
+                                    }
+                                } else {
+                                    FirstMealPrompt(capture::openDescribe, barcode::open, setTargets)
                                 }
                             }
                         }
@@ -209,9 +215,18 @@ fun NutritionScreen(open: DeepLink.Nutrition? = null, onOpened: () -> Unit = {},
                                 ),
                             )
                         }
-                        // Meals shown for their targets, nothing in them yet: the day can still be repeated.
-                        if (meals.isNotEmpty() && summary.isEmptyDay() && canRepeat) {
-                            item { RepeatPreviousDay(state.repeating, vm::repeatPreviousDay) }
+                        // Meals shown for their targets, nothing in them yet: the day can still be repeated, or a first meal logged.
+                        if (meals.isNotEmpty() && summary.isEmptyDay()) {
+                            item {
+                                if (canRepeat) {
+                                    RepeatPreviousDay(
+                                        state.repeating,
+                                        vm::repeatPreviousDay,
+                                    )
+                                } else {
+                                    FirstMealPrompt(capture::openDescribe, barcode::open, setTargets)
+                                }
+                            }
                         }
                         item {
                             DayFooter(
@@ -275,7 +290,7 @@ fun NutritionScreen(open: DeepLink.Nutrition? = null, onOpened: () -> Unit = {},
         MealReviewSheet(review, search, capture, state.date)
     }
     if (captured.consentOpen) AiConsentDialog(onAccept = capture::acceptAi, onDecline = capture::declineAi)
-    logSheet?.let { LogSheet(it, favorite = it.food.id in favoriteIds, vm) }
+    logSheet?.let { LogSheet(it, favorite = it.food.id in favoriteIds, vm, day = state.summary) }
     dailyTargets?.let { TargetsSheet(it, targetsVm) }
     mealTarget?.let { MealTargetSheet(it, targetsVm) }
     customFoodSheet?.let { CustomFoodSheet(it, myFoods) }
