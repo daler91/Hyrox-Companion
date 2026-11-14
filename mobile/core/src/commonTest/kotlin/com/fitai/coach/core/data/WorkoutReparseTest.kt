@@ -15,6 +15,7 @@ class WorkoutReparseTest {
     private val db = testDatabaseStore().open("u1")
     private val sync = SyncEngine(db, server.api, now = { 0L }, newKey = { newIdempotencyKey() })
     private val workouts = WorkoutRepository(db, server.api, sync) { "live-key" }
+    private val structure = WorkoutStructureRepository(db, server.api, workouts)
 
     @AfterTest
     fun closeDatabase() = db.close()
@@ -28,7 +29,7 @@ class WorkoutReparseTest {
         server.on("POST", "$W1/reparse", 200, READ_FOUR)
         server.on("GET", W1, 200, Samples.workout("w1", Samples.setRow("n1", 1), Samples.setRow("n2", 1)))
 
-        val result = workouts.reparse("w1")
+        val result = structure.reparse("w1")
 
         assertEquals(4L, result.setCount)
         assertEquals("{}", server.sentTo("POST", "$W1/reparse").single().body)
@@ -40,8 +41,8 @@ class WorkoutReparseTest {
         server.on("POST", "$W1/reparse-from-image", 200, READ_FOUR)
         server.on("GET", W1, 200, Samples.workout("w1", Samples.setRow("n1", 1)))
 
-        workouts.reparseFromImage("w1", EncodedImage("cG5n", "image/png"))
-        workouts.reparseFromImage("w1", EncodedImage("aGVpYw", "image/heic"))
+        structure.reparseFromImage("w1", EncodedImage("cG5n", "image/png"))
+        structure.reparseFromImage("w1", EncodedImage("aGVpYw", "image/heic"))
 
         assertEquals(
             listOf("""{"mimeType":"image/png","imageBase64":"cG5n"}""", """{"mimeType":"image/jpeg","imageBase64":"aGVpYw"}"""),

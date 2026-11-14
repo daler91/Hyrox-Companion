@@ -106,6 +106,7 @@ fun WorkoutDetailScreen(
                 workout = workout,
                 state = state,
                 distanceUnit = prefs?.distanceUnit,
+                weightUnit = prefs?.weightUnit,
                 actions = object : WorkoutActions {
                     override fun back() = onBack()
 
@@ -188,6 +189,13 @@ fun WorkoutDetailScreen(
                 )
             }
         }
+        is DetailSheet.BlockResult -> BlockResultSheetFor(
+            blocks = state.workout?.structureBlocks.orEmpty(),
+            blockId = open.blockId,
+            saving = state.scoring,
+            onScore = { blockId, score -> vm.scoreBlock(blockId, score) { if (sheet == open) close() } },
+            onDismiss = close,
+        )
         DetailSheet.AddExercise -> ExercisePickerSheet(
             onPick = { name, label ->
                 vm.addExercise(name, label)
@@ -261,6 +269,8 @@ private sealed interface DetailSheet {
 
     data object Maf : DetailSheet
 
+    data class BlockResult(val blockId: String) : DetailSheet
+
     data class EditSet(val set: ExerciseSetRow) : DetailSheet
 }
 
@@ -275,7 +285,7 @@ private interface WorkoutActions {
     /** Nutrition on [date], adding to the post-workout meal. */
     fun logRecoveryMeal(date: String)
 
-    /** Opens a sheet: the details editor, the plan-day picker, a set's editor or the exercise library. */
+    /** Opens a sheet: the details editor, the plan-day picker, a set's editor, the exercise library, the MAF form or a block's result. */
     fun open(opened: DetailSheet)
 
     fun addSet(sets: List<ExerciseSetRow>)
@@ -298,7 +308,13 @@ private interface WorkoutActions {
 }
 
 @Composable
-private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState, distanceUnit: String?, actions: WorkoutActions) {
+private fun WorkoutContent(
+    workout: WorkoutLogDetail,
+    state: WorkoutDetailState,
+    distanceUnit: String?,
+    weightUnit: String?,
+    actions: WorkoutActions,
+) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
     val groups = exerciseGroups(workout.exerciseSets)
@@ -371,11 +387,18 @@ private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        val blocks = orderedBlocks(workout.structureBlocks)
+        if (blocks.isNotEmpty()) {
+            item(key = "structure-heading") {
+                Text("Structure", style = type.h3, color = colors.text, modifier = Modifier.semantics { heading() })
+            }
+            itemsIndexed(blocks, key = { _, block -> "block-${block.id}" }) { index, block ->
+                StructureBlockCard(block, index, weightUnit, busy = state.scoring) { actions.open(DetailSheet.BlockResult(block.id)) }
+            }
+        }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                if (state.planEntry !=
-                    null
-                ) {
+                if (state.planEntry != null) {
                     FitaiButton("Reopen", onClick = { actions.confirm(Confirm.Reopen) }, variant = ButtonVariant.Secondary)
                 }
                 FitaiButton(
