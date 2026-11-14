@@ -29,8 +29,15 @@ import com.fitai.coach.core.data.UserSession
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.launch
 
 /** What the sync banner says (OfflineIndicator); none while all is sent. */
 sealed interface SyncBanner {
@@ -70,6 +77,32 @@ fun syncBannerText(banner: SyncBanner): Pair<String, String?> = when (banner) {
 }
 
 /**
+ * What went once the network came back (OfflineIndicator's "Back online"):
+ * each send that took writes queued while offline, given to [onSynced].
+ * Worked out from the flows themselves, not from the screen's recomposition,
+ * so a send that lands the moment the network returns still counts. Writes
+ * that were dropped instead of sent stop counting a few seconds after the
+ * outbox empties.
+ */
+suspend fun watchReconnectSyncs(online: Flow<Boolean>, pending: Flow<Int>, events: Flow<SyncEvent>, onSynced: (Int) -> Unit) {
+    coroutineScope {
+        val waited = MutableStateFlow(false)
+        launch {
+            combine(online, pending, ::Pair).collectLatest { (isOnline, count) ->
+                if (!isOnline && count > 0) waited.value = true
+                if (isOnline && count == 0) {
+                    delay(SETTLE_MS)
+                    waited.value = false
+                }
+            }
+        }
+        events.filterIsInstance<SyncEvent.Synced>().collect { event ->
+            if (waited.getAndUpdate { false }) onSynced(event.count)
+        }
+    }
+}
+
+/**
  * Across the top of the app (OfflineIndicator): offline, and how many changes
  * will go on reconnecting; what went once back online, for a few seconds;
  * and changes still waiting after a while online.
@@ -79,8 +112,6 @@ fun SyncStatusBanner(session: UserSession) {
     val online by session.online.collectAsStateWithLifecycle()
     val pending by session.sync.pendingCount.collectAsStateWithLifecycle(0)
     var stuck by remember { mutableStateOf(false) }
-    var wasOffline by remember { mutableStateOf(false) }
-    var reconnected by remember { mutableStateOf(false) }
     var justSynced by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(online, pending > 0) {
@@ -90,25 +121,8 @@ fun SyncStatusBanner(session: UserSession) {
             stuck = true
         }
     }
-    LaunchedEffect(online) {
-        if (!online) {
-            wasOffline = true
-            return@LaunchedEffect
-        }
-        if (!wasOffline) return@LaunchedEffect
-        wasOffline = false
-        // The next send is what waited; past this, a send is everyday and says nothing.
-        reconnected = pending > 0
-        delay(RECONNECT_WINDOW_MS)
-        reconnected = false
-    }
     LaunchedEffect(session) {
-        session.sync.events.filterIsInstance<SyncEvent.Synced>().collect { event ->
-            if (reconnected) {
-                reconnected = false
-                justSynced = event.count
-            }
-        }
+        watchReconnectSyncs(session.online, session.sync.pendingCount, session.sync.events) { justSynced = it }
     }
     LaunchedEffect(justSynced) {
         if (justSynced == null) return@LaunchedEffect
@@ -148,8 +162,8 @@ private fun SyncBannerRow(banner: SyncBanner) {
 /** A write still waiting this long online is news (normally it goes within a second). */
 private const val STUCK_AFTER_MS = 5_000L
 
-/** How long after reconnecting a send counts as the one that took what waited. */
-private const val RECONNECT_WINDOW_MS = 30_000L
+/** How long after the outbox empties online a send can still count as the one that took what waited. */
+private const val SETTLE_MS = 5_000L
 
 /** How long "Back online — N changes synced" stays (the web's 3.5 s). */
 private const val SYNCED_SHOWS_MS = 3_500L

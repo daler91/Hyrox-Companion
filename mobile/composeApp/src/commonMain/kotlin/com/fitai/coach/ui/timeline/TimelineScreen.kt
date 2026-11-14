@@ -350,54 +350,7 @@ private fun TimelineList(
                 }
             }
             items(if (readyPlan == null) state.rows.days else emptyList(), key = { "day-${it.date}" }) { day ->
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                    DayHeader(day, state.today, onAddNote = { onNote(day.date, null) })
-                    state.fuelling[day.date]?.let { fuelling ->
-                        FuellingDayChip(fuelling, onClick = { navigation.openNutrition(day.date) })
-                    }
-                    day.annotations.forEach { annotation ->
-                        AnnotationCard(
-                            annotation,
-                            onEdit = { onNote(annotation.startDate, annotation.id) },
-                            onDelete = { vm.deleteAnnotation(annotation.id) },
-                        )
-                    }
-                    if (day.entries.isEmpty() && day.annotations.isEmpty()) {
-                        Text("Rest day — nothing scheduled.", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
-                    }
-                    day.entries.forEach { entry ->
-                        val picking = state.selection
-                        if (picking != null) {
-                            SelectableTimelineCard(entry, picked = picking.picks(entry), enabled = !picking.deleting) {
-                                vm.toggleSelected(entry)
-                            }
-                            return@forEach
-                        }
-                        TimelineCard(
-                            entry = entry,
-                            quickComplete = canQuickComplete(entry, tomorrow),
-                            onOpen = { onOpen(entry) },
-                            actions = CardActions(
-                                onComplete = { vm.markDone(entry) },
-                                onUndoRecovery = { vm.undoRecovery(entry) },
-                                moves = quickMoves(entry, state.today),
-                                onMove = { date -> vm.move(entry, date) },
-                                onPickDate = if (canMove(entry)) ({ onPickDate(entry) }) else null,
-                            ),
-                            chips = remember(entry, state.records) { exerciseChips(entry, state.records) },
-                            fuelling = remember(entry, state.bodyweightKg) { FuellingTarget.of(entry, state.bodyweightKg) },
-                            pending = state.isPending(entry),
-                            mafCeiling = state.mafCeiling,
-                            strava = stravaControls(
-                                entry,
-                                day.entries,
-                                onLink = { target -> vm.linkRecording(entry, target) },
-                                onUnlink = { vm.unlinkRecording(entry) },
-                                onDismissSuggestion = { vm.dismissSuggestion(entry) },
-                            ),
-                        )
-                    }
-                }
+                DayRow(day, state, vm, tomorrow, navigation, onOpen = onOpen, onPickDate = onPickDate, onNote = onNote)
             }
             if (state.rows.hiddenUpcoming > 0) {
                 item(key = "more-upcoming") {
@@ -411,6 +364,68 @@ private fun TimelineList(
                 direction,
                 onClick = { scope.launch { listState.animateScrollToItem(todayItem) } },
                 modifier = Modifier.align(Alignment.BottomStart).padding(Spacing.Lg),
+            )
+        }
+    }
+}
+
+/** One day: its header and fuelling, its training notes, then its sessions, or "Rest day" with none. */
+@Composable
+private fun DayRow(
+    day: TimelineDay,
+    state: TimelineUiState,
+    vm: TimelineViewModel,
+    tomorrow: String,
+    navigation: TimelineNavigation,
+    onOpen: (TimelineEntry) -> Unit,
+    onPickDate: (TimelineEntry) -> Unit,
+    onNote: (date: String, editingId: String?) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+        DayHeader(day, state.today, onAddNote = { onNote(day.date, null) })
+        state.fuelling[day.date]?.let { fuelling ->
+            FuellingDayChip(fuelling, onClick = { navigation.openNutrition(day.date) })
+        }
+        day.annotations.forEach { annotation ->
+            AnnotationCard(
+                annotation,
+                onEdit = { onNote(annotation.startDate, annotation.id) },
+                onDelete = { vm.deleteAnnotation(annotation.id) },
+            )
+        }
+        if (day.entries.isEmpty() && day.annotations.isEmpty()) {
+            Text("Rest day — nothing scheduled.", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
+        }
+        day.entries.forEach { entry ->
+            val picking = state.selection
+            if (picking != null) {
+                SelectableTimelineCard(entry, picked = picking.picks(entry), enabled = !picking.deleting) {
+                    vm.toggleSelected(entry)
+                }
+                return@forEach
+            }
+            TimelineCard(
+                entry = entry,
+                quickComplete = canQuickComplete(entry, tomorrow),
+                onOpen = { onOpen(entry) },
+                actions = CardActions(
+                    onComplete = { vm.markDone(entry) },
+                    onUndoRecovery = { vm.undoRecovery(entry) },
+                    moves = quickMoves(entry, state.today),
+                    onMove = { date -> vm.move(entry, date) },
+                    onPickDate = if (canMove(entry)) ({ onPickDate(entry) }) else null,
+                ),
+                chips = remember(entry, state.records) { exerciseChips(entry, state.records) },
+                fuelling = remember(entry, state.bodyweightKg) { FuellingTarget.of(entry, state.bodyweightKg) },
+                pending = state.isPending(entry),
+                mafCeiling = state.mafCeiling,
+                strava = stravaControls(
+                    entry,
+                    day.entries,
+                    onLink = { target -> vm.linkRecording(entry, target) },
+                    onUnlink = { vm.unlinkRecording(entry) },
+                    onDismissSuggestion = { vm.dismissSuggestion(entry) },
+                ),
             )
         }
     }

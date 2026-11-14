@@ -177,22 +177,14 @@ fun NutritionScreen(open: DeepLink.Nutrition? = null, onOpened: () -> Unit = {},
                         // With no history there's nothing to repeat, so the shortcuts stay hidden (Nutrition.tsx isFirstRun).
                         val canRepeat = !quickAdd.firstRun
                         // A first-run athlete gets the first-meal prompt wherever the repeat shortcut would show.
-                        val setTargets = if (summary.effectiveTarget == null) targetsVm::openDaily else null
+                        val setTargets = { targetsVm.openDaily() }.takeIf { summary.effectiveTarget == null }
+                        val shortcut = EmptyDayShortcut(
+                            repeating = state.repeating,
+                            onRepeat = { vm.repeatPreviousDay() }.takeIf { canRepeat },
+                            firstMeal = { FirstMealPrompt(capture::openDescribe, barcode::open, setTargets) },
+                        )
                         if (meals.isEmpty()) {
-                            item {
-                                if (canRepeat) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                                        Text(
-                                            "Nothing logged for ${dayLabel(state.date, state.today).lowercase()}.",
-                                            style = FitaiTheme.typography.body,
-                                            color = FitaiTheme.colors.textMuted,
-                                        )
-                                        RepeatPreviousDay(state.repeating, vm::repeatPreviousDay)
-                                    }
-                                } else {
-                                    FirstMealPrompt(capture::openDescribe, barcode::open, setTargets)
-                                }
-                            }
+                            item { shortcut.Show(nothingLogged = "Nothing logged for ${dayLabel(state.date, state.today).lowercase()}.") }
                         }
                         items(meals, key = { it.wireValue }) { meal ->
                             MealSection(
@@ -217,16 +209,7 @@ fun NutritionScreen(open: DeepLink.Nutrition? = null, onOpened: () -> Unit = {},
                         }
                         // Meals shown for their targets, nothing in them yet: the day can still be repeated, or a first meal logged.
                         if (meals.isNotEmpty() && summary.isEmptyDay()) {
-                            item {
-                                if (canRepeat) {
-                                    RepeatPreviousDay(
-                                        state.repeating,
-                                        vm::repeatPreviousDay,
-                                    )
-                                } else {
-                                    FirstMealPrompt(capture::openDescribe, barcode::open, setTargets)
-                                }
-                            }
+                            item { shortcut.Show(nothingLogged = null) }
                         }
                         item {
                             DayFooter(
@@ -438,6 +421,23 @@ private fun Macro(label: String, value: Double, target: Double?, unit: String) {
 }
 
 private fun Double.roundToWhole(): Double = kotlin.math.round(this)
+
+/**
+ * An empty day's shortcut: "Repeat previous day", under a line saying nothing
+ * is logged when no meal shows at all, or, for an athlete with nothing to
+ * repeat yet ([onRepeat] null), the first-meal prompt (Nutrition.tsx
+ * firstRunStarter).
+ */
+private class EmptyDayShortcut(val repeating: Boolean, val onRepeat: (() -> Unit)?, val firstMeal: @Composable () -> Unit) {
+    @Composable
+    fun Show(nothingLogged: String?) {
+        val repeat = onRepeat ?: return firstMeal()
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+            nothingLogged?.let { Text(it, style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted) }
+            RepeatPreviousDay(repeating, repeat)
+        }
+    }
+}
 
 /** "Repeat previous day": the day before, copied onto this one. */
 @Composable
