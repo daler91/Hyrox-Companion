@@ -130,9 +130,9 @@ An audit of the API against the app after Wave 4 found these still unused.
   of the trend. MAF-method athletes with a ceiling only — `POST`, `PATCH`, `DELETE /workouts/{id}/maf-test`.
 - [x] Structure blocks on workout detail (rounds, EMOMs, AMRAPs): each block's setup and steps, and a result for each
   EMOM, AMRAP or rounds block, recorded, corrected or cleared — `PATCH /workouts/{id}/structure-blocks/{blockId}/score`.
-- [ ] Select several workouts and delete them together, with one undo — `POST /workouts/bulk-delete`,
+- [x] Select several workouts on the timeline and delete them together, with one undo — `POST /workouts/bulk-delete`,
   `POST /recycle-bin/batches/{batchId}/restore`.
-- [ ] Combine workouts into one — `POST /workouts/combine`.
+- [x] Combine a workout with another logged the same day, choosing what to keep — `POST /workouts/combine`.
 
 Deferred: the structure-block **editor**. The plan-day version is behind a flag on the web, and it is a large editor.
 
@@ -140,6 +140,36 @@ Not needed in the app:
 
 - `POST /workouts/{id}/seed-from-plan`: the server seeds a workout's sets from its plan day when the day is marked done.
 - `GET /workouts/{id}/history`: no web screen uses it.
+
+## Wave 6: the rest of the screens
+
+After Wave 5 the app called every endpoint it needs. A sweep of the web's screens then found these features that
+reuse endpoints the app already calls, or need none.
+
+### Workout detail
+- [x] Each exercise's menu: **Change exercise** (keeps its sets' values) and **Delete exercise** with its sets; on
+  plan days too.
+- [x] **Use last**: fill an exercise's sets from last time.
+- [x] Notes on a set.
+- [x] The RPE the recording's heart rate suggests, saved only when taken.
+- [x] Where each exercise differed from its plan ("planned 5 reps, 60 kg"), with adherence insights on.
+
+### Timeline
+- [ ] Coach cues on cards and in the session sheets (the athlete's note apart from the `[AI Coach]` lines).
+- [ ] Jump back to today after scrolling away.
+- [ ] Offline banner and a "Pending sync" mark on cards with changes still to send.
+- [ ] The MAF ceiling on planned runs, for MAF athletes.
+- [ ] Empty states: start from the 8-week template; set a start date for a plan with no dates.
+
+### Nutrition
+- [ ] The log-food sheet's preview: the macro split, the effect on today's goals, and the serving's micronutrients.
+- [ ] A first-meal prompt on an empty log.
+
+### Onboarding and coach
+- [ ] A fuelling step in onboarding (height, age, activity, weight goal, daily targets).
+- [ ] A "Connect a device" button when onboarding finishes.
+- [ ] Message times and day separators in coach chat.
+- [ ] The 4-week completion rate and the count of upcoming sessions.
 
 ## Staying on the web (decided in docs/mobile-app-plan.md)
 

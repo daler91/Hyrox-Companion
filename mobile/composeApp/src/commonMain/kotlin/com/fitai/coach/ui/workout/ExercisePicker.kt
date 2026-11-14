@@ -47,20 +47,27 @@ fun searchExercises(query: String): List<String> {
  * custom exercise (ExerciseTable's add picker).
  */
 @Composable
-fun ExercisePickerSheet(onPick: (exerciseName: String, customLabel: String?) -> Unit, onDismiss: () -> Unit) {
+fun ExercisePickerSheet(
+    onPick: (exerciseName: String, customLabel: String?) -> Unit,
+    onDismiss: () -> Unit,
+    title: String = "Add exercise",
+    description: String? = null,
+    customRow: (typed: String) -> String = { "Add \"$it\" as a custom exercise" },
+) {
     var query by remember { mutableStateOf("") }
     val results = remember(query) { searchExercises(query) }
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
     FitaiBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.padding(horizontal = Spacing.Lg), verticalArrangement = Arrangement.spacedBy(Spacing.Md)) {
-            Text("Add exercise", style = type.h3, color = colors.text)
+            Text(title, style = type.h3, color = colors.text)
+            description?.let { Text(it, style = type.bodySm, color = colors.textMuted) }
             FitaiTextField(query, { query = it }, "Search exercises", placeholder = "e.g. wall balls")
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = PICKER_MAX_HEIGHT.dp)) {
                 val typed = query.trim()
                 if (typed.isNotEmpty()) {
                     item(key = "custom") {
-                        PickerRow("Add \"$typed\" as a custom exercise", "custom") { onPick(CUSTOM_EXERCISE, typed) }
+                        PickerRow(customRow(typed), "custom") { onPick(CUSTOM_EXERCISE, typed) }
                     }
                 }
                 items(results, key = { it }) { name ->

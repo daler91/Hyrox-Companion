@@ -16,10 +16,12 @@ import com.fitai.coach.core.exercises.generated.EXERCISE_DEFINITIONS
 import com.fitai.coach.ui.format.userMessage
 import com.fitai.coach.ui.workout.CUSTOM_EXERCISE
 import com.fitai.coach.ui.workout.ExerciseGroup
+import com.fitai.coach.ui.workout.ExerciseIdentity
 import com.fitai.coach.ui.workout.SetEdit
 import com.fitai.coach.ui.workout.reorderedSetIds
 import com.fitai.coach.ui.workout.toDoublePatch
 import com.fitai.coach.ui.workout.toIntPatch
+import com.fitai.coach.ui.workout.toNotePatch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -172,25 +174,54 @@ class PlanDayViewModel(private val session: UserSession, private val entryId: St
     }
 
     fun saveSet(set: ExerciseSetRow, edit: SetEdit) = online("Couldn't save that set") { id ->
+        patchSet(
+            id,
+            set,
+            PatchPlansDaysByDayIdSetsBySetIdRequest(
+                reps = edit.reps.toIntPatch(),
+                weight = edit.weight.toDoublePatch(),
+                distance = edit.distance.toDoublePatch(),
+                time = edit.time.toDoublePatch(),
+                notes = edit.notes.toNotePatch(),
+            ),
+        )
+    }
+
+    /** Swaps an exercise for another (Change exercise); its sets keep their values. */
+    fun changeExercise(group: ExerciseGroup, exerciseName: String, customLabel: String?) = online("Couldn't change that exercise") { id ->
+        val identity = ExerciseIdentity.of(exerciseName, customLabel)
+        val patch = PatchPlansDaysByDayIdSetsBySetIdRequest(
+            exerciseName = identity.exerciseName,
+            category = identity.category,
+            customLabel = identity.customLabel?.let { Patch.of(it) } ?: Patch.clear(),
+        )
+        for (set in group.sets) {
+            if (!patchSet(id, set, patch)) break
+        }
+    }
+
+    /** Deletes an exercise and all its sets. */
+    fun deleteExercise(group: ExerciseGroup) = online("Couldn't delete that exercise") { id ->
+        val ids = group.sets.map { it.id }.toSet()
+        ids.forEach { session.planDays.deleteSet(id, it) }
+        sets.update { current -> current.copy(rows = current.rows.filterNot { it.id in ids }) }
+    }
+
+    /**
+     * Saves a set's change against the version the device saw. Another
+     * device's change wins: it's fetched and shown, and false says so.
+     */
+    private suspend fun patchSet(planDayId: String, set: ExerciseSetRow, patch: PatchPlansDaysByDayIdSetsBySetIdRequest): Boolean {
         val saved = try {
-            session.planDays.updateSet(
-                id,
-                set.id,
-                set.version,
-                PatchPlansDaysByDayIdSetsBySetIdRequest(
-                    reps = edit.reps.toIntPatch(),
-                    weight = edit.weight.toDoublePatch(),
-                    distance = edit.distance.toDoublePatch(),
-                    time = edit.time.toDoublePatch(),
-                ),
-            )
+            session.planDays.updateSet(planDayId, set.id, set.version, patch)
         } catch (e: ApiException) {
             if (e.status != CONFLICT) throw e
             toasts.send("That set was changed on another device. Showing the latest.")
-            reload(id)
-            return@online
+            reload(planDayId)
+            null
         }
-        sets.update { current -> current.copy(rows = current.rows.map { if (it.id == saved.id) saved else it }) }
+        saved?.let { row -> sets.update { current -> current.copy(rows = current.rows.map { if (it.id == row.id) row else it }) } }
+        return saved != null
     }
 
     /** Adds a set to an exercise, copying its last set's values. */

@@ -73,6 +73,8 @@ data class TimelineUiState(
     val fuelling: Map<String, DayFuelling> = emptyMap(),
     /** For the planned-session fuelling targets; null without one in the profile. */
     val bodyweightKg: Double? = null,
+    /** Picking workouts to delete together; null when not picking. */
+    val selection: Selection? = null,
 )
 
 /** The recovery sheet for a missed day: loading, the options, or why they couldn't load. */
@@ -99,6 +101,7 @@ class TimelineViewModel(
     private val expanded = MutableStateFlow(INITIAL_DAYS to INITIAL_DAYS)
     private val status = MutableStateFlow(RefreshStatus())
     private val filter = MutableStateFlow(Filter())
+    private val selection = MutableStateFlow<Selection?>(null)
     private val toasts = Channel<String>(Channel.BUFFERED)
     private val undoOffers = Channel<UndoOffer>(Channel.BUFFERED)
 
@@ -129,8 +132,8 @@ class TimelineViewModel(
         combine(timeline.plans, timeline.weekSummary, ::Pair),
         session.preferences.preferences,
         combine(selectedPlan, expanded, filter, timeline.olderCursor, ::Shown),
-        status,
-    ) { (entries, more, fuelling), (plans, summary), prefs, shown, refresh ->
+        combine(status, selection, ::Pair),
+    ) { (entries, more, fuelling), (plans, summary), prefs, shown, (refresh, picking) ->
         val today = todayIn(prefs?.userTimezone)
         TimelineUiState(
             loaded = true,
@@ -158,6 +161,7 @@ class TimelineViewModel(
             loadingOlder = shown.filter.loadingOlder,
             fuelling = fuelling,
             bodyweightKg = prefs?.bodyweightKg,
+            selection = picking,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), TimelineUiState())
 
@@ -279,6 +283,49 @@ class TimelineViewModel(
         if (!canMoveTo(entry, date, addDaysToIsoDate(today, 1))) return@act
         timeline.move(entry, date, today)
         toasts.send("Workout moved")
+    }
+
+    /** Starts picking workouts to delete together. */
+    fun startSelecting() {
+        selection.value = Selection()
+    }
+
+    fun stopSelecting() {
+        selection.value = null
+    }
+
+    fun toggleSelected(entry: TimelineEntry) {
+        val key = selectionKey(entry) ?: return
+        selection.update { it?.copy(keys = if (key in it.keys) it.keys - key else it.keys + key) }
+    }
+
+    /** Picks every workout on screen that can be deleted. */
+    fun selectAll() = selection.update { it?.copy(keys = selectable(state.value.rows).mapNotNull(::selectionKey).toSet()) }
+
+    fun clearSelection() = selection.update { it?.copy(keys = emptySet()) }
+
+    /** Deletes the picked workouts together; the toast's Undo puts the whole batch back. */
+    fun deleteSelected() {
+        val picked = selection.value?.takeUnless { it.deleting || it.count == 0 || it.tooMany } ?: return
+        val entries = selectable(state.value.rows).filter(picked::picks)
+        selection.value = picked.copy(deleting = true)
+        viewModelScope.launch {
+            try {
+                val result = session.workoutBatches.deleteAll(entries)
+                selection.value = null
+                undoOffers.send(
+                    UndoOffer(removedLabel(result.deletedCount)) {
+                        val warnings = session.workoutBatches.restoreBatch(result.batchId)
+                        if (warnings.isNotEmpty()) toasts.send("Restored. ${warnings.joinToString(" ")}")
+                    },
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                selection.update { it?.copy(deleting = false) }
+                toasts.send(e.userMessage("Couldn't delete those workouts"))
+            }
+        }
     }
 
     /** Removes a skipped plan day from its plan; the toast can undo it. */

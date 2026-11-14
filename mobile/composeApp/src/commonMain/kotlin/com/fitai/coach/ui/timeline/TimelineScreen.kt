@@ -49,6 +49,7 @@ import com.fitai.coach.ui.components.FitaiBadge
 import com.fitai.coach.ui.components.FitaiButton
 import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.components.FitaiChip
+import com.fitai.coach.ui.components.FitaiDialog
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.components.offerUndo
@@ -95,6 +96,7 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
 
     var sheet by remember { mutableStateOf<OpenSheet?>(null) }
     var noteSheet by remember { mutableStateOf<NoteSheet?>(null) }
+    var confirmingDelete by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val allEntries = state.rows.days.flatMap { it.entries }
     // The fuelling chips cover the days on screen; asked for again each time the timeline shows.
@@ -125,12 +127,26 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
                     onNote = { date, id -> noteSheet = NoteSheet(date, id) },
                     onNewAiPlan = generator::open,
                     navigation = navigation,
+                    onDeleteSelected = { confirmingDelete = true },
                 )
             }
         }
         FitaiToastHost(toasts, Modifier.align(Alignment.BottomCenter))
     }
     GeneratePlanSheet(generatorState, generator)
+    state.selection?.takeIf { confirmingDelete }?.let { picked ->
+        FitaiDialog(
+            title = "Delete selected workouts?",
+            text = deleteSelectedText(picked.count),
+            confirmLabel = "Delete",
+            onConfirm = {
+                confirmingDelete = false
+                vm.deleteSelected()
+            },
+            onDismiss = { confirmingDelete = false },
+            destructive = true,
+        )
+    }
 
     val today = state.today
     when (val open = sheet) {
@@ -243,6 +259,7 @@ private fun TimelineList(
     onNote: (date: String, editingId: String?) -> Unit,
     onNewAiPlan: () -> Unit,
     navigation: TimelineNavigation,
+    onDeleteSelected: () -> Unit,
 ) {
     val listState = rememberLazyListState()
     var scrolledToToday by rememberSaveable { mutableStateOf(false) }
@@ -267,11 +284,21 @@ private fun TimelineList(
                 vm::filterBy,
                 PlanToolActions(vm::renamePlan, vm::setPlanGoal, vm::schedulePlan, vm::setPlanArchived, vm::deletePlan),
                 onNewAiPlan,
+                onSelect = if (state.selection == null) vm::startSelecting else vm::stopSelecting,
             )
             state.reviewPrompt?.let { prompt ->
                 ReviewPromptCard(prompt, onOpen = {
                     navigation.openReview(prompt.weekStart)
                 }, onDismiss = { vm.dismissReviewPrompt(prompt.weekStart) })
+            }
+        }
+        state.selection?.let { picked ->
+            stickyHeader(key = "selection") {
+                SelectionBar(
+                    picked,
+                    selectableCount = selectable(state.rows).size,
+                    SelectionActions(vm::selectAll, vm::clearSelection, onDeleteSelected, vm::stopSelecting),
+                )
             }
         }
         if (state.rows.hiddenPast > 0) {
@@ -301,6 +328,13 @@ private fun TimelineList(
                     Text("Rest day — nothing scheduled.", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
                 }
                 day.entries.forEach { entry ->
+                    val picking = state.selection
+                    if (picking != null) {
+                        SelectableTimelineCard(entry, picked = picking.picks(entry), enabled = !picking.deleting) {
+                            vm.toggleSelected(entry)
+                        }
+                        return@forEach
+                    }
                     TimelineCard(
                         entry = entry,
                         quickComplete = canQuickComplete(entry, tomorrow),
@@ -357,12 +391,27 @@ private fun Header(
     onFilter: (TimelineEntry.Status?) -> Unit,
     planTools: PlanToolActions,
     onNewAiPlan: () -> Unit,
+    onSelect: () -> Unit,
 ) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("training", style = type.h1, color = colors.text, modifier = Modifier.weight(1f).semantics { heading() })
+            if (state.hasAnyEntries) {
+                FitaiButton(
+                    if (state.selection ==
+                        null
+                    ) {
+                        "Select"
+                    } else {
+                        "Done"
+                    },
+                    onClick = onSelect,
+                    variant = ButtonVariant.Ghost,
+                    size = ButtonSize.Sm,
+                )
+            }
             FitaiButton(
                 "New AI plan",
                 onClick = onNewAiPlan,

@@ -76,6 +76,7 @@ fun WorkoutDetailScreen(
     onAskCoach: (CoachThread) -> Unit,
     onDeleted: (recycleBinItemId: String) -> Unit,
     onOpenNutrition: (date: String, meal: Meal?) -> Unit = { _, _ -> },
+    onCombined: (workoutId: String) -> Unit = {},
 ) {
     val session = LocalUserSession.current
     val vm = viewModel(key = "workout-$workoutId") { WorkoutDetailViewModel(session, workoutId) }
@@ -107,6 +108,7 @@ fun WorkoutDetailScreen(
                 state = state,
                 distanceUnit = prefs?.distanceUnit,
                 weightUnit = prefs?.weightUnit,
+                onSaveRpe = vm::saveRpe,
                 actions = object : WorkoutActions {
                     override fun back() = onBack()
 
@@ -120,7 +122,10 @@ fun WorkoutDetailScreen(
 
                     override fun addSet(sets: List<ExerciseSetRow>) = vm.addSet(sets)
 
-                    override fun useNext(sets: List<ExerciseSetRow>, target: NextTarget) = vm.useNext(sets, target)
+                    override fun fill(sets: List<ExerciseSetRow>, fill: SetFill) = when (fill) {
+                        is SetFill.Next -> vm.useNext(sets, fill.target)
+                        is SetFill.Last -> vm.useLast(sets, fill.history)
+                    }
 
                     override fun moveExercise(groups: List<ExerciseGroup>, index: Int, offset: Int) = vm.moveExercise(groups, index, offset)
 
@@ -196,6 +201,25 @@ fun WorkoutDetailScreen(
             onScore = { blockId, score -> vm.scoreBlock(blockId, score) { if (sheet == open) close() } },
             onDismiss = close,
         )
+        is DetailSheet.ChangeExercise -> ExercisePickerSheet(
+            onPick = { name, label ->
+                vm.changeExercise(open.group, name, label)
+                close()
+            },
+            onDismiss = close,
+            title = "Change exercise",
+            description = "Replace ${open.group.label} with another exercise. Your reps, weight, and other set values stay the same.",
+            customRow = { "Use \"$it\" as a custom exercise" },
+        )
+        DetailSheet.Combine -> state.workout?.let { workout ->
+            CombineSheet(
+                workout = workout,
+                candidates = state.combineCandidates,
+                busy = state.busy,
+                onCombine = { other, draft -> vm.combine(other, draft, onCombined) },
+                onDismiss = close,
+            )
+        }
         DetailSheet.AddExercise -> ExercisePickerSheet(
             onPick = { name, label ->
                 vm.addExercise(name, label)
@@ -206,7 +230,7 @@ fun WorkoutDetailScreen(
         null -> Unit
     }
 
-    when (confirm) {
+    when (val asked = confirm) {
         Confirm.Reopen -> FitaiDialog(
             title = "Reopen this workout?",
             text = "The plan day goes back to planned and this logged workout is deleted.",
@@ -225,6 +249,17 @@ fun WorkoutDetailScreen(
             onConfirm = {
                 confirm = null
                 vm.untagMaf()
+            },
+            onDismiss = { confirm = null },
+            destructive = true,
+        )
+        is Confirm.DeleteExercise -> FitaiDialog(
+            title = "Delete exercise?",
+            text = deleteExerciseText(asked.group, "this workout"),
+            confirmLabel = "Delete",
+            onConfirm = {
+                confirm = null
+                vm.deleteExercise(asked.group)
             },
             onDismiss = { confirm = null },
             destructive = true,
@@ -269,12 +304,31 @@ private sealed interface DetailSheet {
 
     data object Maf : DetailSheet
 
+    data object Combine : DetailSheet
+
+    data class ChangeExercise(val group: ExerciseGroup) : DetailSheet
+
     data class BlockResult(val blockId: String) : DetailSheet
 
     data class EditSet(val set: ExerciseSetRow) : DetailSheet
 }
 
-private enum class Confirm { Reopen, Delete, RemoveMaf }
+private sealed interface Confirm {
+    data object Reopen : Confirm
+
+    data object Delete : Confirm
+
+    data object RemoveMaf : Confirm
+
+    data class DeleteExercise(val group: ExerciseGroup) : Confirm
+}
+
+/** What fills an exercise's sets. */
+private sealed interface SetFill {
+    data class Next(val target: NextTarget) : SetFill
+
+    data class Last(val history: ExerciseHistory) : SetFill
+}
 
 /** What the workout's controls do. */
 private interface WorkoutActions {
@@ -290,7 +344,8 @@ private interface WorkoutActions {
 
     fun addSet(sets: List<ExerciseSetRow>)
 
-    fun useNext(sets: List<ExerciseSetRow>, target: NextTarget)
+    /** Fills an exercise's sets: with the next target, or with last time's values. */
+    fun fill(sets: List<ExerciseSetRow>, fill: SetFill)
 
     fun moveExercise(groups: List<ExerciseGroup>, index: Int, offset: Int)
 
@@ -313,6 +368,7 @@ private fun WorkoutContent(
     state: WorkoutDetailState,
     distanceUnit: String?,
     weightUnit: String?,
+    onSaveRpe: (Int) -> Unit,
     actions: WorkoutActions,
 ) {
     val colors = FitaiTheme.colors
@@ -331,6 +387,9 @@ private fun WorkoutContent(
             Text(workout.focus, style = type.h1, color = colors.text, modifier = Modifier.semantics { heading() })
         }
         item { Stats(workout, distanceUnit) }
+        workout.suggestedRpe?.takeIf { workout.rpe == null }?.let { suggested ->
+            item { SuggestedRpeRow(suggested) { onSaveRpe(suggested) } }
+        }
         item { PlanDayRow(state.linkedPlanDay, linked = workout.planDayId != null, onChange = { actions.open(DetailSheet.PlanDay) }) }
         state.maf?.let { tag ->
             item {
@@ -371,6 +430,7 @@ private fun WorkoutContent(
                 history = state.histories[group.exerciseName].takeIf { group.exerciseName != CUSTOM_EXERCISE },
                 busy = state.busy,
                 actions = actions,
+                showsPlannedDiffs = state.showsPlannedDiffs,
                 move = GroupMove(
                     up = if (index > 0) ({ actions.moveExercise(groups, index, -1) }) else null,
                     down = if (index < groups.lastIndex) ({ actions.moveExercise(groups, index, 1) }) else null,
@@ -394,6 +454,17 @@ private fun WorkoutContent(
             }
             itemsIndexed(blocks, key = { _, block -> "block-${block.id}" }) { index, block ->
                 StructureBlockCard(block, index, weightUnit, busy = state.scoring) { actions.open(DetailSheet.BlockResult(block.id)) }
+            }
+        }
+        if (state.combineCandidates.isNotEmpty()) {
+            item {
+                FitaiButton(
+                    "Combine with another workout",
+                    onClick = { actions.open(DetailSheet.Combine) },
+                    variant = ButtonVariant.Secondary,
+                    enabled = !state.busy,
+                    leadingIcon = LucideIcons.CopyPlus,
+                )
             }
         }
         item {
@@ -456,6 +527,7 @@ private fun ExerciseCard(
     history: ExerciseHistory?,
     busy: Boolean,
     actions: WorkoutActions,
+    showsPlannedDiffs: Boolean,
     move: GroupMove,
 ) {
     val colors = FitaiTheme.colors
@@ -466,8 +538,21 @@ private fun ExerciseCard(
         onEditSet = { actions.open(DetailSheet.EditSet(it)) },
         onAddSet = actions::addSet,
         move = move,
+        menu = GroupMenu(onChange = { actions.open(DetailSheet.ChangeExercise(group)) }, onDelete = {
+            actions.confirm(Confirm.DeleteExercise(group))
+        }),
     ) {
-        history?.lastTime?.let { Text("Last time · $it", style = type.bodySm, color = colors.textMuted) }
+        if (showsPlannedDiffs) plannedDiffSummary(group.sets)?.let { Text(it, style = type.bodySm, color = colors.textMuted) }
+        history?.lastTime?.let { lastTime ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Last time · $lastTime", style = type.bodySm, color = colors.textMuted, modifier = Modifier.weight(1f))
+                if (history.lastSets.isNotEmpty()) {
+                    FitaiButton("Use last", onClick = {
+                        actions.fill(group.sets, SetFill.Last(history))
+                    }, variant = ButtonVariant.Ghost, size = ButtonSize.Sm)
+                }
+            }
+        }
         history?.next?.let { next ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -476,9 +561,25 @@ private fun ExerciseCard(
                     color = colors.text,
                     modifier = Modifier.weight(1f),
                 )
-                FitaiButton("Use", onClick = { actions.useNext(group.sets, next) }, variant = ButtonVariant.Ghost, size = ButtonSize.Sm)
+                FitaiButton("Use", onClick = {
+                    actions.fill(group.sets, SetFill.Next(next))
+                }, variant = ButtonVariant.Ghost, size = ButtonSize.Sm)
             }
         }
+    }
+}
+
+/** The RPE the recording's heart rate suggests (RpePrompt): saved only when the athlete takes it. */
+@Composable
+private fun SuggestedRpeRow(suggested: Int, onSave: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "Your heart rate suggests RPE $suggested.",
+            style = FitaiTheme.typography.bodySm,
+            color = FitaiTheme.colors.textMuted,
+            modifier = Modifier.weight(1f),
+        )
+        FitaiButton("Save RPE $suggested", onClick = onSave, variant = ButtonVariant.Ghost, size = ButtonSize.Sm)
     }
 }
 
@@ -569,6 +670,13 @@ private fun DetailsEditor(workout: WorkoutLogDetail, onSave: (DetailsEdit) -> Un
             }
             Text("How hard was it?", style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
             RpeSelector(edit.rpe, { edit = edit.copy(rpe = it) })
+            workout.suggestedRpe?.takeIf { edit.rpe == null }?.let { suggested ->
+                Text(
+                    "Your heart rate suggests $suggested. Tap it to save, or pick your own.",
+                    style = FitaiTheme.typography.bodySm,
+                    color = FitaiTheme.colors.textMuted,
+                )
+            }
             FitaiTextField(edit.notes, { edit = edit.copy(notes = it) }, "Notes", singleLine = false)
             FitaiSwitchRow("Counts as training", edit.countsAsTraining, { edit = edit.copy(countsAsTraining = it) })
             FitaiButton("Save", onClick = { onSave(edit) }, enabled = edit.isValid(), modifier = Modifier.fillMaxWidth())
