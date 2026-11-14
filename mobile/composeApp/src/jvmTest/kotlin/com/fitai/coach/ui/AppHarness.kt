@@ -214,7 +214,15 @@ fun appTest(
     }
 }
 
-/** Waits (in real time: the server and database run on other threads) until a node matches. */
+/**
+ * Waits (in real time: the server and database run on other threads) until a
+ * node matches. The default is generous because the first wait in a test JVM
+ * also pays for its cold start (Skia, fonts, the SQLite native library, the
+ * first Room database): about 8 s on one local core, and past the old 10 s on
+ * a loaded CI runner. A passing wait returns as soon as the node shows.
+ */
 @OptIn(ExperimentalTestApi::class)
-fun ComposeUiTest.awaitNode(matcher: SemanticsMatcher, timeoutMillis: Long = 10_000) =
+fun ComposeUiTest.awaitNode(matcher: SemanticsMatcher, timeoutMillis: Long = AWAIT_NODE_MS) =
     waitUntil(timeoutMillis = timeoutMillis) { onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+
+private const val AWAIT_NODE_MS = 30_000L
