@@ -1,6 +1,7 @@
 package com.fitai.coach.ui
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
@@ -29,6 +30,10 @@ private fun loggedDaysAgo(days: Long): String {
     return """{"id":"log-w$days","date":"$date","type":"logged","status":"completed","focus":"Run $days",""" +
         """"mainWorkout":"5 km easy\nThen 4 x 400 m\nThen strides","workoutLogId":"w$days"}"""
 }
+
+private val loggedToday =
+    """{"id":"log-w0","date":"${FakeApi.today}","type":"logged","status":"completed","focus":"Morning Run",""" +
+        """"mainWorkout":"5 km easy\nThen 4 x 400 m\nThen strides","workoutLogId":"w0"}"""
 
 /** The timeline's coach cues, MAF ceiling, offline and pending-sync marks, empty states, and the way back to today. */
 @OptIn(ExperimentalTestApi::class)
@@ -109,6 +114,26 @@ class TimelineStatusUiTest {
             awaitNode(hasText("Ready to start training"))
             onNode(hasText("Set start date") and hasClickAction()).performClick()
             awaitNode(hasText("Schedule your training plan"))
+        }
+    }
+
+    @Test
+    fun onAFirstOpenTheTimelineScrollsToTodayOnceItHasLoaded() {
+        val api = FakeApi().apply {
+            establishedAccount(FakeApi.plannedToday("Tempo intervals"), loggedToday)
+            on(
+                "GET",
+                "/api/v1/timeline-annotations",
+                """[{"id":"a1","userId":"u1","startDate":"${FakeApi.today}","endDate":"${FakeApi.today}","type":"travel","note":"Away"}]""",
+            )
+            // Nothing cached and a slow server: today's row shows, empty, before the plans and the week above it.
+            slow("GET", "/api/v1/timeline", millis = 1_000)
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
+            awaitNode(hasText("Away"))
+            waitForIdle()
+            onNodeWithContentDescription("Mark Tempo intervals as complete").assertIsDisplayed()
+            onNodeWithContentDescription("Move Morning Run to another day").assertIsDisplayed()
         }
     }
 

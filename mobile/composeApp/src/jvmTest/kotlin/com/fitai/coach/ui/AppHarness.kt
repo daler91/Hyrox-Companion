@@ -33,6 +33,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.koin.core.context.startKoin
@@ -71,9 +72,15 @@ class FakeApi {
 
     val requests = CopyOnWriteArrayList<Sent>()
     private val routes = ConcurrentHashMap<String, Pair<Int, String>>()
+    private val delays = ConcurrentHashMap<String, Long>()
 
     fun on(method: String, path: String, body: String = "{}", status: Int = 200) {
         routes["$method $path"] = status to body
+    }
+
+    /** From now on [method] [path] answers only after [millis], as a slow network would. */
+    fun slow(method: String, path: String, millis: Long) {
+        delays["$method $path"] = millis
     }
 
     fun sent(method: String, path: String): List<Sent> = requests.filter { it.method == method && it.path == path }
@@ -84,6 +91,7 @@ class FakeApi {
                 val sent =
                     Sent(request.method.value, request.url.encodedPath, (request.body as? TextContent)?.text, request.url.encodedQuery)
                 requests += sent
+                delays["${sent.method} ${sent.path}"]?.let { delay(it) }
                 val (status, body) = routes["${sent.method} ${sent.path}"] ?: (404 to """{"error":"Not found","code":"NOT_FOUND"}""")
                 respond(body, HttpStatusCode.fromValue(status), headersOf(HttpHeaders.ContentType, "application/json"))
             },

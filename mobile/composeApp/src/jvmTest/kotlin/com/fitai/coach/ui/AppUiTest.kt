@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
@@ -254,7 +255,8 @@ class AppUiTest {
         appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
             awaitNode(hasText("Calf strain"))
             awaitNode(hasText("Was this your Easy Run?"))
-            onNodeWithText("Link").performClick()
+            // Today's row runs past the bottom of the window: scroll to the button, as a person would.
+            onNodeWithText("Link").performScrollTo().performClick()
 
             waitUntil(timeoutMillis = 10_000) { api.sent("POST", "/api/v1/workouts/w9/device-link").isNotEmpty() }
             assertEquals("""{"planDayId":"d1"}""", api.sent("POST", "/api/v1/workouts/w9/device-link").single().body)

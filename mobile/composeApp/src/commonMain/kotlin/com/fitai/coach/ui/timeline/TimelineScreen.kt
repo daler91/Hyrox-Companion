@@ -280,10 +280,14 @@ private fun TimelineList(
     val listState = rememberLazyListState()
     var scrolledToToday by rememberSaveable { mutableStateOf(false) }
     val header = 1 + (if (state.rows.hiddenPast > 0 || state.hasOlder) 1 else 0)
-    // While a plan waits for its start date, its card stands in for the days: scroll once they come.
     val readyPlan = state.planReadyToStart()
-    LaunchedEffect(state.rows.todayIndex, readyPlan) {
-        if (!scrolledToToday && state.rows.todayIndex >= 0 && readyPlan == null) {
+    // Today has a row from the first frame. With nothing cached, its sessions, the plans and the
+    // week above it only come with the first refresh: scrolling sooner leaves today below them.
+    // While a plan waits for its start date, its card stands in for the days: scroll once they come.
+    val cachedAtOpen = remember { state.hasAnyEntries }
+    val daysShown = readyPlan == null && (cachedAtOpen || !state.refreshing)
+    LaunchedEffect(state.rows.todayIndex, daysShown) {
+        if (!scrolledToToday && daysShown && state.rows.todayIndex >= 0) {
             listState.scrollToItem(state.rows.todayIndex + header)
             scrolledToToday = true
         }
