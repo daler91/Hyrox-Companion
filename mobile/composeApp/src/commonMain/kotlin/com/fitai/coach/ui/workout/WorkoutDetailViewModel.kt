@@ -17,6 +17,7 @@ import com.fitai.coach.core.data.SyncEvent
 import com.fitai.coach.core.data.UserSession
 import com.fitai.coach.core.exercises.NextTarget
 import com.fitai.coach.core.exercises.generated.EXERCISE_DEFINITIONS
+import com.fitai.coach.core.structure.BlockScore
 import com.fitai.coach.ui.format.userMessage
 import com.fitai.coach.ui.planday.parseResult
 import kotlinx.coroutines.CancellationException
@@ -59,6 +60,8 @@ data class WorkoutDetailState(
     val maf: MafTag? = null,
     /** A MAF tag, correction or removal is in flight. */
     val mafSaving: Boolean = false,
+    /** A block's result is being saved. */
+    val scoring: Boolean = false,
 ) {
     /** The plan day it counts towards, when the timeline has it. */
     val linkedPlanDay: PlanDayOption? get() = workout?.planDayId?.let { id -> planDayOptions.firstOrNull { it.planDayId == id } }
@@ -133,6 +136,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
             parsing = more.parsing,
             maf = panel.maf,
             mafSaving = more.mafSaving,
+            scoring = more.scoring,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), WorkoutDetailState())
 
@@ -317,11 +321,11 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
     }
 
     /** Reads the workout's text into sets, replacing the ones it has. */
-    fun parseText() = parse("Couldn't read that into sets") { session.workouts.reparse(workoutId) }
+    fun parseText() = parse("Couldn't read that into sets") { session.workoutStructure.reparse(workoutId) }
 
     /** Reads a photo of the session into sets, replacing the ones it has. */
     fun parsePhoto(photo: EncodedImage) =
-        parse("Couldn't read that photo — try a clearer shot.") { session.workouts.reparseFromImage(workoutId, photo) }
+        parse("Couldn't read that photo — try a clearer shot.") { session.workoutStructure.reparseFromImage(workoutId, photo) }
 
     /** Tags the run as a MAF test, or corrects the tag it has, from [form]; [onSaved] closes the form. */
     fun saveMaf(form: MafForm, distanceUnit: String?, onSaved: () -> Unit) {
@@ -339,6 +343,14 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
         session.mafTests.untag(workoutId)
         toasts.send("Removed from MAF trend")
     }
+
+    /** Records a block's result, or (null) clears it; [onSaved] closes the form. */
+    fun scoreBlock(blockId: String, score: BlockScore?, onSaved: () -> Unit) =
+        oneAtATime("Couldn't save that result", running = { it.scoring }, mark = { copy(scoring = it) }) {
+            session.workoutStructure.scoreBlock(workoutId, blockId, score)
+            toasts.send(if (score == null) "Result cleared" else "Result saved")
+            onSaved()
+        }
 
     /** A read replaces every set, so it waits for, and holds off, anything else that changes them. */
     private fun parse(failure: String, read: suspend () -> WorkoutReparseResponse) =
@@ -412,6 +424,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
         val busy: Boolean = false,
         val parsing: Boolean = false,
         val mafSaving: Boolean = false,
+        val scoring: Boolean = false,
     )
 
     private data class Panels(

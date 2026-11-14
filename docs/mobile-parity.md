@@ -128,8 +128,8 @@ An audit of the API against the app after Wave 4 found these still unused.
   sets it has — `POST /workouts/{id}/reparse`, `…/reparse-from-image`.
 - [x] Tag a run as a **MAF test** from workout detail, correct its heart rate, duration and distance, or take it out
   of the trend. MAF-method athletes with a ceiling only — `POST`, `PATCH`, `DELETE /workouts/{id}/maf-test`.
-- [ ] Structure blocks on workout detail (rounds, EMOMs, AMRAPs) and scoring each one —
-  `PATCH /workouts/{id}/structure-blocks/{blockId}/score`.
+- [x] Structure blocks on workout detail (rounds, EMOMs, AMRAPs): each block's setup and steps, and a result for each
+  EMOM, AMRAP or rounds block, recorded, corrected or cleared — `PATCH /workouts/{id}/structure-blocks/{blockId}/score`.
 - [ ] Select several workouts and delete them together, with one undo — `POST /workouts/bulk-delete`,
   `POST /recycle-bin/batches/{batchId}/restore`.
 - [ ] Combine workouts into one — `POST /workouts/combine`.
