@@ -35,6 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -46,7 +48,11 @@ import com.fitai.coach.core.api.generated.ChatFactProposal
 import com.fitai.coach.core.api.generated.ChatSafetyNotice
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
 import com.fitai.coach.core.data.MAX_CHAT_MESSAGE
+import com.fitai.coach.core.data.UserSession
 import com.fitai.coach.core.data.newIdempotencyKey
+import com.fitai.coach.core.dates.localDateOf
+import com.fitai.coach.core.dates.timeOfDay
+import com.fitai.coach.core.dates.todayIn
 import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.FitaiBadge
@@ -112,6 +118,11 @@ fun CoachPanel(onClose: () -> Unit, thread: CoachThread? = null) {
                     onClose = onClose,
                 )
                 HorizontalDivider(color = FitaiTheme.colors.border)
+                // The athlete's numbers, over the main conversation only (the web's stats bar).
+                if (thread == null) {
+                    TrainingStats(session, prefs?.userTimezone)
+                    HorizontalDivider(color = FitaiTheme.colors.border)
+                }
                 if (state.aiEnabled == false) {
                     Consent(state.enablingAi, vm::enableAiCoach)
                 } else {
@@ -167,6 +178,15 @@ private fun Header(title: String?, styleLabel: String?, canClear: Boolean, onCle
 }
 
 @Composable
+private fun TrainingStats(session: UserSession, timeZone: String?) {
+    val entries by session.timeline.entries.collectAsStateWithLifecycle(emptyList())
+    val summary by session.timeline.weekSummary.collectAsStateWithLifecycle(null)
+    val today = todayIn(timeZone)
+    val stats = remember(entries, today) { calculateStats(entries, today) }
+    CoachStatsBar(stats, streak = (summary?.currentStreak ?: 0).toInt())
+}
+
+@Composable
 private fun Consent(saving: Boolean, onEnable: () -> Unit) {
     Column(Modifier.padding(Spacing.Lg), verticalArrangement = Arrangement.spacedBy(Spacing.Md)) {
         Text("Turn on the AI Coach", style = FitaiTheme.typography.h2, color = FitaiTheme.colors.text)
@@ -183,8 +203,11 @@ private fun Consent(saving: Boolean, onEnable: () -> Unit) {
 @Composable
 private fun Conversation(state: CoachUiState, vm: CoachViewModel, modifier: Modifier) {
     val list = rememberLazyListState()
+    // Days and times are the phone's own, as the web uses the browser's.
+    val today = todayIn(null)
+    val transcript = remember(state.items, today) { buildTranscript(state.items, today) { localDateOf(it, null) } }
     LaunchedEffect(state.items.size, state.items.lastOrNull()?.content?.length) {
-        if (state.items.isNotEmpty()) list.animateScrollToItem(state.items.lastIndex + 1)
+        if (state.items.isNotEmpty()) list.animateScrollToItem(transcript.lastIndex + 1)
     }
     LazyColumn(
         modifier.fillMaxWidth(),
@@ -206,8 +229,11 @@ private fun Conversation(state: CoachUiState, vm: CoachViewModel, modifier: Modi
                 }
             }
         }
-        items(state.items, key = { it.id }) { item ->
+        items(transcript, key = { row -> if (row is TranscriptRow.Day) row.key else (row as TranscriptRow.Message).item.id }) { row ->
+            val item = (row as? TranscriptRow.Message)?.item
             when {
+                row is TranscriptRow.Day -> DaySeparator(row.label)
+                item == null -> Unit
                 item.kind == ChatKind.Summary -> Text(
                     "New conversation — the coach carried over a note of the earlier one",
                     style = FitaiTheme.typography.bodySm,
@@ -234,7 +260,7 @@ private fun Conversation(state: CoachUiState, vm: CoachViewModel, modifier: Modi
 
 @Composable
 private fun UserBubble(item: ChatItem) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
         Column(
             Modifier.widthIn(max = 320.dp).background(FitaiTheme.colors.primary, Radius.Lg).padding(Spacing.Md),
             verticalArrangement = Arrangement.spacedBy(Spacing.Xs),
@@ -242,6 +268,33 @@ private fun UserBubble(item: ChatItem) {
             item.photoNote?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.onPrimary) }
             Text(item.content, style = FitaiTheme.typography.body, color = FitaiTheme.colors.onPrimary)
         }
+        SentTime(item)
+    }
+}
+
+/** When a message was sent, under it ("9:30 AM"); the day is the row above. */
+@Composable
+private fun SentTime(item: ChatItem) {
+    val time = item.sentAt?.let { timeOfDay(it, null) } ?: return
+    Text(
+        time,
+        style = FitaiTheme.typography.bodySm,
+        color = FitaiTheme.colors.textMuted,
+        modifier = Modifier.clearAndSetSemantics { contentDescription = "sent $time" },
+    )
+}
+
+/** Where the conversation moves to a new day ("Today", "Yesterday", "Tue, Sep 29"). */
+@Composable
+private fun DaySeparator(label: String) {
+    Row(
+        Modifier.fillMaxWidth().semantics(mergeDescendants = true) { heading() },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.Sm),
+    ) {
+        HorizontalDivider(Modifier.weight(1f), color = FitaiTheme.colors.border)
+        Text(label, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+        HorizontalDivider(Modifier.weight(1f), color = FitaiTheme.colors.border)
     }
 }
 
@@ -291,23 +344,33 @@ private fun AssistantBubble(item: ChatItem, state: CoachUiState, vm: CoachViewMo
                 FitaiButton("Try again", onClick = { vm.retry(item.id) }, variant = ButtonVariant.Secondary)
             }
         }
-        if (item.rateable && item.id != WELCOME_ID) {
-            Row {
-                IconButton(onClick = { vm.rate(item, up = true) }) {
-                    Icon(
-                        LucideIcons.ThumbsUp,
-                        contentDescription = "good reply",
-                        tint = if (item.feedbackUp == true) colors.accentText else colors.textMuted,
-                    )
-                }
-                IconButton(onClick = { vm.rate(item, up = false) }) {
-                    Icon(
-                        LucideIcons.ThumbsDown,
-                        contentDescription = "bad reply",
-                        tint = if (item.feedbackUp == false) colors.accentText else colors.textMuted,
-                    )
-                }
+        val rateable = item.rateable && item.id != WELCOME_ID
+        if (rateable || item.sentAt != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SentTime(item)
+                if (rateable) RateButtons(item, vm)
             }
+        }
+    }
+}
+
+@Composable
+private fun RateButtons(item: ChatItem, vm: CoachViewModel) {
+    val colors = FitaiTheme.colors
+    Row {
+        IconButton(onClick = { vm.rate(item, up = true) }) {
+            Icon(
+                LucideIcons.ThumbsUp,
+                contentDescription = "good reply",
+                tint = if (item.feedbackUp == true) colors.accentText else colors.textMuted,
+            )
+        }
+        IconButton(onClick = { vm.rate(item, up = false) }) {
+            Icon(
+                LucideIcons.ThumbsDown,
+                contentDescription = "bad reply",
+                tint = if (item.feedbackUp == false) colors.accentText else colors.textMuted,
+            )
         }
     }
 }

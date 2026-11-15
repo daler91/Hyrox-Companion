@@ -64,6 +64,7 @@ private val TITLES = mapOf(
     SetupStep.Welcome to "Welcome to fitai.coach",
     SetupStep.Units to "Set your preferences",
     SetupStep.Goal to "What's your goal?",
+    SetupStep.Fuelling to "Fuel your training",
     SetupStep.Coach to "Meet your AI Coach",
     SetupStep.Plan to "Choose your path",
     SetupStep.AiPlan to "Generate an AI plan",
@@ -75,6 +76,7 @@ private val DESCRIPTIONS = mapOf(
     SetupStep.Welcome to "Let's get you set up in just a few steps.",
     SetupStep.Units to "Choose your measurement units and HYROX race profile.",
     SetupStep.Goal to "This helps us tailor your experience.",
+    SetupStep.Fuelling to "Get suggested daily nutrition targets from your body profile.",
     SetupStep.Coach to "Choose whether the AI Coach can use your training data.",
     SetupStep.Plan to "How would you like to start training?",
     SetupStep.AiPlan to "Your goal, schedule and anything the coach should plan around.",
@@ -105,7 +107,7 @@ fun OnboardingScreen(run: Int, onFinished: (SetupResult) -> Unit) {
 
     Box(Modifier.fillMaxSize().background(FitaiTheme.colors.background)) {
         Column(Modifier.fillMaxSize().imePadding()) {
-            Header(state.step, onBack = vm::back, onClose = { confirmLeave = true })
+            Header(state.step, state.fuellingOn, onBack = vm::back, onClose = { confirmLeave = true })
             Column(
                 Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.Lg),
                 verticalArrangement = Arrangement.spacedBy(Spacing.Md),
@@ -141,8 +143,10 @@ fun OnboardingScreen(run: Int, onFinished: (SetupResult) -> Unit) {
 }
 
 @Composable
-private fun Header(step: SetupStep, onBack: () -> Unit, onClose: () -> Unit) {
-    val hasBack = step in setOf(SetupStep.Units, SetupStep.Goal, SetupStep.Coach, SetupStep.Plan, SetupStep.AiPlan, SetupStep.Schedule)
+private fun Header(step: SetupStep, fuelling: Boolean, onBack: () -> Unit, onClose: () -> Unit) {
+    val hasBack = step !in setOf(SetupStep.Welcome, SetupStep.Generating)
+    val steps = numberedSteps(fuelling)
+    val number = stepNumber(step, fuelling)
     Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.Xs, vertical = Spacing.Xs)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (hasBack) {
@@ -151,7 +155,7 @@ private fun Header(step: SetupStep, onBack: () -> Unit, onClose: () -> Unit) {
                 Spacer(Modifier.size(48.dp))
             }
             Text(
-                "Step ${stepNumber(step)} of ${NUMBERED_STEPS.size}",
+                "Step $number of ${steps.size}",
                 style = FitaiTheme.typography.bodySm,
                 color = FitaiTheme.colors.textMuted,
                 modifier = Modifier.weight(1f),
@@ -161,7 +165,7 @@ private fun Header(step: SetupStep, onBack: () -> Unit, onClose: () -> Unit) {
             }
         }
         LinearProgressIndicator(
-            progress = { stepNumber(step).toFloat() / NUMBERED_STEPS.size },
+            progress = { number.toFloat() / steps.size },
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.Md),
             color = FitaiTheme.colors.primary,
             trackColor = FitaiTheme.colors.muted,
@@ -176,6 +180,7 @@ private fun StepContent(state: OnboardingUiState, vm: OnboardingViewModel) {
         SetupStep.Welcome -> Welcome()
         SetupStep.Units -> Units(state, vm::edit)
         SetupStep.Goal -> Goal(state, vm)
+        SetupStep.Fuelling -> FuellingStep(state, vm)
         SetupStep.Coach -> Coach(state.profile.aiCoachEnabled) { on -> vm.edit { it.copy(aiCoachEnabled = on) } }
         SetupStep.Plan -> PlanChoice(state.aiCoachSaved, vm)
         SetupStep.AiPlan -> state.planForm?.let { form ->
@@ -190,6 +195,8 @@ private fun StepContent(state: OnboardingUiState, vm: OnboardingViewModel) {
 private fun Footer(state: OnboardingUiState, vm: OnboardingViewModel) {
     val (label, action, enabled) = when (state.step) {
         SetupStep.Welcome, SetupStep.Units, SetupStep.Goal, SetupStep.Coach -> Triple("Continue", vm::next, true)
+        // Optional: blank (or incomplete), it is skipped.
+        SetupStep.Fuelling -> Triple(if (state.fuellingProfile == null) "Skip" else "Continue", vm::next, true)
         SetupStep.AiPlan -> Triple("Generate plan", vm::generate, state.planForm?.canGenerate == true)
         SetupStep.Schedule -> Triple("Start training", vm::startTraining, state.startDate.isNotEmpty())
         SetupStep.Generating -> Triple("Keep it generating in the background", vm::keepGeneratingInBackground, true)

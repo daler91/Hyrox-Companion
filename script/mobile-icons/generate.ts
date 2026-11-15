@@ -74,6 +74,8 @@ export const ICONS: Readonly<Record<string, string>> = {
   CloudUpload: "cloud-upload",
   HeartPulse: "heart-pulse",
   StarFilled: "star",
+  TrendingUp: "trending-up",
+  Calendar: "calendar",
 };
 
 /**

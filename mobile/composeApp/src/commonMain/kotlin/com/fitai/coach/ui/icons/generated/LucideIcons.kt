@@ -97,6 +97,16 @@ object LucideIcons {
         )
     }
 
+    val Calendar: ImageVector by lazy {
+        lucide(
+            "Calendar",
+            "M8 2v3",
+            "M16 2v3",
+            "M5 3H19A2 2 0 0 1 21 5V19A2 2 0 0 1 19 21H5A2 2 0 0 1 3 19V5A2 2 0 0 1 5 3Z",
+            "M3 9h18",
+        )
+    }
+
     val CalendarCheck: ImageVector by lazy {
         lucide(
             "CalendarCheck",
@@ -533,6 +543,14 @@ object LucideIcons {
             "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6",
             "M3 6h18",
             "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2",
+        )
+    }
+
+    val TrendingUp: ImageVector by lazy {
+        lucide(
+            "TrendingUp",
+            "M16 7h6v6",
+            "m22 7-8.5 8.5-5-5L2 17",
         )
     }
 

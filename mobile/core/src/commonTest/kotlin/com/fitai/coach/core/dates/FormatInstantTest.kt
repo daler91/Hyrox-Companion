@@ -17,4 +17,11 @@ class FormatInstantTest {
         assertNull(formatInstant("2026-11-10", "UTC"))
         assertNull(formatInstant("yesterday", "UTC"))
     }
+
+    @Test
+    fun aTimeOfDayShowsInTheGivenZone() {
+        assertEquals("4:30 AM", timeOfDay("2026-11-10T09:30:00.000Z", "America/New_York"))
+        assertEquals("10:30 PM", timeOfDay("2026-11-10T09:30:00Z", "Pacific/Auckland"))
+        assertNull(timeOfDay("2026-11-10", "UTC"))
+    }
 }

@@ -268,6 +268,23 @@ private fun rebased(stored: Double?, ratio: Double?, fallback: Double): Double =
 }
 
 /**
+ * `carryPeriodizationForward`: a new version that keeps [current]'s choices
+ * (load scaling, recovery and phase awareness on or off) and its calibration,
+ * re-based onto the new carb goal [carbG]. Onboarding's fuelling step saves
+ * with it, so new macros don't switch periodisation off.
+ */
+public fun carryPeriodizationForward(current: StoredPeriodization, carbG: Double?): PeriodizationSettings = nextPeriodizationSettings(
+    current,
+    PeriodizationChoice(
+        carbG = carbG,
+        periodize = current.settings.periodizationEnabled,
+        recoveryEnabled = current.settings.recoveryEnabled,
+        phaseAware = current.settings.phaseAware,
+    ),
+    null,
+)
+
+/**
  * `nextPeriodizationSettings`: the columns for a new target version — the
  * athlete's choice, with the current version's calibration carried forward
  * (re-based onto the new carb baseline) and the baseline's defaults where
