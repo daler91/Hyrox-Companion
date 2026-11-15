@@ -374,20 +374,23 @@ class OnboardingViewModel(private val session: UserSession, private val todayIn:
             go(SetupStep.Coach)
             return
         }
-        busy("Could not save your fuelling profile.", always = { go(SetupStep.Coach) }) {
-            try {
-                if (!s.fuellingUnchanged) {
-                    session.preferences.update(input.toPreferences())
-                    saved = saved.copy(age = input.ageYears.toInt().toString())
-                    mutableState.update { it.copy(savedBody = input.toSavedBody()) }
-                }
-                if (s.applyTargets) setTargets(input, s)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                val reason = e.userMessage("Something went wrong.").let { if (it.endsWith(".")) it else "$it." }
-                toasts.send("Could not save your fuelling profile. $reason You can set it up later in Nutrition → Targets.")
+        busy("Could not save your fuelling profile.", always = { go(SetupStep.Coach) }) { saveFuellingProfile(input, s) }
+    }
+
+    /** Saves the profile where it changed and sets the targets if asked; a failure says where to finish the job. */
+    private suspend fun saveFuellingProfile(input: NutritionTargetInput, s: OnboardingUiState) {
+        try {
+            if (!s.fuellingUnchanged) {
+                session.preferences.update(input.toPreferences())
+                saved = saved.copy(age = input.ageYears.toInt().toString())
+                mutableState.update { it.copy(savedBody = input.toSavedBody()) }
             }
+            if (s.applyTargets) setTargets(input, s)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val reason = e.userMessage("Something went wrong.").let { if (it.endsWith(".")) it else "$it." }
+            toasts.send("Could not save your fuelling profile. $reason You can set it up later in Nutrition → Targets.")
         }
     }
 

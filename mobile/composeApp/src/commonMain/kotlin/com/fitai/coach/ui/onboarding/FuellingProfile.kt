@@ -147,19 +147,12 @@ fun parseFuellingProfile(fields: FuellingFields, profile: SetupProfile): Nutriti
  */
 fun resolveFuellingProfile(fields: FuellingFields, profile: SetupProfile, saved: SavedBody): NutritionTargetInput? {
     val parsed = parseFuellingProfile(fields, profile) ?: return null
-    val savedKg = saved.bodyweightKg
-    val savedRate = saved.goalRateKgPerWeek
-    val keepRate = parsed.goalDirection != WeightGoalDirection.Maintain && parsed.goalDirection == saved.goalDirection &&
-        savedRate != null && savedRate > 0
+    val keptKg = saved.bodyweightKg?.takeIf { fields.bodyweight == bodyweightInput(it, profile.weightUnit) }
+    val sameGoal = parsed.goalDirection != WeightGoalDirection.Maintain && parsed.goalDirection == saved.goalDirection
+    val keptRate = saved.goalRateKgPerWeek?.takeIf { sameGoal && it > 0 }
     return parsed.copy(
-        bodyweightKg = if (savedKg != null &&
-            fields.bodyweight == bodyweightInput(savedKg, profile.weightUnit)
-        ) {
-            savedKg
-        } else {
-            parsed.bodyweightKg
-        },
-        goalRateKgPerWeek = if (keepRate && savedRate != null) savedRate else parsed.goalRateKgPerWeek,
+        bodyweightKg = keptKg ?: parsed.bodyweightKg,
+        goalRateKgPerWeek = keptRate ?: parsed.goalRateKgPerWeek,
     )
 }
 

@@ -56,32 +56,21 @@ fun calculateStats(entries: List<TimelineEntry>, today: String): TrainingStats {
     val weekStart = addDaysToIsoDate(today, -(weekdayIndex(today) ?: 0))
     val weekEnd = addDaysToIsoDate(weekStart, DAYS_IN_WEEK - 1)
     val rateStart = addDaysToIsoDate(today, -COMPLETION_RATE_WINDOW_DAYS)
-    var thisWeek = 0
-    var doneThisWeek = 0
-    var upcoming = 0
-    var due = 0
-    var doneWhenDue = 0
-    for (entry in entries) {
-        val done = entry.status == TimelineEntry.Status.Completed
-        if (entry.date in weekStart..weekEnd) {
-            thisWeek++
-            if (done) doneThisWeek++
-        }
-        if (entry.date >= today && entry.status == TimelineEntry.Status.Planned) upcoming++
-        val scored = entry.date >= rateStart && entry.date < today && entry.excused != true &&
-            entry.recovery != TimelineEntry.Recovery.LetGo
-        if (scored) {
-            due++
-            if (done) doneWhenDue++
-        }
-    }
+    val thisWeek = entries.filter { it.date in weekStart..weekEnd }
+    // Finished days only: before today, from the window's first day.
+    val due = entries.filter { it.date >= rateStart && it.date < today && !isExcused(it) }
     return TrainingStats(
-        workoutsThisWeek = thisWeek,
-        completedThisWeek = doneThisWeek,
-        plannedUpcoming = upcoming,
-        completionRate = if (due > 0) jsRound(doneWhenDue * PERCENT / due).toInt() else null,
+        workoutsThisWeek = thisWeek.size,
+        completedThisWeek = thisWeek.count(::isDone),
+        plannedUpcoming = entries.count { it.date >= today && it.status == TimelineEntry.Status.Planned },
+        completionRate = due.takeIf { it.isNotEmpty() }?.let { jsRound(it.count(::isDone) * PERCENT / it.size).toInt() },
     )
 }
+
+private fun isDone(entry: TimelineEntry): Boolean = entry.status == TimelineEntry.Status.Completed
+
+/** Not held against the rate: a day inside a declared absence, or a missed session the athlete let go. */
+private fun isExcused(entry: TimelineEntry): Boolean = entry.excused == true || entry.recovery == TimelineEntry.Recovery.LetGo
 
 /** One count in the bar, with what a screen reader says for it. */
 private class StatBadgeSpec(val icon: ImageVector, val value: String, val label: String, val tint: Color, val description: String)
