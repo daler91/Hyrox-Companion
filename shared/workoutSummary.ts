@@ -27,15 +27,9 @@ export interface SummaryExercise {
   readonly sets?: readonly SummarySet[] | null;
 }
 
-function areSetsUniform(sets: readonly SummarySet[]): boolean {
-  if (sets.length <= 1) return true;
-  const firstSet = sets[0];
-  for (let i = 1; i < sets.length; i++) {
-    if (sets[i].reps !== firstSet.reps || sets[i].weight !== firstSet.weight) {
-      return false;
-    }
-  }
-  return true;
+/** Every set has the first one's reps and weight. */
+function areSetsUniform(firstSet: SummarySet, sets: readonly SummarySet[]): boolean {
+  return sets.every((set) => set.reps === firstSet.reps && set.weight === firstSet.weight);
 }
 
 function exerciseLabel(ex: SummaryExercise): string {
@@ -48,13 +42,13 @@ function exerciseLabel(ex: SummaryExercise): string {
 function formatExerciseSummary(ex: SummaryExercise, weightUnit: string, distanceUnit: string): string {
   const name = exerciseLabel(ex);
   const sets = ex.sets || [];
+  const [firstSet] = sets;
 
-  if (sets.length === 0) {
+  if (firstSet === undefined) {
     return `${name}: completed`;
   }
 
-  const firstSet = sets[0];
-  const allSame = areSetsUniform(sets);
+  const allSame = areSetsUniform(firstSet, sets);
 
   const parts: string[] = [];
   if (allSame && sets.length > 1 && firstSet.reps) {

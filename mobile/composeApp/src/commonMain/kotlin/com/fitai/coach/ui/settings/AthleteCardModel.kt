@@ -81,10 +81,13 @@ fun importedNoteMessage(added: Long, skipped: Long): String = if (skipped > 0) {
 }
 
 /** The hint under the new fact's field; [card] says whether it is full, and how full is full. */
-fun addFactHint(card: AthleteCardFacts): String = if (card.atCap) {
-    "Your card holds up to ${card.maxActive} facts. Retire one that no longer applies to add another."
-} else {
-    "One thing per fact, in your own words. It stays on your card until you retire it."
+fun addFactHint(card: AthleteCardFacts): String {
+    val cap = card.maxActive?.takeIf { card.atCap }
+    return if (cap != null) {
+        "Your card holds up to $cap facts. Retire one that no longer applies to add another."
+    } else {
+        "One thing per fact, in your own words. It stays on your card until you retire it."
+    }
 }
 
 /** A step the athlete confirms first: retiring or deleting a fact, or removing the older note. */
