@@ -115,7 +115,7 @@ private fun Facts(card: AthleteCardFacts, state: AthleteCardState, vm: AthleteCa
             FactRow(fact, due = isAthleteFactDue(fact.reviewOn, state.today), busy = state.busy, vm = vm)
         }
     }
-    AddFact(state, card.atCap, vm)
+    AddFact(state, card, vm)
     if (card.retired.isNotEmpty()) RetiredFacts(card.retired, canRestore = !card.atCap && !state.busy, busy = state.busy, vm = vm)
 }
 
@@ -198,13 +198,14 @@ private fun CategoryChips(selected: AthleteFact.Category, onSelect: (AthleteFact
 }
 
 @Composable
-private fun AddFact(state: AthleteCardState, atCap: Boolean, vm: AthleteCardViewModel) {
+private fun AddFact(state: AthleteCardState, card: AthleteCardFacts, vm: AthleteCardViewModel) {
+    val atCap = card.atCap
     FitaiTextField(
         state.newFact,
         vm::editNew,
         "Add a fact",
         placeholder = "e.g. Bad left knee: no deep lunges",
-        supportingText = addFactHint(atCap),
+        supportingText = addFactHint(card),
         enabled = !atCap,
         singleLine = false,
     )

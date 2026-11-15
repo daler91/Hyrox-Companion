@@ -106,6 +106,23 @@ function isEligibleDay(
   );
 }
 
+/** A block-view day (GET /api/v1/nutrition/block) as the comparison reads it. */
+export function correlationDayFromBlockPoint(point: {
+  readonly calories: number;
+  readonly carb: number;
+  readonly carbTargetG?: number | null;
+  readonly avgRpe?: number | null;
+  readonly compliancePct?: number | null;
+}): FuellingCorrelationDay {
+  return {
+    calories: point.calories,
+    carbG: point.carb,
+    carbTargetG: point.carbTargetG ?? null,
+    avgRpe: point.avgRpe ?? null,
+    compliancePct: point.compliancePct ?? null,
+  };
+}
+
 export function analyzeFuellingCorrelation(
   days: readonly FuellingCorrelationDay[],
 ): FuellingCorrelationResult {

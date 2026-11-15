@@ -5,6 +5,7 @@ import com.fitai.coach.core.api.generated.ExerciseSetRow
 import com.fitai.coach.core.api.generated.TimelineCoachNotes
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.api.generated.TrainingPlan
+import com.fitai.coach.ui.components.BadgeTone
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -26,6 +27,7 @@ class TimelineStatusTest {
         notes: String? = null,
         coachNotes: TimelineCoachNotes? = null,
         date: String = "2026-11-10",
+        dayKind: TimelineEntry.DayKind? = null,
     ) = TimelineEntry(
         id = id,
         date = date,
@@ -38,6 +40,7 @@ class TimelineStatusTest {
         exerciseSets = sets,
         notes = notes,
         coachNotes = coachNotes,
+        dayKind = dayKind,
     )
 
     private fun plan(id: String, startDate: String? = null) =
@@ -49,6 +52,22 @@ class TimelineStatusTest {
             startDate = startDate,
             generationStatus = TrainingPlan.GenerationStatus.Ready,
         )
+
+    @Test
+    fun theServerSaysWhichDayIsTheRaceAndWhichMissedDayWasOnlyRest() {
+        assertEquals("Race day" to BadgeTone.Accent, statusBadge(entry(dayKind = TimelineEntry.DayKind.Race)))
+        assertEquals(
+            "Rest day" to BadgeTone.Neutral,
+            statusBadge(entry(status = TimelineEntry.Status.Missed, dayKind = TimelineEntry.DayKind.Rest)),
+        )
+        assertEquals("Planned" to BadgeTone.Accent, statusBadge(entry(dayKind = TimelineEntry.DayKind.Rest)))
+        assertEquals(
+            "Missed" to BadgeTone.Neutral,
+            statusBadge(entry(status = TimelineEntry.Status.Missed, dayKind = TimelineEntry.DayKind.Session)),
+        )
+        // An entry cached before the server said: its status alone.
+        assertEquals("Missed" to BadgeTone.Neutral, statusBadge(entry(status = TimelineEntry.Status.Missed)))
+    }
 
     @Test
     fun theServersSplitNotesShowAndOldCachedNotesShowAsTheAthletesText() {

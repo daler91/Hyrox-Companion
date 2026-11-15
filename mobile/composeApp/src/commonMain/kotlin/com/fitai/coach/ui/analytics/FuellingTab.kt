@@ -44,7 +44,7 @@ fun LazyListScope.fuelling(block: GetNutritionBlockResponse) {
         return
     }
     item { IntakeVsTrainingCard(block.points) }
-    item { FuellingCorrelationCard(block.points) }
+    item { FuellingCorrelationCard(block.correlation) }
 }
 
 @Composable
@@ -118,9 +118,9 @@ private fun IntakeChart(points: List<GetNutritionBlockResponse.PointsItem>) {
  * until a day has food, a carb target and an outcome (FuellingCorrelationCard).
  */
 @Composable
-private fun FuellingCorrelationCard(points: List<GetNutritionBlockResponse.PointsItem>) {
-    val result = remember(points) { fuellingCorrelation(points) }
-    if (result.eligibleDays == 0) return
+private fun FuellingCorrelationCard(correlation: GetNutritionBlockResponse.Correlation) {
+    val result = remember(correlation) { FuellingCorrelation.of(correlation) }
+    if (result.eligibleDays == 0L) return
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
     FitaiCard(Modifier.fillMaxWidth()) {
@@ -145,7 +145,7 @@ private fun FuellingCorrelationCard(points: List<GetNutritionBlockResponse.Point
                     color = colors.textMuted,
                 )
             }
-            Text(FUELLING_EXPLANATION, style = type.bodySm, color = colors.textMuted)
+            Text(result.explanation, style = type.bodySm, color = colors.textMuted)
         }
     }
 }

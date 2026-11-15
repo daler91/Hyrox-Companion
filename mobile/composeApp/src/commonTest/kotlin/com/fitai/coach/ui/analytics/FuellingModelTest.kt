@@ -1,5 +1,7 @@
 package com.fitai.coach.ui.analytics
 
+import com.fitai.coach.core.api.ApiJson
+import com.fitai.coach.core.api.generated.GetNutritionBlockResponse
 import com.fitai.coach.core.api.generated.GetNutritionBlockResponse.PointsItem
 import com.fitai.coach.ui.format.formatNumber
 import kotlin.test.Test
@@ -23,33 +25,22 @@ class FuellingModelTest {
             compliancePct = compliance,
         )
 
-    // Hit: at least 90% of a 300 g target (270 g); miss: under it.
-    private fun hit(rpe: Double?, compliance: Double? = null) = day(2500.0, 280.0, 300.0, rpe, compliance)
-
-    private fun miss(rpe: Double?, compliance: Double? = null) = day(2000.0, 150.0, 300.0, rpe, compliance)
-
     @Test
-    fun hitDaysAreComparedWithMissedDaysOnceEachHasThree() {
-        val result = fuellingCorrelation(
-            listOf(hit(6.0, 95.0), hit(7.0, 90.0), hit(6.5, 100.0), miss(8.0, 80.0), miss(7.5, 85.0), miss(8.5, 90.0)),
+    fun theCardReadsTheServersComparison() {
+        val correlation = ApiJson.decodeFromString(
+            GetNutritionBlockResponse.Correlation.serializer(),
+            """{"status":"ok","rpe":{"hitDays":3,"missDays":3,"hitAvg":6.5,"missAvg":8,"delta":-1.5},"compliance":null,""" +
+                """"eligibleDays":6,"carbHitPct":90,"reasonCodes":["insufficient_compliance_days"],"explanation":"How it works."}""",
         )
+        val result = FuellingCorrelation.of(correlation)
         assertTrue(result.ok)
-        assertEquals(6, result.eligibleDays)
-        assertEquals(MetricComparison(3, 3, 6.5, 8.0, -1.5), result.rpe)
-        assertEquals(MetricComparison(3, 3, 95.0, 85.0, 10.0), result.compliance)
-        assertEquals(90, result.carbHitPct)
-    }
+        assertEquals(FuellingCorrelation(MetricComparison(3, 3, 6.5, 8.0, -1.5), null, 6, 90, "How it works."), result)
 
-    @Test
-    fun anUnloggedDayIsNotAMissAndUnderThreeDaysIsNotAComparison() {
-        // No food logged: 0 g of carbs would read as a miss, so the day doesn't count.
-        val unlogged = day(0.0, 0.0, 300.0, 9.0)
-        val result = fuellingCorrelation(listOf(hit(6.0), hit(7.0), hit(6.5), miss(8.0), miss(7.5), unlogged))
-        assertEquals(5, result.eligibleDays)
-        assertNull(result.rpe)
-        assertFalse(result.ok)
-        // No target, no outcome: not eligible at all.
-        assertEquals(0, fuellingCorrelation(listOf(day(2000.0, 100.0, null, 7.0), day(2000.0, 100.0, 300.0, null))).eligibleDays)
+        val notYet = FuellingCorrelation.of(
+            correlation.copy(status = GetNutritionBlockResponse.Correlation.Status.InsufficientData, rpe = null),
+        )
+        assertFalse(notYet.ok)
+        assertNull(notYet.rpe)
     }
 
     @Test

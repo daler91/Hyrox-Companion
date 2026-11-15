@@ -45,7 +45,8 @@ class LogDraftTest {
         val request = draft.toRequest()
 
         assertEquals("Workout", request.focus)
-        assertEquals("Back Squat", request.mainWorkout)
+        // No text of the athlete's own: left out, for the server to write from the rows.
+        assertNull(request.mainWorkout)
         assertEquals(Patch.of(7), request.rpe)
         assertEquals(Patch.of(45), request.duration)
         assertEquals(Patch.of("felt good"), request.notes)
@@ -54,6 +55,8 @@ class LogDraftTest {
         // Encodes without the unset fields.
         val json = ApiJson.encodeToString(CreateWorkoutRequest.serializer(), request)
         assertEquals(false, json.contains("planDayId"))
+        assertEquals(false, json.contains("mainWorkout"))
+        assertEquals("5x5 heavy", draft.copy(text = " 5x5 heavy ").toRequest().mainWorkout)
     }
 
     @Test

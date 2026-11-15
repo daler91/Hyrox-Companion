@@ -193,7 +193,14 @@
           ]
         }
       ],
-      "suggestedRpe": 1
+      "suggestedRpe": 1,
+      "avgCadenceUnit": "rpm",
+      "mafCompliance": {
+        "compliancePct": 1,
+        "classification": "over_ceiling",
+        "nextAction": "sample text",
+        "avgOverBy": 1
+      }
     },
     "future": {
       "id": "sample text",
@@ -349,6 +356,16 @@
         }
       ],
       "suggestedRpe": 1,
+      "avgCadenceUnit": "zz_value_from_a_newer_server",
+      "mafCompliance": {
+        "compliancePct": 1,
+        "classification": "zz_value_from_a_newer_server",
+        "nextAction": "sample text",
+        "avgOverBy": 1,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
       "zzPropertyFromANewerServer": {
         "added": true
       }

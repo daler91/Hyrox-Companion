@@ -2,8 +2,7 @@
   "request": {
     "min": {
       "date": "a",
-      "focus": "a",
-      "mainWorkout": "a"
+      "focus": "a"
     },
     "max": {
       "date": "sample text",

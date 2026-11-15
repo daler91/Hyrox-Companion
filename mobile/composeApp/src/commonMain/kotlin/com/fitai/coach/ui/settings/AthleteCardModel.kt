@@ -7,9 +7,6 @@ import com.fitai.coach.core.api.generated.PostAthleteFactsRequest
 /** One short statement per fact, so each can be retired and reviewed on its own (shared/athleteFacts.ts). */
 const val ATHLETE_FACT_MAX_LENGTH = 140
 
-/** Active facts a card may hold; the server refuses one more. */
-const val MAX_ACTIVE_ATHLETE_FACTS = 20
-
 /** The categories the athlete picks from, in the web's order. */
 val ATHLETE_FACT_CATEGORIES: List<AthleteFact.Category> = listOf(
     AthleteFact.Category.Constraint,
@@ -32,14 +29,19 @@ fun athleteFactCategoryLabel(category: AthleteFact.Category): String = when (cat
 fun isAthleteFactDue(reviewOn: String, today: String): Boolean = reviewOn <= today
 
 /** The card as Settings lists it: facts due for a check first, oldest due first, then the rest as stated. */
-data class AthleteCardFacts(val active: List<AthleteFact>, val retired: List<AthleteFact>) {
-    val atCap: Boolean get() = active.size >= MAX_ACTIVE_ATHLETE_FACTS
+data class AthleteCardFacts(
+    val active: List<AthleteFact>,
+    val retired: List<AthleteFact>,
+    /** The server's cap on active facts; null until it has said, when only the server refuses one more. */
+    val maxActive: Int? = null,
+) {
+    val atCap: Boolean get() = maxActive != null && active.size >= maxActive
 }
 
-fun groupAthleteFacts(facts: List<AthleteFact>, today: String): AthleteCardFacts {
+fun groupAthleteFacts(facts: List<AthleteFact>, today: String, maxActive: Int? = null): AthleteCardFacts {
     val (active, retired) = facts.partition { it.active }
     val (due, current) = active.partition { isAthleteFactDue(it.reviewOn, today) }
-    return AthleteCardFacts(due.sortedBy { it.reviewOn } + current, retired)
+    return AthleteCardFacts(due.sortedBy { it.reviewOn } + current, retired, maxActive)
 }
 
 /** A fact being reworded: its new words and category, sent only where they changed. */
@@ -78,11 +80,14 @@ fun importedNoteMessage(added: Long, skipped: Long): String = if (skipped > 0) {
     "Note added to your athlete card"
 }
 
-/** The hint under the new fact's field. */
-fun addFactHint(atCap: Boolean): String = if (atCap) {
-    "Your card holds up to $MAX_ACTIVE_ATHLETE_FACTS facts. Retire one that no longer applies to add another."
-} else {
-    "One thing per fact, in your own words. It stays on your card until you retire it."
+/** The hint under the new fact's field; [card] says whether it is full, and how full is full. */
+fun addFactHint(card: AthleteCardFacts): String {
+    val cap = card.maxActive?.takeIf { card.atCap }
+    return if (cap != null) {
+        "Your card holds up to $cap facts. Retire one that no longer applies to add another."
+    } else {
+        "One thing per fact, in your own words. It stays on your card until you retire it."
+    }
 }
 
 /** A step the athlete confirms first: retiring or deleting a fact, or removing the older note. */

@@ -1,5 +1,6 @@
 import {
   analyzeFuellingCorrelation,
+  correlationDayFromBlockPoint,
   type FuellingMetricComparison,
 } from "@shared/fuellingCorrelation";
 import type { BlockViewPoint } from "@shared/schema";
@@ -66,16 +67,7 @@ export function FuellingCorrelationCard({
   readonly points: readonly BlockViewPoint[];
 }) {
   const result = useMemo(
-    () =>
-      analyzeFuellingCorrelation(
-        points.map((p) => ({
-          calories: p.calories,
-          carbG: p.carb,
-          carbTargetG: p.carbTargetG ?? null,
-          avgRpe: p.avgRpe ?? null,
-          compliancePct: p.compliancePct ?? null,
-        })),
-      ),
+    () => analyzeFuellingCorrelation(points.map(correlationDayFromBlockPoint)),
     [points],
   );
 

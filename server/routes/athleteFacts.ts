@@ -1,4 +1,9 @@
-import { ATHLETE_FACT_LIMIT_MESSAGE, athleteFactReviewOn } from "@shared/athleteFacts";
+import {
+  ATHLETE_FACT_LIMIT_MESSAGE,
+  athleteFactReviewOn,
+  MAX_ACTIVE_ATHLETE_FACTS,
+  MAX_ACTIVE_FACTS_HEADER,
+} from "@shared/athleteFacts";
 import {
   type AthleteFactImportResult,
   type CreateAthleteFact,
@@ -40,12 +45,17 @@ function sendRefusal(res: Response, reason: Extract<AthleteFactWrite, { ok: fals
   return res.status(409).json({ error: "Your card already has that fact.", code: ErrorCode.ATHLETE_FACT_DUPLICATE });
 }
 
-/** GET /api/v1/athlete-facts: every fact, retired ones included, oldest first. */
+/**
+ * GET /api/v1/athlete-facts: every fact, retired ones included, oldest first.
+ * The cap on active facts comes back in a header, so a client says "Your card
+ * holds up to 20 facts" from the server's number rather than its own copy.
+ */
 router.get(
   "/api/v1/athlete-facts",
   isAuthenticated,
   rateLimiter("athleteFacts", 60),
   asyncHandler(async (req: Request, res: Response) => {
+    res.setHeader(MAX_ACTIVE_FACTS_HEADER, String(MAX_ACTIVE_ATHLETE_FACTS));
     res.json(await storage.athleteFacts.list(getUserId(req)));
   }),
 );

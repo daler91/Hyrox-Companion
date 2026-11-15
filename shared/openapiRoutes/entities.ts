@@ -27,6 +27,7 @@ export interface EntityComponents {
   readonly ParsedExercise: z.ZodObject;
   readonly CoachNoteInputs: z.ZodType;
   readonly PlanProposal: z.ZodObject;
+  readonly SessionMafCompliance: z.ZodObject;
 }
 
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
@@ -176,6 +177,21 @@ const planProposalSchema = z
   })
   .openapi({ description: "A multi-day plan change the AI coach proposed from a chat message, with its current status" });
 
+/** How a session's average heart rate sat against the athlete's MAF ceiling (shared/maf.ts computeMafCompliance). */
+const sessionMafComplianceSchema = z
+  .object({
+    compliancePct: int().min(0).max(100).openapi({ description: "100 when held at or under the ceiling; falls as the average runs over it" }),
+    classification: z.enum(["compliant", "mostly_compliant", "over_ceiling"]).openapi({
+      description: "mostly_compliant: the average stayed under the ceiling but the peak went more than 5 bpm over it",
+    }),
+    nextAction: z.string().openapi({ description: "A short coaching cue for the athlete" }),
+    avgOverBy: int().openapi({ description: "Average heart rate minus the ceiling, in bpm; negative when under it" }),
+  })
+  .openapi({
+    description:
+      "On a completed session with an average heart rate and running in it, for an athlete who trains the MAF method and has a ceiling: how the average sat against that ceiling. Omitted otherwise.",
+  });
+
 export function registerEntityComponents(registry: OpenAPIRegistry): EntityComponents {
   return {
     ExerciseSetRow: registry.register("ExerciseSetRow", exerciseSetRowSchema),
@@ -186,5 +202,6 @@ export function registerEntityComponents(registry: OpenAPIRegistry): EntityCompo
       coachNoteInputsSchema.openapi({ description: "Which inputs drove the coach's note on a plan day, shown with the note" }),
     ),
     PlanProposal: registry.register("PlanProposal", planProposalSchema),
+    SessionMafCompliance: registry.register("SessionMafCompliance", sessionMafComplianceSchema),
   };
 }

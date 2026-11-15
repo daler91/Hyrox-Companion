@@ -3,6 +3,8 @@
 
 package com.fitai.coach.core.api.generated
 
+import com.fitai.coach.core.api.WireEnum
+import com.fitai.coach.core.api.WireEnumSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
@@ -61,4 +63,23 @@ public data class WorkoutLogDetail(
      * RPE (1-10) suggested by the recording's average heart rate, for the athlete to confirm. Never saved on its own. Null without heart rate, for strength and mind-body sports, or when the athlete has neither a max HR nor an age on file. Returned whether or not `rpe` is set.
      */
     public val suggestedRpe: Int? = null,
-)
+    /**
+     * With avgCadence: rpm (pedal revolutions) for a ride, spm (steps) otherwise, from the recording's sport; omitted without a cadence
+     */
+    public val avgCadenceUnit: WorkoutLogDetail.AvgCadenceUnit? = null,
+    public val mafCompliance: SessionMafCompliance? = null,
+) {
+    /**
+     * With avgCadence: rpm (pedal revolutions) for a ride, spm (steps) otherwise, from the recording's sport; omitted without a cadence
+     */
+    @Serializable(with = AvgCadenceUnit.Serializer::class)
+    public enum class AvgCadenceUnit(override val wireValue: String) : WireEnum {
+        Spm("spm"),
+        Rpm("rpm"),
+        /** A value this build does not know; never sent. */
+        Unknown(""),
+        ;
+
+        internal object Serializer : WireEnumSerializer<AvgCadenceUnit>("AvgCadenceUnit", AvgCadenceUnit.entries, Unknown)
+    }
+}

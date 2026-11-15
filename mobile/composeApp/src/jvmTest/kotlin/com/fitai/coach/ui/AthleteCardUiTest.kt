@@ -88,6 +88,24 @@ class AthleteCardUiTest {
             awaitNode(hasText("Note added to your athlete card"))
         }
     }
+
+    @Test
+    fun aCardAtTheServersCapTakesNoMoreFacts() {
+        val api = FakeApi().apply {
+            establishedAccount()
+            on(
+                "GET",
+                "/api/v1/athlete-facts",
+                "[${fact("f1", "No box jumps")},${fact("f2", "No sled at my gym", category = "equipment")}]",
+                headers = mapOf("X-Max-Active-Facts" to "2"),
+            )
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api, height = 1600) {
+            openSettings()
+            scrollTo(hasText("Your card holds up to 2 facts. Retire one that no longer applies to add another."))
+            awaitNode(hasText("Your card holds up to 2 facts. Retire one that no longer applies to add another."))
+        }
+    }
 }
 
 private fun fact(id: String, text: String, reviewOn: String = "2099-01-01", active: Boolean = true, category: String = "constraint") =

@@ -1,4 +1,3 @@
-import { calculateMafHr, type MafCategory } from "@shared/maf";
 import {
   calculateNutritionTarget,
   carryPeriodizationForward,
@@ -326,13 +325,10 @@ export function useOnboardingWizard(
       changes.trainingStyleId === undefined ? {} : { trainingStyleId };
     if (!isMafMethod) return payload;
 
-    const age = Number(mafAge);
-    payload.mafAge = age;
+    // The server works the ceiling out from these answers (calculateMafHr).
+    payload.mafAge = Number(mafAge);
     payload.mafCategory = mafCategory;
     payload.mafHrDataAvailable = mafHrDataAvailable;
-
-    const maf = calculateMafHr({ age, category: mafCategory as MafCategory });
-    payload.mafHr = maf.ceiling;
     return payload;
   };
 

@@ -6,6 +6,7 @@ import com.fitai.coach.core.api.generated.GetExercisesByExerciseNameHistoryRespo
 import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetsBySetIdRequest
 import com.fitai.coach.core.api.generated.SessionGradeIntent
 import com.fitai.coach.core.api.generated.SessionGradeVerdict
+import com.fitai.coach.core.api.generated.SessionMafCompliance
 import com.fitai.coach.core.api.generated.WorkoutLogDetail
 import com.fitai.coach.core.exercises.NextTarget
 import com.fitai.coach.core.exercises.NextTargetStep
@@ -23,7 +24,6 @@ import com.fitai.coach.ui.format.formatWeight
 import com.fitai.coach.ui.format.shortDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.math.roundToInt
@@ -246,7 +246,7 @@ fun deviceDetails(workout: WorkoutLogDetail, distanceUnit: String?): List<String
         }?.let { add(if (running) "${formatPace(it, distanceUnit)} pace" else "${formatSpeed(it, distanceUnit)} avg speed") }
         workout.avgCadence?.takeIf {
             it > 0
-        }?.let { add("${it.roundToInt()} ${cadenceUnitFor(sportType(workout.deviceActivity))} cadence") }
+        }?.let { cadence -> add(listOfNotNull("${cadence.roundToInt()}", workout.avgCadenceUnit?.label, "cadence").joinToString(" ")) }
         workout.avgWatts?.takeIf { it > 0 }?.let { add("$it W power") }
         workout.sufferScore?.takeIf { it > 0 }?.let { add("$it relative effort") }
     }
@@ -268,9 +268,6 @@ private fun recording(deviceActivity: JsonElement): JsonObject? = (deviceActivit
 
 /** Whether a session's duration should read as moving time: it stood still a minute or more (MIN_REPORTABLE_STOPPED_SEC). */
 fun reportsMovingTime(deviceActivity: JsonElement): Boolean = (stoppedSeconds(deviceActivity) ?: 0) >= MIN_REPORTABLE_STOPPED_SECONDS
-
-private fun sportType(deviceActivity: JsonElement): String? =
-    recording(deviceActivity)?.let { raw -> (raw["sport_type"] ?: raw["type"])?.jsonPrimitive?.contentOrNull }
 
 /** "4:35/km" from metres per second (formatPace). */
 fun formatPace(metersPerSecond: Double, distanceUnit: String?): String {
@@ -299,17 +296,31 @@ fun formatSpeed(metersPerSecond: Double, distanceUnit: String?): String {
     }
 }
 
-/** Pedal "rpm" for a ride, "spm" for everything else (cadenceUnitFor). */
-fun cadenceUnitFor(sportType: String?): String =
-    if (sportType != null && sportType.lowercase().filter { it.isLetterOrDigit() } in CYCLING_SPORTS) "rpm" else "spm"
+/** The server's unit for the cadence: pedal "rpm" on a ride, "spm" otherwise; unknown to this build, none. */
+private val WorkoutLogDetail.AvgCadenceUnit.label: String?
+    get() = wireValue.takeIf { it.isNotEmpty() }
 
 private fun roundTo1(value: Double) = (value * TENTHS).roundToInt() / TENTHS
 
-private val CYCLING_SPORTS = setOf(
-    "ride", "virtualride", "mountainbikeride", "gravelride", "ebikeride", "emountainbikeride", "handcycle", "velomobile",
-    "cycling", "roadbiking", "mountainbiking", "gravelcycling", "indoorcycling", "virtualcycling", "cyclocross",
-    "trackcycling", "bmx", "ebikefitness", "ebikemountain", "handcycling", "recumbentcycling",
-)
+/** How the workout's average heart rate sat against the MAF ceiling, as its chip says it (summariseMafTile). */
+data class MafStatus(val label: String, val tone: BadgeTone, val cue: String)
+
+/**
+ * The server's MAF score as a chip: "4 over MAF", "MAF peaks" (the average
+ * held but the peak didn't), "at MAF" or "2 under MAF", with the coach's cue.
+ * The words carry it, never the colour alone.
+ */
+fun mafStatus(compliance: SessionMafCompliance?): MafStatus? {
+    val over = compliance?.avgOverBy ?: return null
+    return when (compliance.classification) {
+        SessionMafCompliance.Classification.OverCeiling -> MafStatus("$over over MAF", BadgeTone.Danger, compliance.nextAction)
+        SessionMafCompliance.Classification.MostlyCompliant -> MafStatus("MAF peaks", BadgeTone.Warning, compliance.nextAction)
+        SessionMafCompliance.Classification.Compliant ->
+            MafStatus(if (over == 0L) "at MAF" else "${-over} under MAF", BadgeTone.Success, compliance.nextAction)
+        SessionMafCompliance.Classification.Unknown -> null
+    }
+}
+
 private const val MIN_REPORTABLE_STOPPED_SECONDS = 60
 private const val METERS_PER_KM = 1000.0
 private const val SECONDS_PER_MINUTE = 60

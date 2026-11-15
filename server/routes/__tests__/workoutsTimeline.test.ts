@@ -13,6 +13,7 @@ vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule
 vi.mock("../../storage", async () =>
   (await import("./testUtils")).mockStorageModule({
     timeline: ["getTimeline", "getTimelinePage"],
+    users: ["getUser"],
   }),
 );
 
@@ -46,7 +47,7 @@ describe("Workout Timeline Routes", () => {
         limit: DEFAULT_TIMELINE_PAGE_SIZE,
         before: undefined,
       });
-      expect(response.body).toEqual(mockEntries);
+      expect(response.body).toEqual(mockEntries.map((entry) => ({ ...entry, dayKind: "session" })));
       expect(response.headers["x-next-cursor"]).toBeUndefined();
     });
 

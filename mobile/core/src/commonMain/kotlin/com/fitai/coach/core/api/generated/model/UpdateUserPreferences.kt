@@ -58,6 +58,9 @@ public data class UpdateUserPreferences(
     public val mafTrend: Patch<UpdateUserPreferences.MafTrend> = Patch.Absent,
     public val mafCategory: Patch<UpdateUserPreferences.MafCategory> = Patch.Absent,
     public val mafHrDataAvailable: Patch<Boolean> = Patch.Absent,
+    /**
+     * Ignored. The server works the ceiling out itself (calculateMafHr) from mafAge and mafCategory whenever both are set on a maf_method athlete, and returns it
+     */
     public val mafHr: Patch<Int> = Patch.Absent,
     public val mafBaselineTestScheduledAt: Patch<String> = Patch.Absent,
 ) {

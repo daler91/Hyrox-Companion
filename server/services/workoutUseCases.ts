@@ -1,4 +1,5 @@
 import { type exercisesPayloadSchema, type insertWorkoutLogSchema, lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type StructureSetRelink, type updateWorkoutLogSchema } from "@shared/schema";
+import { generateSummary } from "@shared/workoutSummary";
 import type { z } from "zod";
 
 import { isTextAiProviderConfigured } from "../ai/providers";
@@ -15,10 +16,24 @@ import { findPersonalRecordAchievements } from "./personalRecordAchievements";
 import { assignWorkoutPlanDay, createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
 import { refreshDerivedStateAfterLoggedSetChange } from "./workoutService/loggedSetChange";
 
-type CreateWorkoutPayload = z.infer<typeof insertWorkoutLogSchema> & {
+type CreateWorkoutPayload = Omit<z.infer<typeof insertWorkoutLogSchema>, "mainWorkout"> & {
+  /** Left out or blank, written from the exercises (see workoutText). */
+  mainWorkout?: string;
   exercises?: z.infer<typeof exercisesPayloadSchema>;
   structureBlocks?: StructureBlockInput[];
 };
+
+/**
+ * The workout's text: the athlete's own, or, when they wrote none, a summary
+ * of its exercises in their units, as the web's composer wrote it
+ * (generateSummary; docs/mobile-shared-logic.md, API field 11).
+ */
+async function workoutText(userId: string, mainWorkout: string | undefined, exercises: readonly ParsedExercise[] | undefined): Promise<string> {
+  if (mainWorkout?.trim()) return mainWorkout;
+  if (!exercises || exercises.length === 0) return mainWorkout ?? "";
+  const user = await storage.users.getUser(userId);
+  return generateSummary(exercises, user?.weightUnit === "lbs" ? "lbs" : "kg", user?.distanceUnit || "km");
+}
 type UpdateWorkoutPayload = z.infer<typeof updateWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
   structureBlocks?: StructureBlockInput[];
@@ -119,7 +134,8 @@ export async function createWorkout(input: {
     throw new AppError(ErrorCode.VALIDATION_ERROR, createLint.schemaErrors[0]?.message ?? "Structured workout has schema errors.", 400);
   }
 
-  const createdWorkout = await createWorkoutAndScheduleCoaching(workoutData, structured, input.userId, structureBlocks);
+  const mainWorkout = await workoutText(input.userId, workoutData.mainWorkout, structured);
+  const createdWorkout = await createWorkoutAndScheduleCoaching({ ...workoutData, mainWorkout }, structured, input.userId, structureBlocks);
   // D10 (CODEBASE_ANALYSIS_2026-10-03): every workout write drops the athlete's
   // cached analytics slices, or the refetch after the save is answered from the
   // pre-write cache for up to its TTL and reads as "my workout didn't save".

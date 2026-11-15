@@ -1,4 +1,4 @@
-import { BODY_SYSTEMS } from "./bodySystemLoad";
+import { BODY_SYSTEMS, describeBodySystemDivergence } from "./bodySystemLoad";
 import type {
   BodySystem,
   BodySystemLoadOverview,
@@ -36,6 +36,7 @@ export function bodySystemOverview(
   overrides: Partial<Omit<BodySystemLoadOverview, "systems">> = {},
 ): BodySystemLoadOverview {
   const overridesBySystem = new Map(Object.entries(systems));
+  const summaries = BODY_SYSTEMS.map((system) => bodySystemSummary(system, overridesBySystem.get(system)));
   return {
     asOf: "2026-09-25",
     weeks: [
@@ -46,11 +47,12 @@ export function bodySystemOverview(
       { start: "2026-09-12", end: "2026-09-18" },
       { start: "2026-09-19", end: "2026-09-25" },
     ],
-    systems: BODY_SYSTEMS.map((system) => bodySystemSummary(system, overridesBySystem.get(system))),
+    systems: summaries,
     sessionCount: 24,
     estimatedSessions: 0,
     unattributedSessions: 0,
     unscoredSessions: 0,
+    divergence: describeBodySystemDivergence({ systems: summaries }),
     ...overrides,
   };
 }

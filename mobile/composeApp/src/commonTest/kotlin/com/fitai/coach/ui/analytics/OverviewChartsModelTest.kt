@@ -32,7 +32,13 @@ class OverviewChartsModelTest {
         weekly: List<Double?> = listOf(0.0, 0.0, 0.0, 0.0, 0.0, 100.0),
     ) = SystemsItem(system, weekly.last() ?: 0.0, baseline, ratio, status, high, peak, weekly)
 
-    private fun load(vararg systems: SystemsItem, estimated: Long = 0, unattributed: Long = 0, unscored: Long = 0) = BodySystemLoad(
+    private fun load(
+        vararg systems: SystemsItem,
+        estimated: Long = 0,
+        unattributed: Long = 0,
+        unscored: Long = 0,
+        divergence: String? = null,
+    ) = BodySystemLoad(
         asOf = "2026-11-10",
         weeks = emptyList(),
         systems = systems.toList(),
@@ -40,6 +46,7 @@ class OverviewChartsModelTest {
         estimatedSessions = estimated,
         unattributedSessions = unattributed,
         unscoredSessions = unscored,
+        divergence = divergence,
     )
 
     @Test
@@ -156,28 +163,20 @@ class OverviewChartsModelTest {
     }
 
     @Test
-    fun theDivergenceSentenceNamesTheSpikeAndTheCalmSystems() {
+    fun theBannerSaysTheServersDivergenceSentenceLoudlyWhenASystemIsVeryHigh() {
+        val sentence = "Leg muscle load is at a six-week high (31% above your usual week), while aerobic load is normal."
         val divergence = bodySystemDivergence(
             load(
                 system(System.LegMuscle, Status.High, ratio = 1.31, high = true),
-                system(System.Aerobic, Status.Normal, ratio = 1.0),
-                system(System.RunningImpact, Status.Normal, ratio = 0.95),
-                system(System.UpperPull, Status.Low, ratio = 0.6),
+                system(System.Aerobic, Status.Normal),
+                divergence = sentence,
             ),
         )
-        assertEquals(
-            "Leg muscle load is at a six-week high (31% above your usual week), while aerobic and running impact loads are normal " +
-                "and upper-body pull load is below usual.",
-            divergence?.text,
-        )
-        assertEquals(false, divergence?.severe)
-        val severe = bodySystemDivergence(load(system(System.UpperPull, Status.VeryHigh, ratio = 2.0), system(System.Aerobic, Status.New)))
-        assertEquals(
-            "Upper-body pull load is 100% above your usual week and aerobic load jumped from almost none in the previous four weeks.",
-            severe?.text,
-        )
+        assertEquals(Divergence(sentence, severe = false), divergence)
+        val severe =
+            bodySystemDivergence(load(system(System.UpperPull, Status.VeryHigh, ratio = 2.0), divergence = "Upper-body pull load is up."))
         assertEquals(true, severe?.severe)
-        assertNull(bodySystemDivergence(load(system(System.Aerobic, Status.Normal, ratio = 1.0))))
+        assertNull(bodySystemDivergence(load(system(System.UpperPull, Status.VeryHigh, ratio = 2.0))))
     }
 
     @Test

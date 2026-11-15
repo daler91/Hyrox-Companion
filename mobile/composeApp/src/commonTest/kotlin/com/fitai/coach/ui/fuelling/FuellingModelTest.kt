@@ -84,24 +84,13 @@ class FuellingModelTest {
     }
 
     @Test
-    fun aWindowWithinTheCapIsKeptWhole() {
-        assertEquals(DateRange("2026-11-02", "2026-11-29"), fuellingRangeWindow("2026-11-02", "2026-11-29", "2026-11-12"))
-    }
-
-    @Test
-    fun aWiderWindowNarrowsAroundTodayOrToItsNearerEnd() {
-        // Today near the newest end: the window keeps that end.
-        assertEquals(DateRange("2024-11-29", "2026-11-29"), fuellingRangeWindow("2024-01-01", "2026-11-29", "2026-11-12"))
-        // Today near the oldest end: the window keeps that end.
-        assertEquals(DateRange("2024-01-01", "2025-12-31"), fuellingRangeWindow("2024-01-01", "2026-11-29", "2024-02-01"))
-    }
-
-    @Test
     fun theTimelineAsksForWholeFourWeekBlocksAroundItsSessions() {
         // Any day in a block asks for the same Monday-to-Sunday four weeks.
-        assertEquals(DateRange("2026-11-02", "2026-11-29"), timelineFuellingWindow(listOf("2026-11-12"), "2026-11-12"))
-        assertEquals(DateRange("2026-11-02", "2026-11-29"), timelineFuellingWindow(listOf("2026-11-19", "2026-11-05"), "2026-11-12"))
-        assertNull(timelineFuellingWindow(emptyList(), "2026-11-12"))
+        assertEquals(DateRange("2026-11-02", "2026-11-29"), timelineFuellingWindow(listOf("2026-11-12")))
+        assertEquals(DateRange("2026-11-02", "2026-11-29"), timelineFuellingWindow(listOf("2026-11-19", "2026-11-05")))
+        // Years apart, the whole span: the server narrows it around today.
+        assertEquals(DateRange("2024-01-01", "2026-11-29"), timelineFuellingWindow(listOf("2026-11-12", "2024-01-03")))
+        assertNull(timelineFuellingWindow(emptyList()))
     }
 
     @Test

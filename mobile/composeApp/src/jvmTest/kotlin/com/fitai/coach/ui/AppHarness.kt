@@ -73,9 +73,11 @@ class FakeApi {
     val requests = CopyOnWriteArrayList<Sent>()
     private val routes = ConcurrentHashMap<String, Pair<Int, String>>()
     private val delays = ConcurrentHashMap<String, Long>()
+    private val responseHeaders = ConcurrentHashMap<String, Map<String, String>>()
 
-    fun on(method: String, path: String, body: String = "{}", status: Int = 200) {
+    fun on(method: String, path: String, body: String = "{}", status: Int = 200, headers: Map<String, String> = emptyMap()) {
         routes["$method $path"] = status to body
+        responseHeaders["$method $path"] = headers
     }
 
     /** From now on [method] [path] answers only after [millis], as a slow network would. */
@@ -93,7 +95,12 @@ class FakeApi {
                 requests += sent
                 delays["${sent.method} ${sent.path}"]?.let { delay(it) }
                 val (status, body) = routes["${sent.method} ${sent.path}"] ?: (404 to """{"error":"Not found","code":"NOT_FOUND"}""")
-                respond(body, HttpStatusCode.fromValue(status), headersOf(HttpHeaders.ContentType, "application/json"))
+                val extra = responseHeaders["${sent.method} ${sent.path}"].orEmpty().map { (name, value) -> name to listOf(value) }
+                respond(
+                    body,
+                    HttpStatusCode.fromValue(status),
+                    headersOf(HttpHeaders.ContentType to listOf("application/json"), *extra.toTypedArray()),
+                )
             },
             ApiConfig("https://api.test", AppIdentity("android", "1.0")),
         ) { "test-token" },

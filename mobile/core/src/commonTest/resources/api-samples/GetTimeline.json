@@ -238,6 +238,14 @@
               "text": "sample text"
             }
           ]
+        },
+        "dayKind": "race",
+        "avgCadenceUnit": "rpm",
+        "mafCompliance": {
+          "compliancePct": 1,
+          "classification": "over_ceiling",
+          "nextAction": "sample text",
+          "avgOverBy": 1
         }
       }
     ],
@@ -511,6 +519,17 @@
               }
             }
           ],
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "dayKind": "zz_value_from_a_newer_server",
+        "avgCadenceUnit": "zz_value_from_a_newer_server",
+        "mafCompliance": {
+          "compliancePct": 1,
+          "classification": "zz_value_from_a_newer_server",
+          "nextAction": "sample text",
+          "avgOverBy": 1,
           "zzPropertyFromANewerServer": {
             "added": true
           }

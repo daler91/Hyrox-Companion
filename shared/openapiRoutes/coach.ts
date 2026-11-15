@@ -1,6 +1,7 @@
 import type { OpenAPIRegistry, ResponseConfig, RouteConfig } from "@asteasolutions/zod-to-openapi";
 import { createSelectSchema } from "drizzle-zod";
 
+import { MAX_ACTIVE_ATHLETE_FACTS, MAX_ACTIVE_FACTS_HEADER } from "../athleteFacts";
 import { CHAT_STATUS_STEPS } from "../chat";
 import {
   athleteFactCategoryEnum, athleteFacts, athleteFactSourceEnum, chatFactDecisionSchema,
@@ -505,8 +506,16 @@ function registerAthleteFactPaths({ routes, ok, fail, success }: Kit, AthleteFac
 
   route("get", "/api/v1/athlete-facts", {
     summary: "List the athlete card",
-    description: "Every fact, retired ones included, oldest first.",
-    responses: { ...ok("The athlete's facts", z.array(AthleteFact)), ...fail() },
+    description:
+      "Every fact, retired ones included, oldest first. X-Max-Active-Facts says how many active facts the card may hold; adding or restoring one more is refused with ATHLETE_FACT_LIMIT.",
+    responses: {
+      ...ok("The athlete's facts", z.array(AthleteFact), {
+        headers: z.object({
+          [MAX_ACTIVE_FACTS_HEADER]: z.string().regex(/^\d+$/).openapi({ description: "The most active facts a card may hold", example: String(MAX_ACTIVE_ATHLETE_FACTS) }),
+        }),
+      }),
+      ...fail(),
+    },
   });
 
   route("post", "/api/v1/athlete-facts", {
@@ -674,6 +683,14 @@ function registerTimelineEntry(registry: OpenAPIRegistry, entities: EntityCompon
         structureBlocks: z.array(TimelineStructureBlock).optional(),
         sessionEstimate: TimelineSessionEstimate.optional(),
         coachNotes: TimelineCoachNotes.optional(),
+        dayKind: z.enum(["session", "rest", "race"]).optional().openapi({
+          description:
+            'Sent on every entry. race: the athlete\'s race (focus is the server\'s "Race Day" marker, matched exactly so "Race Pace" is a session); rest: a planned day the plan words as rest ("Rest", "Active recovery", "Complete rest or light walk"), which when missed had nothing to miss; session otherwise',
+        }),
+        avgCadenceUnit: z.enum(["spm", "rpm"]).optional().openapi({
+          description: "With avgCadence: rpm (pedal revolutions) for a ride, spm (steps) otherwise, from deviceSportType; omitted without a cadence",
+        }),
+        mafCompliance: entities.SessionMafCompliance.optional(),
       })
       .openapi({
         description:

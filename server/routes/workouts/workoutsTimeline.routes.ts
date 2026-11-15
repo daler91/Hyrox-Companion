@@ -1,8 +1,10 @@
+import type { TimelineEntry } from "@shared/schema";
 import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { DEFAULT_TIMELINE_LIMIT, DEFAULT_TIMELINE_PAGE_SIZE } from "../../constants";
 import { asyncHandler, parsePagination, rateLimiter } from "../../routeUtils";
+import { withSessionDerivedFields } from "../../services/sessionDerivedFields";
 import { withSessionEstimates } from "../../services/sessionEstimate/timelineSessionEstimates";
 import { withCoachNotes } from "../../services/timelineCoachNotes";
 import { storage } from "../../storage";
@@ -21,9 +23,17 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
  * anchored on the athlete's today, see `TimelineStorage.getTimelinePage`.
  * `offset` is the pre-cursor contract and still windows the flat merge with
  * no cursor header, so nothing that sends it breaks. Upcoming planned entries
- * carry `sessionEstimate` (see withSessionEstimates), and entries with notes
- * `coachNotes` (see withCoachNotes).
+ * carry `sessionEstimate` (see withSessionEstimates), entries with notes
+ * `coachNotes` (see withCoachNotes), and every entry its `dayKind`, with
+ * `avgCadenceUnit` and `mafCompliance` where they apply (see
+ * withSessionDerivedFields).
  */
+/** What every page of entries gets before it is sent. */
+async function enrich(userId: string, entries: TimelineEntry[]): Promise<TimelineEntry[]> {
+  const [estimated, athlete] = await Promise.all([withSessionEstimates(userId, entries), storage.users.getUser(userId)]);
+  return withSessionDerivedFields(withCoachNotes(estimated), athlete);
+}
+
 export function registerWorkoutTimelineRoutes(router: Router): void {
   router.get("/api/v1/timeline", isAuthenticated, rateLimiter("timeline", 60), asyncHandler(async (req: TimelineRequest, res: Response) => {
     const userId = getUserId(req);
@@ -33,7 +43,7 @@ export function registerWorkoutTimelineRoutes(router: Router): void {
     const limit = Math.min(pagination.limit, DEFAULT_TIMELINE_LIMIT);
 
     if (pagination.offset !== undefined) {
-      res.json(withCoachNotes(await withSessionEstimates(userId, await storage.timeline.getTimeline(userId, planId, limit, pagination.offset))));
+      res.json(await enrich(userId, await storage.timeline.getTimeline(userId, planId, limit, pagination.offset)));
       return;
     }
     if (before !== undefined && !ISO_DATE.test(before)) {
@@ -43,6 +53,6 @@ export function registerWorkoutTimelineRoutes(router: Router): void {
 
     const page = await storage.timeline.getTimelinePage(userId, { planId, limit, before });
     if (page.nextCursor) res.setHeader("X-Next-Cursor", page.nextCursor);
-    res.json(withCoachNotes(await withSessionEstimates(userId, page.entries)));
+    res.json(await enrich(userId, page.entries));
   }));
 }

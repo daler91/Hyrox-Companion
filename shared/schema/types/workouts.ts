@@ -1,4 +1,5 @@
 ﻿import type { CoachCueParts } from "../../coachNotes";
+import type { MafComplianceClass } from "../../maf";
 import type { PlannedSessionEstimate } from "../../plannedSessionEstimate";
 import type {
   DeviceLinkSource,
@@ -351,6 +352,24 @@ export type TimelineCoachNotes = {
   cues: CoachCueParts[];
 };
 
+/**
+ * How a completed session's average heart rate sat against the athlete's MAF
+ * ceiling (`computeMafCompliance`), sent so a client doesn't score it itself.
+ */
+export type SessionMafCompliance = {
+  compliancePct: number;
+  classification: MafComplianceClass;
+  nextAction: string;
+  /** Average heart rate minus the ceiling (bpm); negative when under it. */
+  avgOverBy: number;
+};
+
+/** What a timeline day is: a session, a rest day, or the athlete's race. */
+export type TimelineDayKind = "session" | "rest" | "race";
+
+/** The unit `avgCadence` is in: pedal revolutions for a ride, steps otherwise. */
+export type CadenceUnit = "spm" | "rpm";
+
 export type TimelineEntry = {
   id: string;
   date: string;
@@ -478,6 +497,15 @@ export type TimelineEntry = {
   sessionEstimate?: PlannedSessionEstimate;
   /** On entries with notes: `notes` split into the athlete's text and the coach's cues (GET /api/v1/timeline). */
   coachNotes?: TimelineCoachNotes;
+  /**
+   * The race (by the server's race-day marker), a rest day (a planned day the
+   * plan words as rest, `isRestLikePlanDay`) or a session (GET /api/v1/timeline).
+   */
+  dayKind?: TimelineDayKind;
+  /** With `avgCadence`: the unit it is in, from the recording's sport (GET /api/v1/timeline). */
+  avgCadenceUnit?: CadenceUnit | null;
+  /** A completed MAF-method run's heart rate against the ceiling (GET /api/v1/timeline). */
+  mafCompliance?: SessionMafCompliance;
   calories?: number | null;
   distanceMeters?: number | null;
   elevationGain?: number | null;
@@ -888,6 +916,12 @@ export const structureBlocksPayloadSchema = z.array(structureBlockSchema).max(10
  * left structureBlocks out, so the generated app models could not send blocks.
  */
 export const createWorkoutPayloadSchema = insertWorkoutLogRouteSchema.extend({
+  // Optional here only: left out or blank, the server writes it from the
+  // exercises (shared/workoutSummary.ts generateSummary), as the web did.
+  mainWorkout: z.string().max(MAX_WORKOUT_TEXT_LEN).optional().openapi({
+    description:
+      'The workout as text. Left out or blank, the server writes a summary of `exercises` in the athlete\'s units, e.g. "Back Squat: 5x5, 100kg; Easy Run: 5000 m"',
+  }),
   exercises: exercisesPayloadSchema.optional(),
   structureBlocks: structureBlocksPayloadSchema,
 });

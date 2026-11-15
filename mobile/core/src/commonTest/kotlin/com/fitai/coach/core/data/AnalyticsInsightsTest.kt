@@ -100,7 +100,13 @@ class AnalyticsInsightsTest {
 
     @Test
     fun theFuellingBlockCoversTheRangeAndAllTimeIsHeldToAYear() = runTest {
-        server.on("GET", "/api/v1/nutrition/block", 200, """{"from":"2026-08-13","to":"2026-11-10","points":[]}""")
+        server.on(
+            "GET",
+            "/api/v1/nutrition/block",
+            200,
+            """{"from":"2026-08-13","to":"2026-11-10","points":[],"correlation":{"status":"insufficient_data","rpe":null,""" +
+                """"compliance":null,"eligibleDays":0,"carbHitPct":90,"reasonCodes":["no_eligible_days"],"explanation":"How it works."}}""",
+        )
 
         analytics.refreshNutritionBlock(AnalyticsRange.Quarter, "2026-11-10")
         analytics.refreshNutritionBlock(AnalyticsRange.All, "2026-11-10")

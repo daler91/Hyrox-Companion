@@ -20,6 +20,11 @@ vi.mock("../../storage", async () =>
   }),
 );
 
+/** Entries as the route sends them: each with its day kind (withSessionDerivedFields). */
+function sent<T extends object>(entries: T[]): Array<T & { dayKind: string }> {
+  return entries.map((entry) => ({ ...entry, dayKind: "session" }));
+}
+
 describe("GET /api/v1/timeline", () => {
   let app: ReturnType<typeof createTestApp>;
   const mockEntries = [{ id: "entry-1", type: "workout", date: "2024-01-01" }];
@@ -62,7 +67,7 @@ describe("GET /api/v1/timeline", () => {
       const res = await request(app).get(`/api/v1/timeline${query}`);
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(mockEntries);
+      expect(res.body).toEqual(sent(mockEntries));
       expect(res.headers["x-next-cursor"]).toBeUndefined();
       expect(storage.timeline.getTimelinePage).toHaveBeenCalledWith("test_user_id", expectedOptions);
       expect(storage.timeline.getTimeline).not.toHaveBeenCalled();
@@ -74,7 +79,7 @@ describe("GET /api/v1/timeline", () => {
       const res = await request(app).get("/api/v1/timeline");
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(mockEntries);
+      expect(res.body).toEqual(sent(mockEntries));
       expect(res.headers["x-next-cursor"]).toBe("2025-12-01");
     });
 
@@ -93,7 +98,7 @@ describe("GET /api/v1/timeline", () => {
       const res = await request(app).get("/api/v1/timeline?limit=10&offset=5");
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(mockEntries);
+      expect(res.body).toEqual(sent(mockEntries));
       expect(res.headers["x-next-cursor"]).toBeUndefined();
       expect(storage.timeline.getTimeline).toHaveBeenCalledWith("test_user_id", undefined, 10, 5);
       expect(storage.timeline.getTimelinePage).not.toHaveBeenCalled();
@@ -119,7 +124,7 @@ describe("GET /api/v1/timeline", () => {
 
       expect(res.status).toBe(200);
       expect(res.body[0].sessionEstimate).toEqual({ durationMin: expect.any(Number), rpe: expect.any(Number), source: "sets", clamped: false });
-      expect(res.body[1]).toEqual(mockEntries[0]);
+      expect(res.body[1]).toEqual(sent(mockEntries)[0]);
     });
   });
 
@@ -133,7 +138,37 @@ describe("GET /api/v1/timeline", () => {
       expect(res.status).toBe(200);
       expect(res.body[0].coachNotes).toEqual({ athleteText: "Felt strong", cues: [{ label: "Pacing", text: "ease off" }] });
       expect(res.body[0].notes).toBe(logged.notes);
-      expect(res.body[1]).toEqual(mockEntries[0]);
+      expect(res.body[1]).toEqual(sent(mockEntries)[0]);
+    });
+  });
+
+  describe("derived fields", () => {
+    it("says what each day is, and scores a MAF athlete's run against their ceiling", async () => {
+      const rest = { id: "plan-d2", date: "2026-11-09", type: "planned", status: "missed", focus: "Rest", mainWorkout: "Rest", planDayId: "d2" };
+      const run = {
+        id: "log-w1",
+        date: "2026-11-10",
+        type: "logged",
+        status: "completed",
+        focus: "Easy run",
+        mainWorkout: "Easy run",
+        avgHeartrate: 144,
+        avgCadence: 172,
+        deviceSportType: "Run",
+        exerciseSets: [{ exerciseName: "easy_run" }],
+      };
+      vi.mocked(storage.timeline.getTimelinePage).mockResolvedValue({ entries: [rest, run], nextCursor: null } as never);
+      vi.mocked(storage.users.getUser).mockResolvedValue({ trainingStyleId: "maf_method", mafHr: 140 } as never);
+
+      const res = await request(app).get("/api/v1/timeline");
+
+      expect(res.status).toBe(200);
+      expect(res.body[0]).toEqual({ ...rest, dayKind: "rest" });
+      expect(res.body[1]).toMatchObject({
+        dayKind: "session",
+        avgCadenceUnit: "spm",
+        mafCompliance: { compliancePct: 76, classification: "over_ceiling", avgOverBy: 4 },
+      });
     });
   });
 

@@ -225,6 +225,11 @@ export interface BodySystemLoadOverview {
   unattributedSessions: number;
   /** Sessions with neither a duration nor any exercises, so no load could be computed at all. */
   unscoredSessions: number;
+  /**
+   * Where this week's load diverges between systems, in one sentence
+   * (`describeBodySystemDivergence`), or null when no system stands out.
+   */
+  divergence: string | null;
 }
 
 export interface MovementPatternCoverage {

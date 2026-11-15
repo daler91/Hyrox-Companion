@@ -1,10 +1,13 @@
 package com.fitai.coach.ui.workout
 
+import com.fitai.coach.core.api.ApiJson
 import com.fitai.coach.core.api.generated.ExerciseSetRow
 import com.fitai.coach.core.api.generated.GetExercisesByExerciseNameHistoryResponseItem
 import com.fitai.coach.core.api.generated.SessionGradeIntent
 import com.fitai.coach.core.api.generated.SessionGradeVerdict
+import com.fitai.coach.core.api.generated.SessionMafCompliance
 import com.fitai.coach.core.api.generated.TimelineEntry
+import com.fitai.coach.core.api.generated.WorkoutLogDetail
 import com.fitai.coach.core.exercises.NextTarget
 import com.fitai.coach.core.exercises.NextTargetStep
 import com.fitai.coach.ui.coach.seedMessage
@@ -184,9 +187,34 @@ class WorkoutDetailModelTest {
         assertEquals("8:03/mi", formatPace(1000.0 / 300, "miles"))
         assertEquals("-", formatPace(0.0, "km"))
         assertEquals("30 km/h", formatSpeed(30 / 3.6, "km"))
-        assertEquals("rpm", cadenceUnitFor("VirtualRide"))
-        assertEquals("spm", cadenceUnitFor("Run"))
-        assertEquals("spm", cadenceUnitFor(null))
+    }
+
+    private fun recorded(extra: String) = ApiJson.decodeFromString(
+        WorkoutLogDetail.serializer(),
+        """{"id":"w1","userId":"u1","date":"2026-11-10","focus":"Ride","mainWorkout":"","countsAsTraining":true,""" +
+            """"autoLinkRecordingOnly":false,"deviceActivity":{},"exerciseSets":[],"structureBlocks":[],"source":"strava"$extra}""",
+    )
+
+    @Test
+    fun theCadenceTakesTheServersUnit() {
+        assertEquals(listOf("88 rpm cadence"), deviceDetails(recorded(""","avgCadence":88.4,"avgCadenceUnit":"rpm""""), "km"))
+        assertEquals(listOf("171 spm cadence"), deviceDetails(recorded(""","avgCadence":171,"avgCadenceUnit":"spm""""), "km"))
+        // From a server too old to say, the number alone.
+        assertEquals(listOf("171 cadence"), deviceDetails(recorded(""","avgCadence":171"""), "km"))
+    }
+
+    @Test
+    fun theMafChipSaysHowFarOverOrUnderTheCeilingTheAverageSat() {
+        fun compliance(classification: String, over: Int) = ApiJson.decodeFromString(
+            SessionMafCompliance.serializer(),
+            """{"compliancePct":90,"classification":"$classification","nextAction":"Cue","avgOverBy":$over}""",
+        )
+        assertEquals(MafStatus("4 over MAF", BadgeTone.Danger, "Cue"), mafStatus(compliance("over_ceiling", 4)))
+        assertEquals(MafStatus("MAF peaks", BadgeTone.Warning, "Cue"), mafStatus(compliance("mostly_compliant", -3)))
+        assertEquals(MafStatus("at MAF", BadgeTone.Success, "Cue"), mafStatus(compliance("compliant", 0)))
+        assertEquals(MafStatus("2 under MAF", BadgeTone.Success, "Cue"), mafStatus(compliance("compliant", -2)))
+        assertNull(mafStatus(compliance("something_new", 0)))
+        assertNull(mafStatus(null))
     }
 
     @Test

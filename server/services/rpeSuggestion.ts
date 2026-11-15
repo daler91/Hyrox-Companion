@@ -45,6 +45,10 @@ function athleteHeartRateContext(user: User | undefined): AthleteLoadContext {
  */
 export async function loadSuggestedRpe(log: HeartRateRpeLog, userId: string): Promise<number | null> {
   if (!hasUsableHeartRate(log)) return null;
-  const user = await storage.users.getUser(userId);
-  return suggestRpeFromHeartRate(log, athleteHeartRateContext(user));
+  return suggestedRpeFor(log, await storage.users.getUser(userId));
+}
+
+/** `suggestRpeFromHeartRate` for a stored log, from a profile the caller already read. */
+export function suggestedRpeFor(log: HeartRateRpeLog, user: User | undefined): number | null {
+  return hasUsableHeartRate(log) ? suggestRpeFromHeartRate(log, athleteHeartRateContext(user)) : null;
 }

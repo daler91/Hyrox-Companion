@@ -3,7 +3,16 @@
     "min": {
       "from": "2026-11-07",
       "to": "2026-11-07",
-      "points": []
+      "points": [],
+      "correlation": {
+        "status": "ok",
+        "rpe": null,
+        "compliance": null,
+        "eligibleDays": 1,
+        "carbHitPct": 1,
+        "reasonCodes": [],
+        "explanation": "a"
+      }
     },
     "max": {
       "from": "2026-11-07",
@@ -21,7 +30,30 @@
           "avgRpe": 1.5,
           "compliancePct": 1.5
         }
-      ]
+      ],
+      "correlation": {
+        "status": "insufficient_data",
+        "rpe": {
+          "hitDays": 1,
+          "missDays": 1,
+          "hitAvg": 1.5,
+          "missAvg": 1.5,
+          "delta": 1.5
+        },
+        "compliance": {
+          "hitDays": 1,
+          "missDays": 1,
+          "hitAvg": 1.5,
+          "missAvg": 1.5,
+          "delta": 1.5
+        },
+        "eligibleDays": 1,
+        "carbHitPct": 1,
+        "reasonCodes": [
+          "sample text"
+        ],
+        "explanation": "sample text"
+      }
     },
     "future": {
       "from": "2026-11-07",
@@ -43,6 +75,38 @@
           }
         }
       ],
+      "correlation": {
+        "status": "zz_value_from_a_newer_server",
+        "rpe": {
+          "hitDays": 1,
+          "missDays": 1,
+          "hitAvg": 1.5,
+          "missAvg": 1.5,
+          "delta": 1.5,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "compliance": {
+          "hitDays": 1,
+          "missDays": 1,
+          "hitAvg": 1.5,
+          "missAvg": 1.5,
+          "delta": 1.5,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "eligibleDays": 1,
+        "carbHitPct": 1,
+        "reasonCodes": [
+          "sample text"
+        ],
+        "explanation": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
       "zzPropertyFromANewerServer": {
         "added": true
       }

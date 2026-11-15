@@ -34,8 +34,6 @@ fun bodySystemDescription(system: BodySystem): String = when (system) {
     BodySystem.Unknown -> ""
 }
 
-private fun noun(system: BodySystem): String = bodySystemLabel(system).lowercase()
-
 /** Any load at all in the six weeks: the card shows on exactly this. */
 fun hasBodySystemLoad(load: TrainingOverview.BodySystemLoad?): Boolean =
     load?.systems?.any { system -> system.weekly.any { (it ?: 0.0) > 0 } } == true
@@ -82,47 +80,17 @@ fun bodySystemDetail(system: SystemLoad): String {
     return listOfNotNull(comparison, peak).joinToString(". ")
 }
 
-private fun isNotable(system: SystemLoad): Boolean =
-    system.sixWeekHigh || system.status in setOf(SystemStatus.High, SystemStatus.VeryHigh, SystemStatus.New)
-
-private fun joinWithAnd(items: List<String>): String =
-    if (items.size <= 1) items.lastOrNull().orEmpty() else items.dropLast(1).joinToString(", ") + " and " + items.last()
-
-private fun notablePhrase(system: SystemLoad): String {
-    val above = system.ratio?.let(::percentChange)?.takeIf { it > 0 }?.let { "$it% above your usual week" }
-    return when {
-        system.status == SystemStatus.New -> "${noun(system.system)} load jumped from almost none in the previous four weeks"
-        system.sixWeekHigh -> "${noun(system.system)} load is at a six-week high" + above?.let { " ($it)" }.orEmpty()
-        else -> "${noun(system.system)} load is ${above ?: "above your usual week"}"
-    }
-}
-
-private fun groupClause(systems: List<SystemLoad>, state: String): String =
-    "${joinWithAnd(systems.map { noun(it.system) })} ${if (systems.size == 1) "load is" else "loads are"} $state"
-
 /** The banner over the tiles: what diverges, and how loud to say it. */
 data class Divergence(val text: String, val severe: Boolean)
 
 /**
- * The divergence one overall number hides, as a sentence — "Leg muscle load is
- * at a six-week high (31% above your usual week), while aerobic load is
- * normal." — or null when nothing stands out (describeBodySystemDivergence).
+ * The server's sentence for the divergence one overall number hides — "Leg
+ * muscle load is at a six-week high (31% above your usual week), while aerobic
+ * load is normal." — or null when nothing stands out. Said loudly when a system
+ * is very high.
  */
-fun bodySystemDivergence(load: TrainingOverview.BodySystemLoad): Divergence? {
-    val notable = load.systems.filter(::isNotable)
-    if (notable.isEmpty()) return null
-    val calm = load.systems.filterNot(::isNotable)
-    val normal = calm.filter { it.status == SystemStatus.Normal }
-    val low = calm.filter { it.status == SystemStatus.Low }
-    val contrast = listOfNotNull(
-        normal.takeIf { it.isNotEmpty() }?.let { groupClause(it, "normal") },
-        low.takeIf { it.isNotEmpty() }?.let { groupClause(it, "below usual") },
-    )
-    val sentence = joinWithAnd(notable.map(::notablePhrase)) + if (contrast.isEmpty()) "" else ", while ${joinWithAnd(contrast)}"
-    return Divergence(
-        sentence.replaceFirstChar { it.uppercase() } + ".",
-        severe = load.systems.any { it.status == SystemStatus.VeryHigh },
-    )
+fun bodySystemDivergence(load: TrainingOverview.BodySystemLoad): Divergence? = load.divergence?.let { text ->
+    Divergence(text, severe = load.systems.any { it.status == SystemStatus.VeryHigh })
 }
 
 /** What the split couldn't see: estimated, unsplit and uncounted sessions (coverageNotes). */

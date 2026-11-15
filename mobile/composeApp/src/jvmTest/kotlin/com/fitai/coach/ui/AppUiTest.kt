@@ -397,7 +397,8 @@ class AppUiTest {
             """"trainingLoad":{"currentUtss":80,"acuteAvg":70,"chronicAvg":62,"acwr":1.12,"zone":"sweet_spot","tsb":-8,""" +
             """"monotony":1.3,"monotonyZone":"ok","hrZones":[],"powerTssEstimated":false,"flaggedVectors":[],""" +
             """"activeRestrictions":[],"trend":$trend},"bodySystemLoad":{"asOf":"2026-11-09","weeks":[],"systems":$systems,""" +
-            """"sessionCount":7,"estimatedSessions":0,"unattributedSessions":0,"unscoredSessions":0}}"""
+            """"sessionCount":7,"estimatedSessions":0,"unattributedSessions":0,"unscoredSessions":0,""" +
+            """"divergence":"Leg muscle load is at a six-week high (31% above your usual week), while aerobic load is normal."}}"""
         val api = FakeApi().apply {
             establishedAccount()
             on("GET", "/api/v1/training-overview", overview)
@@ -457,7 +458,9 @@ class AppUiTest {
                 "2026-11-03",
                 300,
                 6.5,
-            )},${day("2026-11-04", 150, 8.0)},${day("2026-11-05", 160, 7.5)},${day("2026-11-06", 100, 8.5)}]}"""
+            )},${day("2026-11-04", 150, 8.0)},${day("2026-11-05", 160, 7.5)},${day("2026-11-06", 100, 8.5)}],""" +
+            """"correlation":{"status":"ok","rpe":{"hitDays":3,"missDays":3,"hitAvg":6.5,"missAvg":8,"delta":-1.5},""" +
+            """"compliance":null,"eligibleDays":6,"carbHitPct":90,"reasonCodes":[],"explanation":"An association, not causation."}}"""
         val api = FakeApi().apply {
             establishedAccount()
             on("GET", "/api/v1/auth/user", user)

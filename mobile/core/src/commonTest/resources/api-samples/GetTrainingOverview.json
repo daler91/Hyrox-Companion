@@ -193,7 +193,8 @@
         "sessionCount": 1,
         "estimatedSessions": 1,
         "unattributedSessions": 1,
-        "unscoredSessions": 1
+        "unscoredSessions": 1,
+        "divergence": "sample text"
       }
     },
     "future": {
@@ -388,6 +389,7 @@
         "estimatedSessions": 1,
         "unattributedSessions": 1,
         "unscoredSessions": 1,
+        "divergence": "sample text",
         "zzPropertyFromANewerServer": {
           "added": true
         }

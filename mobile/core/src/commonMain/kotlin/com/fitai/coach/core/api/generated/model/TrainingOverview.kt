@@ -249,6 +249,10 @@ public data class TrainingOverview(
         public val estimatedSessions: Long,
         public val unattributedSessions: Long,
         public val unscoredSessions: Long,
+        /**
+         * Where this week's load diverges between systems, in one sentence, or null when no system stands out. For example: "Leg muscle load is at a six-week high (31% above your usual week), while aerobic load is normal."
+         */
+        public val divergence: String? = null,
     ) {
         @Serializable
         public data class WeeksItem(

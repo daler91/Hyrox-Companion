@@ -70,16 +70,12 @@ class TrainingSettingsModelTest {
     }
 
     @Test
-    fun theMafCeilingIs180MinusAgeMovedByTheCategory() {
-        assertEquals(140, mafCeiling(40, MafCategory.ConsistentUpTo2y))
-        assertEquals(130, mafCeiling(40, MafCategory.RecoveringOrMedicated))
-        assertEquals(135, mafCeiling(40, MafCategory.TrainingInterrupted))
-        assertEquals(145, mafCeiling(40, MafCategory.Consistent2yPlusImproving))
-
+    fun theMafSetupSendsTheAnswersAndLeavesTheCeilingToTheServer() {
         assertEquals("Enter a valid age and select your category.", MafSetup("15", MafCategory.ConsistentUpTo2y, null).error)
         assertEquals("Enter a valid age and select your category.", MafSetup("40", null, null).error)
         val answers = assertNotNull(MafSetup("40", MafCategory.TrainingInterrupted, true).patch()).json()
-        assertEquals("135", answers["mafHr"].toString())
+        assertNull(answers["mafHr"])
+        assertEquals("40", answers["mafAge"].toString())
         assertEquals("\"training_interrupted\"", answers["mafCategory"].toString())
         assertEquals("true", answers["mafHrDataAvailable"].toString())
     }
@@ -97,7 +93,7 @@ class TrainingSettingsModelTest {
         assertEquals("\"balanced_default\"", toMaf["trainingStylePreviousId"].toString())
         assertEquals("true", toMaf["trainingStyleRecomputeNow"].toString())
         assertEquals("\"2026-11-20T19:00:00Z\"", toMaf["mafBaselineTestScheduledAt"].toString())
-        assertEquals("140", toMaf["mafHr"].toString())
+        assertNull(toMaf["mafHr"])
 
         val toBalanced = styleSwitchPatch(MAF_STYLE, BALANCED_STYLE, "2026-11-13T19:00:00Z", "2026-11-20T19:00:00Z", null).json()
         assertNull(toBalanced["mafBaselineTestScheduledAt"])

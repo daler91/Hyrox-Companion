@@ -7,57 +7,40 @@ import kotlin.math.abs
 
 private typealias BlockDay = GetNutritionBlockResponse.PointsItem
 
-/** A day "hits" its carbs at 90% of its (load-adjusted) target or more. */
-const val CARB_HIT_RATIO = 0.9
-
-/** Each group needs this many days before a comparison is reported. */
-const val MIN_DAYS_PER_BUCKET = 3
-
-private const val PERCENT = 100
-
 /** One outcome on carb-hit days against missed days; for RPE a negative [delta] felt easier. */
-data class MetricComparison(val hitDays: Int, val missDays: Int, val hitAvg: Double, val missAvg: Double, val delta: Double)
+data class MetricComparison(val hitDays: Long, val missDays: Long, val hitAvg: Double, val missAvg: Double, val delta: Double)
 
-/** The comparison, or why there isn't one yet (FuellingCorrelationResult). */
+/**
+ * The server's comparison of carb-hit days with missed ones (the block's
+ * `correlation`, analyzeFuellingCorrelation), as the card reads it: each
+ * outcome compared once both groups have enough days, or null.
+ */
 data class FuellingCorrelation(
     val rpe: MetricComparison?,
     val compliance: MetricComparison?,
     /** Days with food logged, a carb target and an outcome to compare. */
-    val eligibleDays: Int,
+    val eligibleDays: Long,
+    /** A day hits its carbs at this percentage of its target. */
+    val carbHitPct: Long,
+    /** How the comparison is made, in the server's words. */
+    val explanation: String,
 ) {
     val ok: Boolean get() = rpe != null || compliance != null
-    val carbHitPct: Int get() = jsRound(CARB_HIT_RATIO * PERCENT).toInt()
+
+    companion object {
+        fun of(correlation: GetNutritionBlockResponse.Correlation) = FuellingCorrelation(
+            rpe = correlation.rpe?.run { MetricComparison(hitDays, missDays, hitAvg, missAvg, delta) },
+            compliance = correlation.compliance?.run { MetricComparison(hitDays, missDays, hitAvg, missAvg, delta) },
+            eligibleDays = correlation.eligibleDays,
+            carbHitPct = correlation.carbHitPct,
+            explanation = correlation.explanation,
+        )
+    }
 }
-
-/** Food was logged that day, it had a carb target, and training left an RPE or a compliance. */
-private fun isEligible(day: BlockDay): Boolean =
-    day.calories > 0 && (day.carbTargetG ?: 0.0) > 0 && (day.avgRpe != null || day.compliancePct != null)
-
-private fun isHit(day: BlockDay): Boolean = day.carb >= CARB_HIT_RATIO * (day.carbTargetG ?: 0.0)
 
 private const val TENTHS = 10
 
 private fun round1(n: Double): Double = jsRound(n * TENTHS) / TENTHS
-
-private fun compare(days: List<Pair<Boolean, Double>>, round: (Double) -> Double): MetricComparison? {
-    val hit = days.filter { it.first }.map { it.second }
-    val miss = days.filterNot { it.first }.map { it.second }
-    if (hit.size < MIN_DAYS_PER_BUCKET || miss.size < MIN_DAYS_PER_BUCKET) return null
-    // The difference comes from the raw means, so rounding can't drift it.
-    return MetricComparison(hit.size, miss.size, round(hit.average()), round(miss.average()), round(hit.average() - miss.average()))
-}
-
-/**
- * Session RPE and compliance on days the athlete reached their carb target
- * against days they didn't (analyzeFuellingCorrelation). Only days with food
- * logged count, so an unlogged day isn't read as a miss.
- */
-fun fuellingCorrelation(points: List<BlockDay>): FuellingCorrelation {
-    val eligible = points.filter(::isEligible)
-    val rpe = eligible.mapNotNull { day -> day.avgRpe?.let { isHit(day) to it } }
-    val compliance = eligible.mapNotNull { day -> day.compliancePct?.let { isHit(day) to it } }
-    return FuellingCorrelation(compare(rpe, ::round1), compare(compliance, ::jsRound), eligible.size)
-}
 
 /** The tab shows once any day in the range has food logged. */
 fun hasIntake(points: List<BlockDay>): Boolean = points.any { it.calories > 0 }
@@ -83,9 +66,3 @@ fun complianceDeltaText(comparison: MetricComparison): String = when {
 fun comparisonLine(comparison: MetricComparison, format: (Double) -> String, delta: String): String =
     "${format(comparison.hitAvg)} on carb-hit days (${comparison.hitDays}) vs ${format(comparison.missAvg)} missed " +
         "(${comparison.missDays}) — $delta"
-
-/** What the comparison counts and how to read it. */
-val FUELLING_EXPLANATION: String =
-    "Compares training days where you reached at least ${jsRound(CARB_HIT_RATIO * PERCENT).toInt()}% of your carb target with " +
-        "days you didn't (minimum $MIN_DAYS_PER_BUCKET days per group). Only days with food logged count, so a day you didn't log " +
-        "is not read as a miss. An association, not causation — guidance only."
