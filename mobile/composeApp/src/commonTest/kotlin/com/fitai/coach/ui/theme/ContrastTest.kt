@@ -3,8 +3,12 @@ package com.fitai.coach.ui.theme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
+import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.CARD_TONE_FILL
+import com.fitai.coach.ui.components.badgeColors
+import com.fitai.coach.ui.timeline.COACH_NOTE_TINT
 import com.fitai.coach.ui.timeline.LINK_PROMPT_TINT
+import com.fitai.coach.ui.timeline.StravaOrange
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.test.Test
@@ -39,12 +43,16 @@ class ContrastTest {
         text("onDanger on danger", c.onDanger, c.danger)
         text("onSuccess on success", c.onSuccess, c.success)
         text("onWarning on warning", c.onWarning, c.warning)
-        // Badges (FitaiBadge): a 10% tint of the tone, on a card.
-        text("neutral badge", c.textMuted, c.muted)
-        text("accent badge", c.onAccentSoft, c.accentSoft)
-        for ((name, tone) in listOf("success" to c.success, "warning" to c.warning, "danger" to c.danger)) {
-            text("$name badge", tone, tone.copy(alpha = 0.1f).compositeOver(c.card))
+        // Badges (FitaiBadge), every tone: a neutral fill or a 10% tint of the tone, on a card or the page.
+        for (tone in BadgeTone.entries) {
+            val badge = badgeColors(tone, c)
+            for ((name, surface) in listOf("card" to c.card, "background" to c.background)) {
+                text("$tone badge on $name", badge.content, badge.container.compositeOver(surface))
+            }
         }
+        // An outline badge in muted text (a plan's name) or the accent (today's plan week), on the page and a card.
+        text("muted outline badge", c.textMuted, c.card)
+        text("accent outline badge", c.accentText, c.background)
         // Toasts are the inverse surface, with the other theme's accent as the action.
         val toastAction = if (c.isDark) LightColors.accentText else DarkColors.accentText
         text("toast text", c.background, c.text)
@@ -71,14 +79,34 @@ class ContrastTest {
     fun badgesAndTheLinkPromptMeetAaOnATonedCard() = bothThemes { c ->
         val completed = c.success.copy(alpha = CARD_TONE_FILL).compositeOver(c.card)
         val missed = c.warning.copy(alpha = CARD_TONE_FILL).compositeOver(c.card)
-        // A badge's own 10% tint lies over the card's.
-        text("completed badge on its card", c.success, c.success.copy(alpha = 0.1f).compositeOver(completed))
-        text("Strava badge on a completed card", c.warning, c.warning.copy(alpha = 0.1f).compositeOver(completed))
-        text("missed badge on its card", c.warning, c.warning.copy(alpha = 0.1f).compositeOver(missed))
+        // A badge's own fill lies over the card's tint; any tone can sit on either card (status, tier, Strava, weekday).
+        for (tone in BadgeTone.entries) {
+            val badge = badgeColors(tone, c)
+            text("$tone badge on a completed card", badge.content, badge.container.compositeOver(completed))
+            text("$tone badge on a missed card", badge.content, badge.container.compositeOver(missed))
+        }
         // "Was this your …?" on a recording's card, with its two answers.
-        val prompt = c.warning.copy(alpha = LINK_PROMPT_TINT).compositeOver(completed)
-        text("link prompt question", c.text, prompt)
-        text("link prompt's Link", c.accentText, prompt)
+        val prompt = StravaOrange.copy(alpha = LINK_PROMPT_TINT).compositeOver(completed)
+        text("link prompt question and its answers", c.text, prompt)
+    }
+
+    @Test
+    fun theCoachsNoteMeetsAaOnEveryCardAndInASheet() = bothThemes { c ->
+        val cards = listOf(
+            "plain card" to c.card,
+            "completed card" to c.success.copy(alpha = CARD_TONE_FILL).compositeOver(c.card),
+            "missed card" to c.warning.copy(alpha = CARD_TONE_FILL).compositeOver(c.card),
+            // "Why this workout" in a session's sheet, which is the page colour.
+            "sheet" to c.background,
+        )
+        for ((name, card) in cards) {
+            val note = c.accentText.copy(alpha = COACH_NOTE_TINT).compositeOver(card)
+            text("coach's note title on a $name", c.accentText, note)
+            text("coach's note date and text on a $name", c.text, note)
+            // The chips it lists what it went on with, inside the note.
+            val chip = badgeColors(BadgeTone.Secondary, c)
+            text("coach's note chip on a $name", chip.content, chip.container.compositeOver(note))
+        }
     }
 
     @Test

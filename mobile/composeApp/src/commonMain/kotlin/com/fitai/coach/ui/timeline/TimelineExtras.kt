@@ -21,11 +21,12 @@ import com.fitai.coach.core.units.getWorkoutDistanceDisplay
 import com.fitai.coach.core.units.storedDistanceToDisplay
 import com.fitai.coach.core.units.storedWeightToDisplay
 import com.fitai.coach.ui.components.BadgeTone
-import com.fitai.coach.ui.format.formatClock
+import com.fitai.coach.ui.format.formatMinutes
 import com.fitai.coach.ui.format.formatNumber
 import com.fitai.coach.ui.format.longDate
 import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.workout.ExerciseGroup
+import com.fitai.coach.ui.workout.SummaryStat
 import com.fitai.coach.ui.workout.exerciseGroups
 
 // --- "This week" (TimelineSummaryCard) ---
@@ -272,7 +273,7 @@ fun chipText(group: ExerciseGroup, units: UnitPreferences = UnitPreferences()): 
         val weights = sets.mapNotNull { set -> set.weight?.let { storedWeightToDisplay(it, set.stamp(), units) } }.distinct()
         if (weights.isNotEmpty()) add(weights.joinToString("/") { formatNumber(it) } + weightLabel(units))
         first.distance?.let { add(getWorkoutDistanceDisplay(storedDistanceToDisplay(it, first.stamp(), units), units.distanceUnit).text) }
-        first.time?.let { add(formatClock(it)) }
+        first.time?.let { add(formatMinutes(it)) }
     }
     return if (parts.isEmpty()) group.label else "${group.label} ${parts.joinToString(" ")}"
 }
@@ -281,6 +282,17 @@ private fun ExerciseSetRow.stamp() = StoredUnitStamp(weightUnit = weightUnit, di
 
 /** "lbs" for an athlete on pounds, else "kg" (the web's weightLabel). */
 private fun weightLabel(units: UnitPreferences): String = if (units.weightUnit == "lbs") "lbs" else "kg"
+
+/**
+ * A planned session's targets, as the tiles at the top of its sheet
+ * (buildTargetStats): the duration and effort the athlete expects, each
+ * marked approximate, and how many sets are planned. Empty with none set.
+ */
+fun targetStats(entry: TimelineEntry): List<SummaryStat> = buildList {
+    entry.expectedDurationMin?.takeIf { it > 0 }?.let { add(SummaryStat("Target duration", "~$it", "min")) }
+    entry.expectedRpe?.takeIf { it > 0 }?.let { add(SummaryStat("Target RPE", "~$it/10")) }
+    entry.plannedSetCount?.takeIf { it > 0 }?.let { add(SummaryStat("Sets", "$it", "sets")) }
+}
 
 // --- Coach note ---
 
@@ -293,6 +305,35 @@ fun coachSourceLabel(source: String?): String? = when (source) {
     "progression" -> "Auto-progression"
     else -> null
 }
+
+/** The colour of a note's source badge (sourceBadgeClasses): each of the coach's ways of changing a session has its own. */
+fun coachSourceTone(source: String?): BadgeTone = when (source) {
+    "rag" -> BadgeTone.Success
+    "legacy" -> BadgeTone.Warning
+    "review" -> BadgeTone.Info
+    "load_governor" -> BadgeTone.Danger
+    "progression" -> BadgeTone.Accent
+    else -> BadgeTone.Neutral
+}
+
+/**
+ * "3 days ago", for when the coach's note last changed against the athlete's
+ * [today]; the date itself once it's a month old, or with no today to count
+ * from. Null with nothing to go on.
+ */
+fun updatedAgo(updatedAt: String?, today: String?): String? {
+    val date = updatedAt?.take(NOTE_DATE_LENGTH)?.takeIf { it.length == NOTE_DATE_LENGTH } ?: return null
+    val days = today?.let { dayDiff(date, it) }
+    return when {
+        days == null || days >= NOTE_DATE_AFTER_DAYS -> shortDate(date)
+        days <= 0 -> "today"
+        days == 1 -> "yesterday"
+        else -> "$days days ago"
+    }
+}
+
+private const val NOTE_DATE_LENGTH = 10
+private const val NOTE_DATE_AFTER_DAYS = 30
 
 /** What the coach based a note on, as chips (basedOnChips). */
 fun basedOnChips(inputs: CoachNoteInputs?): List<String> {

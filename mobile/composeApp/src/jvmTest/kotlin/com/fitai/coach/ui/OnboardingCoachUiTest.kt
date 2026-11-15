@@ -106,8 +106,8 @@ class OnboardingCoachUiTest {
         }
         appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
             awaitNode(hasText("Tempo intervals"))
-            awaitNode(hasContentDescription("open coach"))
-            onNode(hasContentDescription("open coach")).performSemanticsAction(SemanticsActions.OnClick)
+            awaitNode(hasContentDescription("open AI Coach"))
+            onNode(hasContentDescription("open AI Coach")).performSemanticsAction(SemanticsActions.OnClick)
 
             awaitNode(hasContentDescription("1 upcoming planned on your timeline"))
             awaitNode(hasContentDescription("50% completion rate over the last 4 weeks on your timeline"))

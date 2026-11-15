@@ -19,7 +19,7 @@ tags:
 - assertVisible: "analytics"
 - tapOn: "Training"
 - assertVisible: "training"
-- tapOn: "open coach"
+- tapOn: "open AI Coach"
 - waitForAnimationToEnd
 - back
 - assertVisible: "training"

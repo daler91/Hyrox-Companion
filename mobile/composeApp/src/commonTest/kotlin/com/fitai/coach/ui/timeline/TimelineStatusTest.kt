@@ -54,20 +54,61 @@ class TimelineStatusTest {
             generationStatus = TrainingPlan.GenerationStatus.Ready,
         )
 
+    private fun badge(entry: TimelineEntry) = statusBadge(entry).let { it.label to it.tone }
+
     @Test
     fun theServerSaysWhichDayIsTheRaceAndWhichMissedDayWasOnlyRest() {
-        assertEquals("Race day" to BadgeTone.Accent, statusBadge(entry(dayKind = TimelineEntry.DayKind.Race)))
+        assertEquals("Race Day" to BadgeTone.Warning, badge(entry(dayKind = TimelineEntry.DayKind.Race)))
         assertEquals(
             "Rest day" to BadgeTone.Neutral,
-            statusBadge(entry(status = TimelineEntry.Status.Missed, dayKind = TimelineEntry.DayKind.Rest)),
+            badge(entry(status = TimelineEntry.Status.Missed, dayKind = TimelineEntry.DayKind.Rest)),
         )
-        assertEquals("Planned" to BadgeTone.Accent, statusBadge(entry(dayKind = TimelineEntry.DayKind.Rest)))
+        // A session still to do is the web's blue, not the accent: the accent marks a key one.
+        assertEquals("Planned" to BadgeTone.Info, badge(entry(dayKind = TimelineEntry.DayKind.Rest)))
         assertEquals(
             "Missed" to BadgeTone.Neutral,
-            statusBadge(entry(status = TimelineEntry.Status.Missed, dayKind = TimelineEntry.DayKind.Session)),
+            badge(entry(status = TimelineEntry.Status.Missed, dayKind = TimelineEntry.DayKind.Session)),
         )
         // An entry cached before the server said: its status alone.
-        assertEquals("Missed" to BadgeTone.Neutral, statusBadge(entry(status = TimelineEntry.Status.Missed)))
+        assertEquals("Missed" to BadgeTone.Neutral, badge(entry(status = TimelineEntry.Status.Missed)))
+    }
+
+    @Test
+    fun everyStatusBadgeHasTheWebsIconAheadOfItsWords() {
+        val planned = entry()
+        val badges = listOf(
+            planned,
+            planned.copy(status = TimelineEntry.Status.Completed),
+            planned.copy(status = TimelineEntry.Status.Skipped),
+            planned.copy(status = TimelineEntry.Status.Missed),
+            planned.copy(status = TimelineEntry.Status.Missed, recoverable = true),
+            planned.copy(status = TimelineEntry.Status.Missed, recovery = TimelineEntry.Recovery.LetGo),
+            planned.copy(status = TimelineEntry.Status.Missed, dayKind = TimelineEntry.DayKind.Rest),
+            planned.copy(excused = true),
+            planned.copy(dayKind = TimelineEntry.DayKind.Race),
+        ).map(::statusBadge)
+        assertEquals(
+            listOf("Planned", "Completed", "Skipped", "Missed", "Missed", "Let go", "Rest day", "Not counted", "Race Day"),
+            badges.map { it.label },
+        )
+        assertTrue(badges.all { it.icon != null })
+        // A miss still to decide is amber; one that's history is neutral. Neither is red.
+        assertEquals(listOf(BadgeTone.Neutral, BadgeTone.Warning), badges.filter { it.label == "Missed" }.map { it.tone })
+    }
+
+    @Test
+    fun onlyKeyAndOptionalSessionsStillToDoCarryATier() {
+        val day = entry().copy(planDayId = "d1")
+        assertEquals("Key" to BadgeTone.Accent, tierBadge(day.copy(priority = TimelineEntry.Priority.Key))?.let { it.label to it.tone })
+        assertEquals(
+            "Optional" to BadgeTone.Outline,
+            tierBadge(day.copy(priority = TimelineEntry.Priority.Optional))?.let { it.label to it.tone },
+        )
+        // Supporting is the everyday middle, and a done or skipped day is past deciding.
+        assertNull(tierBadge(day.copy(priority = TimelineEntry.Priority.Supporting)))
+        assertNull(tierBadge(day.copy(priority = TimelineEntry.Priority.Key, status = TimelineEntry.Status.Completed)))
+        assertNull(tierBadge(day.copy(priority = TimelineEntry.Priority.Key, status = TimelineEntry.Status.Skipped)))
+        assertNull(tierBadge(day.copy(priority = TimelineEntry.Priority.Key, planDayId = null)))
     }
 
     @Test
@@ -153,10 +194,32 @@ class TimelineStatusTest {
     }
 
     @Test
-    fun thePlanLineNamesThePlanAndItsDay() {
-        assertEquals("8-Week Plan · Saturday", planLine(entry().copy(planName = "8-Week Plan", dayName = "Saturday")))
-        assertEquals("Saturday", planLine(entry().copy(planName = " ", dayName = "Saturday")))
-        assertNull(planLine(entry()))
+    fun aPlannedSessionsTargetsBecomeTilesAndNoneSetLeavesNone() {
+        assertEquals(emptyList(), targetStats(entry()))
+        val stats = targetStats(entry().copy(expectedDurationMin = 45, expectedRpe = 7, plannedSetCount = 3))
+        assertEquals(listOf("Target duration ~45 min", "Target RPE ~7/10", "Sets 3 sets"), stats.map { it.spoken })
+        assertEquals(listOf("Sets"), targetStats(entry().copy(expectedDurationMin = 0, plannedSetCount = 3)).map { it.label })
+    }
+
+    @Test
+    fun theCoachsNoteSaysHowLongAgoItChanged() {
+        val today = "2026-11-15"
+        assertEquals("today", updatedAgo("2026-11-15T08:00:00.000Z", today))
+        assertEquals("yesterday", updatedAgo("2026-11-14T23:30:00.000Z", today))
+        assertEquals("4 days ago", updatedAgo("2026-11-11T12:00:00.000Z", today))
+        // A month on it's a date, as it is with no today to count from. A clock ahead of the server's reads "today".
+        assertEquals("Oct 1", updatedAgo("2026-10-01T12:00:00.000Z", today))
+        assertEquals("Nov 11", updatedAgo("2026-11-11T12:00:00.000Z", null))
+        assertEquals("today", updatedAgo("2026-11-16T00:10:00.000Z", today))
+        assertNull(updatedAgo(null, today))
+        assertNull(updatedAgo("soon", today))
+    }
+
+    @Test
+    fun eachOfTheCoachsWaysOfChangingASessionHasItsOwnBadgeColour() {
+        val tones = listOf("rag", "legacy", "review", "load_governor", "progression").map(::coachSourceTone)
+        assertEquals(tones.size, tones.toSet().size)
+        assertEquals(BadgeTone.Neutral, coachSourceTone(null))
     }
 
     @Test
@@ -170,7 +233,7 @@ class TimelineStatusTest {
             avgSpeed = 2.75,
             sufferScore = 71,
         )
-        assertEquals(listOf("467 cal", "338W", "74 spm", "9.9 km/h", "Effort 71"), deviceStats(recorded, "km").map { it.text })
+        assertEquals(listOf("467 cal", "338W", "74 spm", "9.9 km/h", "Effort: 71"), deviceStats(recorded, "km").map { it.text })
         assertEquals("6.2 mph", deviceStats(recorded, "miles")[3].text)
         // Zeroes are absent figures, and a session no recording is linked to has none to show.
         assertEquals(

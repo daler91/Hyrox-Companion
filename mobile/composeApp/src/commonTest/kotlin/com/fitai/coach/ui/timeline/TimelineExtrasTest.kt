@@ -15,7 +15,6 @@ import com.fitai.coach.core.plans.TrainingPhase
 import com.fitai.coach.core.units.UnitPreferences
 import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.format.exerciseLabel
-import com.fitai.coach.ui.format.formatClock
 import com.fitai.coach.ui.format.shortDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -229,7 +228,7 @@ class TimelineExtrasTest {
         val chips = exerciseChips(logged, emptyMap())
 
         assertEquals(
-            listOf("${exerciseLabel("back_squat")} 3x5 100kg", "${exerciseLabel("skierg")} ${formatClock(4.0)}"),
+            listOf("${exerciseLabel("back_squat")} 3x5 100kg", "${exerciseLabel("skierg")} 4min"),
             chips.map {
                 it.text
             },

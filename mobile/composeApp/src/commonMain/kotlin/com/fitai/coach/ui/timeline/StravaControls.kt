@@ -1,20 +1,23 @@
 package com.fitai.coach.ui.timeline
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,9 +27,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.ui.components.BadgeTone
@@ -83,8 +91,8 @@ fun StravaBadge(entry: TimelineEntry, controls: StravaControls) {
     val type = FitaiTheme.typography
     Box {
         Row(
+            // No taller than the badge, so it sits level with the others; a tap near it still lands (Compose widens a small target).
             Modifier
-                .heightIn(min = MIN_TOUCH.dp)
                 .clickable(role = Role.Button, onClick = { open = true })
                 .semantics(mergeDescendants = true) {
                     contentDescription = if (linked) "Strava activity options" else "Link this Strava activity to a workout"
@@ -134,9 +142,10 @@ fun StravaBadge(entry: TimelineEntry, controls: StravaControls) {
 }
 
 /**
- * "Was this your Easy Run?" over its two answers (DeviceLinkSuggestion). The
- * question has the box's width to itself: beside the buttons a long session
- * name wrapped and pushed the second one off the card.
+ * "Was this your Easy Run?" over its two answers (DeviceLinkSuggestion), the
+ * session's name picked out, in a box tinted Strava's orange. The question
+ * has the box's width to itself: beside the buttons a long session name
+ * wrapped and pushed the second one off the card.
  */
 @Composable
 fun LinkSuggestion(suggestion: DeviceLinkOption, controls: StravaControls) {
@@ -145,22 +154,39 @@ fun LinkSuggestion(suggestion: DeviceLinkOption, controls: StravaControls) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(colors.warning.copy(alpha = LINK_PROMPT_TINT), Radius.Sm)
-            .border(1.dp, colors.warning.copy(alpha = LINK_PROMPT_BORDER), Radius.Sm)
+            .background(StravaOrange.copy(alpha = LINK_PROMPT_TINT), Radius.Md)
+            .border(1.dp, StravaOrange.copy(alpha = LINK_PROMPT_BORDER), Radius.Md)
             .padding(start = Spacing.Md, top = Spacing.Sm, end = Spacing.Xs),
     ) {
-        Text("Was this your ${suggestion.label}?", style = type.bodySm, color = colors.text)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { controls.onLink(suggestion) }, contentPadding = PaddingValues(end = Spacing.Lg)) {
-                Text("Link", style = type.label, color = colors.accentText)
+        Text(
+            buildAnnotatedString {
+                append("Was this your ")
+                withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = colors.text)) { append(suggestion.label) }
+                append("?")
+            },
+            style = type.caption,
+            // The web's muted grey falls just short of AA on the box's tint in the light theme, so the question is in the text colour.
+            color = colors.text,
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(
+                onClick = { controls.onLink(suggestion) },
+                shape = Radius.Md,
+                border = BorderStroke(1.dp, colors.borderStrong),
+                contentPadding = PaddingValues(horizontal = Spacing.Md),
+                modifier = Modifier.height(LINK_BUTTON_HEIGHT),
+            ) { Text("Link", style = type.caption.copy(fontWeight = FontWeight.Medium), color = colors.text) }
+            TextButton(onClick = controls.onDismissSuggestion) {
+                Text("Not this one", style = type.caption.copy(fontWeight = FontWeight.Medium), color = colors.text)
             }
-            // In the text colour: the muted one falls short of AA on the box's tint.
-            TextButton(onClick = controls.onDismissSuggestion) { Text("Not this one", style = type.label, color = colors.text) }
         }
     }
 }
 
-/** How strongly the link prompt's box is tinted amber, over its card. */
-const val LINK_PROMPT_TINT = 0.08f
-private const val LINK_PROMPT_BORDER = 0.5f
-private const val MIN_TOUCH = 48
+/** Strava's brand orange, as the web tints the prompt about a Strava recording. */
+val StravaOrange = Color(0xFFFC4C02)
+
+/** How strongly the link prompt's box is tinted orange, over its card (the web's `/5`). */
+const val LINK_PROMPT_TINT = 0.05f
+private const val LINK_PROMPT_BORDER = 0.3f
+private val LINK_BUTTON_HEIGHT = 32.dp

@@ -37,9 +37,9 @@ class CoachExtrasUiTest {
             on("POST", "/api/v1/timeline/ai-suggestions/apply", """{"applied":true,"structured":false}""")
         }
         appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
-            awaitNode(hasContentDescription("open coach"))
-            onNode(hasContentDescription("open coach")).performSemanticsAction(SemanticsActions.OnClick)
-            awaitNode(hasText("ACTIVE STYLE: MAF METHOD"))
+            awaitNode(hasContentDescription("open AI Coach"))
+            onNode(hasContentDescription("open AI Coach")).performSemanticsAction(SemanticsActions.OnClick)
+            awaitNode(hasText("Active style: MAF Method"))
 
             tap("Get workout suggestions")
             awaitNode(hasText("Coaching suggestion"))

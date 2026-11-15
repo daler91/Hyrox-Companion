@@ -18,6 +18,22 @@ fun formatSetDistance(
     distanceUnit: String?,
 ): String = "${formatNumber(value)} ${getStoredDistanceUnit(distanceUnit).wireValue}"
 
+/**
+ * A set's minutes as the web's chips print them (formatMinutes): "45s" under
+ * a minute, else "10min", or "23.1min" for a part of one.
+ */
+fun formatMinutes(minutes: Double): String {
+    val tenths = jsRound(minutes * TENTHS).toLong()
+    return when {
+        !minutes.isFinite() -> ""
+        minutes < 1 -> "${jsRound(minutes * SECONDS_PER_MINUTE).toLong()}s"
+        tenths % TENTHS == 0L -> "${tenths / TENTHS}min"
+        else -> "${tenths / TENTHS}.${tenths % TENTHS}min"
+    }
+}
+
+private const val TENTHS = 10
+
 /** Minutes as "m:ss", or "h:mm:ss" from an hour. */
 fun formatClock(minutes: Double): String {
     val totalSeconds = jsRound(minutes * SECONDS_PER_MINUTE).toLong()

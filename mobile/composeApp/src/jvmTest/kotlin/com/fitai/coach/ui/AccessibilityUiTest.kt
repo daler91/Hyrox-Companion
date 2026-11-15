@@ -1,5 +1,6 @@
 package com.fitai.coach.ui
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.unit.dp
 import com.fitai.coach.core.auth.AuthState
 import kotlin.test.Test
@@ -55,6 +57,29 @@ class AccessibilityUiTest {
                 waitForIdle()
                 assertAccessible(tab)
             }
+        }
+    }
+
+    @Test
+    fun aCoachedSessionsCardAndSheetControlsAreLabelledAndLargeEnough() {
+        // A session with everything a card can carry that's tapped: the done circle, the move menu and the coach's note.
+        val coached = FakeApi.plannedToday("Tempo intervals").removeSuffix("}") +
+            ""","priority":"key","planName":"Hyrox block","dayName":"Sunday","accessory":"Core circuit",""" +
+            """"aiSource":"review","aiRationale":"Builds on last week.","aiNoteUpdatedAt":"${FakeApi.today}T08:00:00.000Z",""" +
+            """"sessionEstimate":{"durationMin":45,"rpe":7,"source":"sets","clamped":false}}"""
+        val api = FakeApi().apply {
+            establishedAccount(coached)
+            on("GET", "/api/v1/nutrition/planned-session-estimate/d1", """{"error":"Unavailable","code":"INTERNAL"}""", status = 503)
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api, PHONE_WIDTH, TALL) {
+            awaitNode(hasText("Tempo intervals"))
+            awaitNode(hasText("Coach's note · updated today"))
+            assertAccessible("coached session card")
+            // Its sheet: rename and close, the full-prescription and estimate disclosures, the tiers, and the stacked actions.
+            onNode(hasText("Tempo intervals") and hasClickAction()).performSemanticsAction(SemanticsActions.OnClick)
+            awaitNode(hasText("Why this workout"))
+            awaitNode(hasText("Complete workout"))
+            assertAccessible("session sheet")
         }
     }
 

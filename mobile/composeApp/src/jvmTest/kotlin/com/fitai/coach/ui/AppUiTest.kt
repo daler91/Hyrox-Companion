@@ -176,7 +176,7 @@ class AppUiTest {
         appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
             awaitNode(hasText("Tempo intervals"))
             openCard("Tempo intervals")
-            onNodeWithText("Edit session").performClick()
+            onNodeWithText("Edit workout").performClick()
 
             awaitNode(hasText("Back Squat"))
             onNodeWithContentDescription("Title").performTextReplacement("Track intervals")
@@ -234,16 +234,16 @@ class AppUiTest {
     fun theCoachButtonStaysOffTheLogFormAndEveryAnalyticsPageIsInTheGrid() {
         val api = FakeApi().apply { establishedAccount() }
         appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
-            awaitNode(hasContentDescription("open coach"))
+            awaitNode(hasContentDescription("open AI Coach"))
             onNodeWithContentDescription("Log Workout").performClick()
             awaitNode(hasText("Continue to exercises"))
             // The form's own Continue button sits where the coach button would float.
-            assertTrue(onAllNodes(hasContentDescription("open coach")).fetchSemanticsNodes().isEmpty())
+            assertTrue(onAllNodes(hasContentDescription("open AI Coach")).fetchSemanticsNodes().isEmpty())
             awaitNode(hasText("Workout details"))
             awaitNode(hasText("Describe your workout"))
 
             onNodeWithContentDescription("Analytics").performClick()
-            awaitNode(hasContentDescription("open coach"))
+            awaitNode(hasContentDescription("open AI Coach"))
             // No page is scrolled out of sight: each has a cell in the grid.
             for (page in listOf(
                 "Overview",
@@ -365,7 +365,7 @@ class AppUiTest {
             val sent = api.sent("POST", "/api/v1/weekly-review/intent").single().body.orEmpty()
             assertTrue(sent.contains("\"week\":\"2026-11-02\"") && sent.contains("\"intent\":\"Three runs\""), sent)
             onNode(hasScrollAction()).performScrollToNode(hasText("Hill repeats"))
-            onNodeWithText("OFF PLAN").assertExists() // badges are uppercase (brand kit §6)
+            onNodeWithText("Off plan").assertExists()
             onNode(hasScrollAction()).performScrollToNode(hasText("What didn't happen"))
             onNodeWithText("Sled work").assertExists()
         }
@@ -484,7 +484,7 @@ class AppUiTest {
             // The page's list; the tab row and range chips scroll sideways too.
             val page = onAllNodes(hasScrollAction()).onFirst()
             page.performScrollToNode(hasText("UTSS 80 - ACWR 1.12"))
-            onNodeWithText("SWEET SPOT").assertExists()
+            onNodeWithText("Sweet spot").assertExists()
             onNodeWithContentDescription("Acute-to-chronic workload ratio over 2 days", substring = true).assertExists()
             page.performScrollToNode(hasText("Your load is in the sweet spot."))
             page.performScrollToNode(
@@ -530,8 +530,8 @@ class AppUiTest {
             awaitNode(hasText("analytics"))
             // The MAF trend tab shows for a MAF athlete only.
             openAnalyticsTab("MAF trend")
-            awaitNode(hasText("2 MAF TESTS"))
-            onNodeWithText("LATEST: 92% · COMPLIANT").assertExists()
+            awaitNode(hasText("2 MAF tests"))
+            onNodeWithText("Latest: 92% · Compliant").assertExists()
             onNodeWithText("Last updated Nov 8, 2026.").assertExists()
             val page = onAllNodes(hasScrollAction()).onFirst()
             page.performScrollToNode(hasText("5:43/km · 48:00 · 141 bpm"))

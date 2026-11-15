@@ -1,5 +1,6 @@
 package com.fitai.coach.ui
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performSemanticsAction
 import com.fitai.coach.core.auth.AuthState
 import com.fitai.coach.ui.timeline.mafCeilingExplanation
 import java.time.LocalDate
@@ -112,7 +114,9 @@ class TimelineStatusUiTest {
         val api = FakeApi().apply { establishedAccount() }
         appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
             awaitNode(hasText("Ready to start training"))
-            onNode(hasText("Set start date") and hasClickAction()).performClick()
+            // Pressed by its action, not a point on screen: from Sunday evening to Tuesday the weekly review
+            // prompt sits above this card and pushes the button below the fold of the test's window.
+            onNode(hasText("Set start date") and hasClickAction()).performSemanticsAction(SemanticsActions.OnClick)
             awaitNode(hasText("Schedule your training plan"))
         }
     }

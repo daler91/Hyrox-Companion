@@ -52,19 +52,20 @@ fun CardNotes(notes: TimelineCoachNotes) {
         if (notes.athleteText.isNotBlank()) {
             Text(
                 notes.athleteText,
-                style = FitaiTheme.typography.bodySm.copy(fontStyle = FontStyle.Italic),
+                style = FitaiTheme.typography.caption.copy(fontStyle = FontStyle.Italic),
                 color = colors.textMuted,
             )
         }
-        if (notes.cues.isNotEmpty()) CoachCues(notes.cues)
+        if (notes.cues.isNotEmpty()) CoachCues(notes.cues, small = true)
     }
 }
 
-/** The coach's cues under their heading, one per line. */
+/** The coach's cues under their heading, one per line; [small] on a card, where the web sets them at its smallest size. */
 @Composable
-fun CoachCues(cues: List<TimelineCoachNotes.CuesItem>) {
+fun CoachCues(cues: List<TimelineCoachNotes.CuesItem>, small: Boolean = false) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
+    val line = if (small) type.caption else type.bodySm
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xxs)) {
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalAlignment = Alignment.CenterVertically) {
             Icon(LucideIcons.Sparkles, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(12.dp))
@@ -72,8 +73,8 @@ fun CoachCues(cues: List<TimelineCoachNotes.CuesItem>) {
         }
         cues.forEach { cue ->
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-                Text("•", style = type.bodySm, color = colors.textMuted)
-                Text(cueText(cue, colors.text), style = type.bodySm, color = colors.textMuted)
+                Text("•", style = line, color = colors.textMuted)
+                Text(cueText(cue, colors.text), style = line, color = colors.textMuted)
             }
         }
     }
