@@ -4,7 +4,7 @@ import { createSelectSchema } from "drizzle-zod";
 import { registerAccountPaths } from "./openapiRoutes/account";
 import { registerAnalyticsPaths } from "./openapiRoutes/analytics";
 import { registerCoachPaths } from "./openapiRoutes/coach";
-import { registerCommonComponents } from "./openapiRoutes/common";
+import { documentIdempotency, registerCommonComponents } from "./openapiRoutes/common";
 import { registerEntityComponents } from "./openapiRoutes/entities";
 import { registerGarminPaths } from "./openapiRoutes/garmin";
 import { registerHealthConnectPaths } from "./openapiRoutes/healthConnect";
@@ -572,7 +572,7 @@ registerNutritionPaths(registry, common);
 export function generateOpenApiDocument() {
   const generator = new OpenApiGeneratorV3(registry.definitions);
 
-  return generator.generateDocument({
+  return documentIdempotency(generator.generateDocument({
     openapi: "3.0.0",
     info: {
       version: "1.0.0",
@@ -599,6 +599,13 @@ The mobile app sends \`X-App-Platform\` and \`X-App-Version\` on every request;
 a build below the server's minimum gets \`426\` with \`AppUpdateRequiredResponse\`.
 Bearer-authenticated requests need no CSRF token.
 
+### Retries
+Every authenticated write (POST, PUT, PATCH, DELETE) accepts an optional
+\`X-Idempotency-Key\`. A repeat with the same key within 7 days returns the
+first response without running the write again; while the first is still
+running, a repeat gets \`409\` with code \`IDEMPOTENT_REQUEST_IN_PROGRESS\`.
+The web and app offline queues send a key with every queued write.
+
 ### Authentication
 This API is protected using JWT Bearer authentication provided by Clerk.
 To authenticate your requests:
@@ -610,5 +617,5 @@ Click the **Authorize** button below to enter your JWT token for use within this
       `.trim(),
     },
     servers: [{ url: "/" }],
-  });
+  }));
 }

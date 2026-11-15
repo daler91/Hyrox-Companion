@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 import { generateOpenApiDocument } from "./openapi";
 
 type Doc = ReturnType<typeof generateOpenApiDocument>;
-type Operation = { responses: Record<string, { content?: Record<string, { schema?: { $ref?: string; type?: string; items?: { $ref?: string } } }> }> };
+type Operation = {
+  responses: Record<string, { description?: string; content?: Record<string, { schema?: { $ref?: string; type?: string; items?: { $ref?: string } } }> }>;
+};
 
 function operation(doc: Doc, route: string, method: string): Operation {
   const paths = doc.paths as Record<string, Record<string, Operation>>;
@@ -58,7 +60,7 @@ describe("generateOpenApiDocument", () => {
       expect.arrayContaining(["ErrorResponse", "ValidationErrorResponse", "AppUpdateRequiredResponse"]),
     );
     const responses = operation(doc, "/api/v1/push/devices", "post").responses;
-    expect(Object.keys(responses).sort()).toEqual(["200", "400", "401", "404", "426", "429"]);
+    expect(Object.keys(responses).sort()).toEqual(["200", "400", "401", "404", "409", "426", "429"]);
   });
 
   it("documents responses as stored rows, not insert payloads", () => {
@@ -108,6 +110,28 @@ describe("generateOpenApiDocument", () => {
       }
     }
     expect(missing).toEqual([]);
+  });
+
+  it("offers X-Idempotency-Key and its 409 on every authenticated write, and on no read", () => {
+    const keyRef = "#/components/parameters/IdempotencyKey";
+    const wrong: string[] = [];
+    for (const [route, item] of Object.entries(doc.paths ?? {})) {
+      for (const [method, op] of Object.entries(item as Record<string, Operation & { parameters?: Array<{ $ref?: string }> }>)) {
+        const offersKey = (op.parameters ?? []).some((p) => p.$ref === keyRef);
+        const write = ["post", "put", "patch", "delete"].includes(method);
+        const inProgress = op.responses["409"]?.description?.includes("IDEMPOTENT_REQUEST_IN_PROGRESS") === true;
+        if (write !== offersKey || (write && !inProgress)) wrong.push(`${method.toUpperCase()} ${route}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+
+    const key = doc.components?.parameters?.IdempotencyKey as { name: string; in: string; required: boolean };
+    expect(key).toMatchObject({ name: "X-Idempotency-Key", in: "header", required: false });
+  });
+
+  it("keeps an operation's own 409 and adds the idempotency case to it", () => {
+    const conflict = operation(doc, "/api/v1/garmin/sync", "post").responses["409"] as { description: string };
+    expect(conflict.description).toMatch(/^GARMIN_BUSY: .+\. Or IDEMPOTENT_REQUEST_IN_PROGRESS: /);
   });
 
   it("matches the committed docs/openapi.json snapshot", () => {
