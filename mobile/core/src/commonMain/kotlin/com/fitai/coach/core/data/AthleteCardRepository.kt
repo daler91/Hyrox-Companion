@@ -8,6 +8,7 @@ import com.fitai.coach.core.api.generated.PostAthleteFactsImportResponse
 import com.fitai.coach.core.api.generated.PostAthleteFactsRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 
 /**
  * The athlete card (/athlete-facts): what the coach treats as true every
@@ -19,8 +20,20 @@ public class AthleteCardRepository(private val api: ApiClient, private val cache
     /** Every fact, retired ones included, oldest first; null until the card has been fetched once. */
     public val facts: Flow<List<AthleteFact>?> = cache.observe(FACTS, SERIALIZER)
 
-    /** Fetches the card and keeps it. @throws com.fitai.coach.core.api.ApiException */
-    public suspend fun refresh(): List<AthleteFact> = api.call(ApiEndpoints.GetAthleteFacts).also { cache.put(FACTS, SERIALIZER, it) }
+    /**
+     * How many active facts the card may hold, from the server's
+     * X-Max-Active-Facts; null until a fetch has said (or from a server too
+     * old to say, which still refuses one too many).
+     */
+    public val maxActive: Flow<Int?> = cache.observe(MAX_ACTIVE, Int.serializer())
+
+    /** Fetches the card and keeps it, with the server's cap. @throws com.fitai.coach.core.api.ApiException */
+    public suspend fun refresh(): List<AthleteFact> {
+        val response = api.callWithHeaders(ApiEndpoints.GetAthleteFacts)
+        response.headers[MAX_ACTIVE_HEADER]?.toIntOrNull()?.let { cache.put(MAX_ACTIVE, Int.serializer(), it) }
+        cache.put(FACTS, SERIALIZER, response.body)
+        return response.body
+    }
 
     /** The facts still in force; retired ones are left out. @throws com.fitai.coach.core.api.ApiException */
     public suspend fun activeFacts(): List<AthleteFact> = refresh().filter { it.active }
@@ -62,6 +75,8 @@ public class AthleteCardRepository(private val api: ApiClient, private val cache
 
     private companion object {
         const val FACTS = "athlete-facts"
+        const val MAX_ACTIVE = "athlete-facts-max-active"
+        const val MAX_ACTIVE_HEADER = "x-max-active-facts"
         val SERIALIZER = ListSerializer(AthleteFact.serializer())
     }
 }

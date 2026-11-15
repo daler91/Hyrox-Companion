@@ -16,7 +16,10 @@ import kotlinx.serialization.json.JsonElement
 public data class CreateWorkoutRequest(
     public val date: String,
     public val focus: String,
-    public val mainWorkout: String,
+    /**
+     * The workout as text. Left out or blank, the server writes a summary of `exercises` in the athlete's units, e.g. "Back Squat: 5x5, 100kg; Easy Run: 5000 m"
+     */
+    public val mainWorkout: String? = null,
     public val accessory: Patch<String> = Patch.Absent,
     public val notes: Patch<String> = Patch.Absent,
     public val duration: Patch<Int> = Patch.Absent,

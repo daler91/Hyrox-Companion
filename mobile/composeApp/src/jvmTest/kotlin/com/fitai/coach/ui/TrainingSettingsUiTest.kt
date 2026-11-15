@@ -81,8 +81,9 @@ class TrainingSettingsUiTest {
                 """"trainingStyleRecomputeNow":true""",
                 """"mafAge":40""",
                 """"mafCategory":"consistent_up_to_2y"""",
-                """"mafHr":140""",
             ).forEach { assertTrue(it in body, body) }
+            // The ceiling is the server's to work out: it comes back in the answer, never goes up in the request.
+            assertTrue("mafHr\"" !in body, body)
             // The switch is said, and kept in this device's audit.
             awaitNode(hasText("Switched to MAF Method", substring = true))
             awaitNode(hasText("Balanced to MAF Method", substring = true))

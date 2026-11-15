@@ -302,12 +302,14 @@ class LogWorkoutViewModel(private val session: UserSession, todayIn: (String?) -
 
 /**
  * The create request for a finished draft (validated by [saveProblem] first).
- * The distance is in [distanceUnit] and goes to the server in metres.
+ * The distance is in [distanceUnit] and goes to the server in metres. With no
+ * text of the athlete's own, the text is left out: the server writes it from
+ * the rows ("Back Squat: 5x5, 100kg"), as the web's composer did.
  */
 fun LogDraft.toRequest(distanceUnit: String? = null): CreateWorkoutRequest = CreateWorkoutRequest(
     date = date,
     focus = title.trim().ifEmpty { "Workout" },
-    mainWorkout = text.trim().ifEmpty { summarize(exercises) },
+    mainWorkout = text.trim().ifEmpty { null },
     notes = notes.trim().ifEmpty { null }.sent(),
     rpe = rpe.sent(),
     duration = duration.trim().toIntOrNull().sent(),

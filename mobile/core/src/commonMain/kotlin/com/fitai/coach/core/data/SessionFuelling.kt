@@ -49,7 +49,11 @@ public class SessionFuelling internal constructor(private val api: ApiClient, pr
     /** The last range of days fetched for the timeline's chips. */
     public val days: Flow<GetNutritionSummaryRangeResponse?> = cache.observe(RANGE_KEY, GetNutritionSummaryRangeResponse.serializer())
 
-    /** Fetches [from] to [to] (inclusive, at most [MAX_RANGE_DAYS]). @throws com.fitai.coach.core.api.ApiException */
+    /**
+     * Fetches [from] to [to] (inclusive). A range wider than the server's cap
+     * comes back narrowed around the athlete's today, its `from` and `to`
+     * saying which days were served. @throws com.fitai.coach.core.api.ApiException
+     */
     public suspend fun refreshDays(from: String, to: String) {
         val range = api.call(
             ApiEndpoints.GetNutritionSummaryRange,
@@ -59,9 +63,6 @@ public class SessionFuelling internal constructor(private val api: ApiClient, pr
     }
 
     public companion object {
-        /** The longest span /nutrition/summary-range takes (NUTRITION_RANGE_MAX_DAYS). */
-        public const val MAX_RANGE_DAYS: Int = 731
-
         private val WORKOUT_SERIALIZER = GetNutritionSessionFuellingByWorkoutIdResponse.serializer()
 
         // Under the day summaries' prefix, so dropping every day drops these too.

@@ -203,6 +203,10 @@ export const WorkoutLogDetailSchema = registry.register(
           description:
             "RPE (1-10) suggested by the recording's average heart rate, for the athlete to confirm. Never saved on its own. Null without heart rate, for strength and mind-body sports, or when the athlete has neither a max HR nor an age on file. Returned whether or not `rpe` is set.",
         }),
+      avgCadenceUnit: z.enum(["spm", "rpm"]).optional().openapi({
+        description: "With avgCadence: rpm (pedal revolutions) for a ride, spm (steps) otherwise, from the recording's sport; omitted without a cadence",
+      }),
+      mafCompliance: entities.SessionMafCompliance.optional(),
     })
     .openapi({
       title: "WorkoutLogDetail",

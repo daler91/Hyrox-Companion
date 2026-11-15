@@ -5,7 +5,7 @@ import { beforeEach,describe, expect, it, vi } from 'vitest';
 
 import * as crypto from '../crypto';
 import { db } from '../db';
-import { UserStorage } from './users';
+import { mafResultFor, UserStorage } from './users';
 
 vi.mock('../crypto', () => ({
   encryptToken: vi.fn((t) => `encrypted-${t}`),
@@ -394,6 +394,82 @@ describe('UserStorage', () => {
       expect(insertValues).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 'user-1', finalHr: expectedMaf.ceiling }),
       );
+    });
+  });
+
+  describe('updateUserPreferences MAF ceiling (API field 3a)', () => {
+    function wireUpdate(before: Partial<User>) {
+      // getUser() awaits the WHERE; the MAF snapshot read goes on to ORDER BY and LIMIT (no snapshot yet).
+      const rows = Object.assign(Promise.resolve([before]), {
+        orderBy: () => ({ limit: () => Promise.resolve([]) }),
+      });
+      const getUserFrom = vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue(rows) });
+      vi.mocked(db.select).mockReturnValue({ from: getUserFrom } as never); // NOSONAR partial Drizzle query-builder mock
+      vi.mocked(db.insert).mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) } as never); // NOSONAR partial Drizzle query-builder mock
+      const set = vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([before]) }) });
+      vi.mocked(db.update).mockReturnValue({ set } as never); // NOSONAR partial Drizzle query-builder mock
+      return set;
+    }
+
+    it('writes the ceiling the answers give, whatever ceiling the client sent', async () => {
+      const set = wireUpdate({ id: 'user-1', trainingStyleId: 'balanced_default' });
+
+      await userStorage.updateUserPreferences('user-1', {
+        trainingStyleId: 'maf_method',
+        mafAge: 40,
+        mafCategory: 'training_interrupted',
+        mafHr: 200,
+      });
+
+      expect(set).toHaveBeenCalledWith(expect.objectContaining({ mafAge: 40, mafHr: 135 }));
+    });
+
+    it('rewrites the ceiling when only the age changes, from the stored category', async () => {
+      const set = wireUpdate({ id: 'user-1', trainingStyleId: 'maf_method', mafAge: 40, mafCategory: 'consistent_2y_plus_improving', mafHr: 145 });
+
+      await userStorage.updateUserPreferences('user-1', { mafAge: 41 });
+
+      expect(set).toHaveBeenCalledWith(expect.objectContaining({ mafAge: 41, mafHr: 144 }));
+    });
+
+    it('works an account that answered only the older questions out from them', async () => {
+      const set = wireUpdate({
+        id: 'user-1',
+        trainingStyleId: 'maf_method',
+        mafAge: 40,
+        mafCategory: null,
+        mafConsistency: 'low',
+        mafTrend: 'flat',
+        mafInjuryIllnessMedication: false,
+        mafHr: 135,
+      });
+      await userStorage.updateUserPreferences('user-1', { weightUnit: 'lbs', mafHr: 150 });
+      expect(set).toHaveBeenCalledWith(expect.objectContaining({ weightUnit: 'lbs', mafHr: 135 }));
+    });
+
+    it('leaves the stored ceiling alone without the answers for one, or off the MAF method', async () => {
+      const incomplete = wireUpdate({ id: 'user-1', trainingStyleId: 'maf_method', mafAge: 40, mafCategory: null, mafHr: 140 });
+      await userStorage.updateUserPreferences('user-1', { weightUnit: 'lbs', mafHr: 150 });
+      expect(incomplete.mock.calls[0]?.[0]).not.toHaveProperty('mafHr');
+
+      const other = wireUpdate({ id: 'user-1', trainingStyleId: 'balanced_default', mafAge: 40, mafCategory: 'consistent_up_to_2y' });
+      await userStorage.updateUserPreferences('user-1', { weeklyGoal: 4 });
+      expect(other.mock.calls[0]?.[0]).not.toHaveProperty('mafHr');
+    });
+  });
+
+  describe('mafResultFor', () => {
+    it('takes the category alone, else the full set of older answers', () => {
+      const base = { trainingStyleId: 'maf_method', mafAge: 30 };
+      expect(mafResultFor({ ...base, mafCategory: 'consistent_up_to_2y' })?.ceiling).toBe(150);
+      expect(mafResultFor({ ...base, mafCategory: 'recovering_or_medicated' })?.ceiling).toBe(140);
+      expect(
+        mafResultFor({ ...base, mafConsistency: 'high', mafTrend: 'improving', mafInjuryIllnessMedication: false })?.ceiling,
+      ).toBe(155);
+      expect(mafResultFor({ ...base, mafConsistency: 'high', mafTrend: 'improving' })).toBeNull();
+      expect(mafResultFor({ ...base, mafCategory: 'consistent_up_to_2y', trainingStyleId: 'balanced_default' })).toBeNull();
+      expect(mafResultFor({ trainingStyleId: 'maf_method', mafAge: 15, mafCategory: 'consistent_up_to_2y' })?.ceiling).toBe(165);
+      expect(mafResultFor(undefined)).toBeNull();
     });
   });
 

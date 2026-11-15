@@ -237,6 +237,10 @@ function registerOverviewPaths(registry: OpenAPIRegistry, common: OpenApiCommon)
     estimatedSessions: z.number().int(),
     unattributedSessions: z.number().int(),
     unscoredSessions: z.number().int(),
+    divergence: z.string().nullable().openapi({
+      description:
+        "Where this week's load diverges between systems, in one sentence, or null when no system stands out. For example: \"Leg muscle load is at a six-week high (31% above your usual week), while aerobic load is normal.\"",
+    }),
   });
 
   const coverageCounts = {

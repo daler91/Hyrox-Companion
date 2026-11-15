@@ -73,6 +73,7 @@ describe("athlete facts routes", () => {
     expect(response.status).toBe(200);
     expect(storage.athleteFacts.list).toHaveBeenCalledWith("test_user_id");
     expect(response.body).toMatchObject([{ fact: "No sled at my gym", reviewOn: "2026-12-30" }]);
+    expect(response.headers["x-max-active-facts"]).toBe("20");
   });
 
   it("adds a fact the athlete typed, due for review in 90 days on their calendar", async () => {

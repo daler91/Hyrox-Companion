@@ -106,7 +106,7 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
     val allEntries = state.rows.days.flatMap { it.entries }
     // The fuelling chips cover the days on screen; asked for again each time the timeline shows.
     val fuellingWindow = remember(state.rows, state.today) {
-        timelineFuellingWindow(state.rows.days.filter { it.entries.isNotEmpty() || it.isToday }.map { it.date }, state.today)
+        timelineFuellingWindow(state.rows.days.filter { it.entries.isNotEmpty() || it.isToday }.map { it.date })
     }
     LaunchedEffect(fuellingWindow) { fuellingWindow?.let(vm::showFuelling) }
     val planFuelling = PlanFuelling(state.bodyweightKg, vm::plannedEstimate, vm::saveExpectedSession)

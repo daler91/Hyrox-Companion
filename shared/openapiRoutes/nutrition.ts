@@ -17,6 +17,7 @@ import {
   foods,
   foodSearchQuerySchema,
   foodServings,
+  fuellingRangeQuerySchema,
   MEAL_TYPES,
   mealTargets,
   nutritionTargets,
@@ -587,8 +588,8 @@ function registerDayAndRangePaths({ common, c, op, gated, notFound }: Ctx): void
   const rangeInvalid = common.validationError("A date is not a real YYYY-MM-DD day, or the range breaks its limits");
 
   op("get", "/api/v1/nutrition/summary-range", "Get daily fuelling progress for a range", {
-    description: `One point per day: intake totals, the effective target (resolved as GET /summary resolves it) and whether a post-workout meal was logged. ${range}`,
-    request: { query: blockViewQuerySchema },
+    description: `One point per day: intake totals, the effective target (resolved as GET /summary resolves it) and whether a post-workout meal was logged. \`to\` defaults to the athlete's local today. The range is inclusive, within 1900-01-01..2100-12-31. A range over ${NUTRITION_RANGE_MAX_DAYS} days is narrowed to ${NUTRITION_RANGE_MAX_DAYS}, centred on the athlete's today where it reaches far enough each side and otherwise kept to its nearer end; \`from\` and \`to\` in the response say what was served.`,
+    request: { query: fuellingRangeQuerySchema },
     responses: {
       ...respond(200, "Every day in the range, ascending", z.object({
         from: calendarDate(),
@@ -607,6 +608,29 @@ function registerDayAndRangePaths({ common, c, op, gated, notFound }: Ctx): void
     },
   });
 
+  const comparison = z
+    .object({
+      hitDays: z.number().int(),
+      missDays: z.number().int(),
+      hitAvg: z.number(),
+      missAvg: z.number(),
+      delta: z.number().openapi({ description: "hitAvg - missAvg, from the unrounded means; for RPE, negative means sessions felt easier on hit days" }),
+    })
+    .nullable();
+  const FuellingCorrelation = z
+    .object({
+      status: z.enum(["ok", "insufficient_data"]).openapi({ description: "ok once either comparison has enough days in both groups" }),
+      rpe: comparison.openapi({ description: "Mean session RPE on hit days against miss days, to one decimal; null under 3 days in either group" }),
+      compliance: comparison.openapi({ description: "Mean compliance (%) on hit days against miss days, whole; null under 3 days in either group" }),
+      eligibleDays: z.number().int().openapi({ description: "Days with food logged, a carb target and an RPE or compliance" }),
+      carbHitPct: z.number().int().openapi({ description: "A day hits its carbs at this percentage of the target (90)" }),
+      reasonCodes: z.array(z.string()).openapi({ description: "no_eligible_days, insufficient_rpe_days, insufficient_compliance_days" }),
+      explanation: z.string().openapi({ description: "How the comparison is made, for the athlete" }),
+    })
+    .openapi({
+      description:
+        "The range's days that reached at least 90% of their carb target against those that didn't, by session RPE and compliance (shared/fuellingCorrelation.ts). Only days with food logged count. An association, not causation.",
+    });
   op("get", "/api/v1/nutrition/block", "Get intake vs training load for a range", {
     description: `One point per day: intake macros, training load (UTSS), and the day's load-scaled carb target, mean session RPE and compliance. ${range}`,
     request: { query: blockViewQuerySchema },
@@ -623,6 +647,7 @@ function registerDayAndRangePaths({ common, c, op, gated, notFound }: Ctx): void
             compliancePct: z.number().nullable().openapi({ description: "Null when no workout that day has a compliance" }),
           }),
         ),
+        correlation: FuellingCorrelation,
       })),
       ...rangeInvalid,
       ...gated(),

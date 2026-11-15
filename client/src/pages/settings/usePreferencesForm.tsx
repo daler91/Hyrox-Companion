@@ -1,4 +1,3 @@
-import { calculateMafHr } from "@shared/maf";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -135,30 +134,13 @@ function editedSinceSave(current: PreferencesDraft, sent: PreferencesDraft | nul
   return sent !== null && JSON.stringify(current) !== JSON.stringify(sent);
 }
 
-/** The MAF ceiling the server holds (null when it has none). */
-interface CommittedMaf {
-  readonly mafHr: number | null;
-}
-
-/** What the post-save Undo restores. */
+/**
+ * What the post-save Undo restores. The snapshot holds the MAF age and
+ * category but not the ceiling: the server works that out from them on every
+ * save, so restoring the answers restores the ceiling with them (CL69).
+ */
 interface UndoTarget {
   readonly snapshot: PreferencesSnapshot;
-  /** The ceiling stored before the save; null when it was never read. */
-  readonly committedMaf: CommittedMaf | null;
-}
-
-/**
- * The save that puts `previous` back. The snapshot holds the MAF age and
- * category but not the ceiling computed from them, so undoing a save that
- * moved the ceiling restored the inputs and left the undone ceiling in force
- * for session grading and MAF compliance. A save that sent mafHr is now
- * undone with the ceiling stored before it.
- * CL69 (CODEBASE_ANALYSIS_2026-10-03)
- */
-function undoPayload(previous: UndoTarget, undone: SavePayload): SavePayload {
-  const payload = snapshotToSavePayload(previous.snapshot);
-  if (undone.mafHr === undefined || !previous.committedMaf) return payload;
-  return { ...payload, mafHr: previous.committedMaf.mafHr };
 }
 
 // Owns the Settings preferences form: the draft state behind every
@@ -191,9 +173,6 @@ export function usePreferencesForm() {
   // lands can tell whether the athlete kept editing meanwhile (CL68).
   const draftRef = useRef(draft);
   const savingDraftRef = useRef<PreferencesDraft | null>(null);
-  // The MAF ceiling the server holds: the snapshot does not carry it, and an
-  // Undo has to put it back (CL69).
-  const committedMafRef = useRef<CommittedMaf | null>(null);
   // Values before the most recent save, used to offer an "Undo" action on
   // the post-save toast.
   const undoSnapshotRef = useRef<UndoTarget | null>(null);
@@ -219,7 +198,6 @@ export function usePreferencesForm() {
 
   useEffect(() => {
     if (!preferences) return;
-    committedMafRef.current = { mafHr: preferences.mafHr ?? null };
     // A refetch that lands mid-edit (window focus, another tab's save, the
     // post-save invalidation racing a fresh keystroke) must not wipe what the
     // athlete has typed: while the draft is dirty only the baseline is seeded
@@ -251,7 +229,6 @@ export function usePreferencesForm() {
       // Promote the saved values to the dirty-state baseline so we don't
       // depend on the invalidating preferences query timing.
       baselineSnapshotRef.current = saved;
-      if (variables.mafHr !== undefined) committedMafRef.current = { mafHr: variables.mafHr };
       // An edit made while the save was in flight stays dirty: clearing the
       // flag let the post-save refetch overwrite it and took the Save bar
       // away with it. CL68 (CODEBASE_ANALYSIS_2026-10-03)
@@ -285,7 +262,7 @@ export function usePreferencesForm() {
               const restored = snapshotToDraft(previous.snapshot);
               setDraft(restored);
               savingDraftRef.current = restored;
-              saveMutation.mutate(undoPayload(previous, variables));
+              saveMutation.mutate(snapshotToSavePayload(previous.snapshot));
             }}
           >
             Undo
@@ -324,10 +301,10 @@ export function usePreferencesForm() {
     const mafAge = ageInputToSnapshot(draft.mafAgeInput);
     // Maffetone's category question, read from the DRAFT for the same reason
     // the old injury flag was: the answer moves the ceiling and must never be
-    // write-once (a healed injury, a second training anniversary). Legacy
-    // accounts without a category keep their stored proxy-derived ceiling
-    // until they answer it — the save payload omits the proxy fields entirely,
-    // and mafHr too unless the ceiling is recomputed (audit M6, CL34).
+    // write-once (a healed injury, a second training anniversary). The server
+    // works the ceiling out from the saved answers; legacy accounts without a
+    // category keep theirs from the older proxy answers, which the save payload
+    // omits entirely (audit M6, CL34).
     const mafCategory = draft.mafCategoryInput || null;
     const hasValidMafInputs = mafAge != null && mafAge >= 16 && mafAge <= 99 && mafCategory != null;
     const recomputeMaf = recomputesMafCeiling(draft, baselineSnapshotRef.current);
@@ -339,10 +316,6 @@ export function usePreferencesForm() {
 
     const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
     const styleChanged = draft.trainingStyleId !== committedStyleId;
-    const maf =
-      recomputeMaf && hasValidMafInputs
-        ? calculateMafHr({ age: mafAge, category: mafCategory })
-        : null;
     // The recurring field mappings live in snapshotToSavePayload; only the
     // save-time-only style/MAF bookkeeping is added here.
     const payload: SavePayload = {
@@ -350,7 +323,6 @@ export function usePreferencesForm() {
       trainingStylePreviousId: styleChanged ? committedStyleId : undefined,
       trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,
       trainingStyleRecomputeNow: styleChanged,
-      mafHr: maf?.ceiling,
       mafBaselineTestScheduledAt:
         styleChanged && draft.trainingStyleId === "maf_method"
           ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -366,7 +338,7 @@ export function usePreferencesForm() {
 
     // Capture the pre-save baseline so the post-save toast can offer Undo.
     undoSnapshotRef.current = baselineSnapshotRef.current
-      ? { snapshot: { ...baselineSnapshotRef.current }, committedMaf: committedMafRef.current }
+      ? { snapshot: { ...baselineSnapshotRef.current } }
       : null;
     pendingStyleAuditRef.current = styleChanged
       ? {

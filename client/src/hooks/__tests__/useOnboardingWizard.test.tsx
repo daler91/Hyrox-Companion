@@ -132,9 +132,10 @@ describe("useOnboardingWizard", () => {
         mafAge: 40,
         mafCategory: "consistent_2y_plus_improving",
         mafHrDataAvailable: true,
-        mafHr: 145,
       }),
     );
+    // The server works the ceiling out from the answers.
+    expect(vi.mocked(api.preferences.update).mock.calls.at(-1)?.[0]).not.toHaveProperty("mafHr");
   });
 
   // Creating the template plan on the Plan step left an unscheduled copy

@@ -25,6 +25,8 @@ data class AthleteCardState(
     val facts: List<AthleteFact>? = null,
     /** The card couldn't be fetched and none is cached. */
     val loadFailed: Boolean = false,
+    /** The server's cap on active facts; null until it has said. */
+    val maxActive: Int? = null,
     /** The athlete's today (YYYY-MM-DD), which decides what is due for a "Still true?". */
     val today: String = "",
     /** The older free-text injuries note, while the athlete still has one. */
@@ -38,7 +40,7 @@ data class AthleteCardState(
     /** The step waiting for the athlete to confirm, if any. */
     val confirm: AthleteCardConfirm? = null,
 ) {
-    val card: AthleteCardFacts? get() = facts?.let { groupAthleteFacts(it, today) }
+    val card: AthleteCardFacts? get() = facts?.let { groupAthleteFacts(it, today, maxActive) }
 }
 
 /**
@@ -57,11 +59,13 @@ class AthleteCardViewModel(private val session: UserSession, private val todayIn
     val state: StateFlow<AthleteCardState> = combine(
         local,
         session.athleteCard.facts,
+        session.athleteCard.maxActive,
         session.preferences.preferences,
         session.account.user,
-    ) { s, facts, prefs, user ->
+    ) { s, facts, maxActive, prefs, user ->
         s.copy(
             facts = facts,
+            maxActive = maxActive,
             today = todayIn(prefs?.userTimezone),
             legacyNote = user?.trainingConstraints?.trim()?.takeIf { it.isNotEmpty() },
         )

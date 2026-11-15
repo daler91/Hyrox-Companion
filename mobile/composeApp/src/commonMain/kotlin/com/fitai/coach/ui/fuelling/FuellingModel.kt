@@ -4,7 +4,6 @@ import com.fitai.coach.core.api.Patch
 import com.fitai.coach.core.api.generated.GetNutritionSummaryRangeResponse
 import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdRequest
 import com.fitai.coach.core.api.generated.TimelineEntry
-import com.fitai.coach.core.data.SessionFuelling
 import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.core.dates.dayDiff
 import com.fitai.coach.core.nutrition.SessionFuellingTargetInput
@@ -128,32 +127,18 @@ private fun blockStart(date: String): String {
 }
 
 /**
- * [oldest] to [newest] held to the server's span cap
- * ([SessionFuelling.MAX_RANGE_DAYS]): a wider window is narrowed, centred on
- * [today] where it reaches far enough each side, else kept to its nearer end
- * (fuellingWindow.ts fuellingRangeWindow). Days outside get no chip.
- */
-fun fuellingRangeWindow(oldest: String, newest: String, today: String): DateRange {
-    val cap = SessionFuelling.MAX_RANGE_DAYS
-    val span = (dayDiff(oldest, newest) ?: 0) + 1
-    if (span <= cap) return DateRange(oldest, newest)
-    val centred = (dayDiff(oldest, today) ?: 0) - (cap - 1) / 2
-    val from = addDaysToIsoDate(oldest, centred.coerceIn(0, span - cap))
-    return DateRange(from, addDaysToIsoDate(from, cap - 1))
-}
-
-/**
  * The range the timeline asks for chips over (renderedFuellingWindow): the
  * days with sessions on them, and today, snapped out to whole
- * [FUELLING_BLOCK_DAYS] blocks and held to the server's cap. Days with only
- * a note still get a chip inside the range; they don't stretch it. Null with
- * nothing to show.
+ * [FUELLING_BLOCK_DAYS] blocks. Days with only a note still get a chip inside
+ * the range; they don't stretch it. However wide, the server serves at most
+ * its cap of days around today (and says which); days outside get no chip.
+ * Null with nothing to show.
  */
-fun timelineFuellingWindow(dates: List<String>, today: String): DateRange? {
+fun timelineFuellingWindow(dates: List<String>): DateRange? {
     val sorted = dates.sorted()
     val oldest = sorted.firstOrNull() ?: return null
     val newest = sorted.last()
-    return fuellingRangeWindow(blockStart(oldest), addDaysToIsoDate(blockStart(newest), FUELLING_BLOCK_DAYS - 1), today)
+    return DateRange(blockStart(oldest), addDaysToIsoDate(blockStart(newest), FUELLING_BLOCK_DAYS - 1))
 }
 
 /**

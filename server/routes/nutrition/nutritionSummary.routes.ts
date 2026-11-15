@@ -1,4 +1,6 @@
+import { analyzeFuellingCorrelation, correlationDayFromBlockPoint } from "@shared/fuellingCorrelation";
 import { applyMealTargetOverrides, computeMealFuelTargets, DEFAULT_MEAL_SCHEDULE, type MealFuelOverride, type MealFuelTargets, type MealScheduleCount, type WorkoutTiming } from "@shared/mealFuelling";
+import { clampNutritionRange } from "@shared/nutritionRange";
 import { singleDayWindow } from "@shared/nutritionTargets";
 import {
   type BlockViewQuery,
@@ -8,7 +10,10 @@ import {
   dailySummaryQuerySchema,
   type DailySummaryResponse,
   type EffectiveTargetSummary,
+  type FuellingRangeQuery,
+  fuellingRangeQuerySchema,
   type FuellingRangeResponse,
+  fuellingRangeSchema,
   type MealType,
   nutritionRangeSchema,
   type SessionFuellingGap,
@@ -252,9 +257,9 @@ async function handleDailySummary(req: Request, res: Response): Promise<void> {
 }
 
 /**
- * The /block and /summary-range window. `to` defaults to the athlete's local
- * today, and that effective range must pass the same span rules as an explicit
- * one: `?from=0001-01-01` alone used to zero-fill ~740k days (PF1,
+ * The /block window. `to` defaults to the athlete's local today, and that
+ * effective range must pass the same span rules as an explicit one:
+ * `?from=0001-01-01` alone used to zero-fill ~740k days (PF1,
  * CODEBASE_ANALYSIS_2026-10-03). Sends the 400 and returns null when it fails.
  */
 async function resolveRangeQuery(
@@ -271,6 +276,28 @@ async function resolveRangeQuery(
     return null;
   }
   return range.data;
+}
+
+/**
+ * The /summary-range window. `to` defaults to the athlete's local today, and a
+ * range wider than NUTRITION_RANGE_MAX_DAYS is narrowed around that today
+ * (clampNutritionRange) rather than refused, so the Timeline, whose visible
+ * window has no fixed length, never loses every chip to a 400. The response's
+ * `from` and `to` say what was served. Sends the 400 and returns null when a
+ * date isn't real or the range runs backwards.
+ */
+async function resolveFuellingRangeQuery(
+  req: Request,
+  res: Response,
+): Promise<{ from: string; to: string } | null> {
+  const { from, to } = req.query as unknown as FuellingRangeQuery;
+  const today = getLocalDateStr(new Date(), await getUserTimezone(getUserId(req)));
+  const range = fuellingRangeSchema.safeParse({ from, to: to ?? today });
+  if (!range.success) {
+    sendValidationError(res, range.error);
+    return null;
+  }
+  return clampNutritionRange(range.data.from, range.data.to, today);
 }
 
 /**
@@ -425,10 +452,12 @@ export function registerNutritionSummaryRoutes(router: Router): void {
       const userId = getUserId(req);
       const { from, to } = range;
 
+      const points = await buildDecoratedBlockPoints(userId, from, to);
       const response: BlockViewResponse = {
         from,
         to,
-        points: await buildDecoratedBlockPoints(userId, from, to),
+        points,
+        correlation: analyzeFuellingCorrelation(points.map(correlationDayFromBlockPoint)),
       };
       res.json(response);
     }),
@@ -445,9 +474,9 @@ export function registerNutritionSummaryRoutes(router: Router): void {
     "/api/v1/nutrition/summary-range",
     isAuthenticated,
     rateLimiter("nutritionRead", 60),
-    validateQuery(blockViewQuerySchema),
+    validateQuery(fuellingRangeQuerySchema),
     asyncHandler(async (req: Request, res: Response) => {
-      const range = await resolveRangeQuery(req, res);
+      const range = await resolveFuellingRangeQuery(req, res);
       if (!range) return;
       const userId = getUserId(req);
       const { from, to } = range;

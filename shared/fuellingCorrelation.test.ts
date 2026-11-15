@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { analyzeFuellingCorrelation, type FuellingCorrelationDay } from "./fuellingCorrelation";
+import { analyzeFuellingCorrelation, correlationDayFromBlockPoint, type FuellingCorrelationDay } from "./fuellingCorrelation";
 
 function day(over: Partial<FuellingCorrelationDay> = {}): FuellingCorrelationDay {
   return {
@@ -117,5 +117,24 @@ describe("analyzeFuellingCorrelation", () => {
     expect(out.status).toBe("insufficient_data");
     expect(out.eligibleDays).toBe(0);
     expect(out.reasonCodes).toContain("no_eligible_days");
+  });
+});
+
+describe("correlationDayFromBlockPoint", () => {
+  it("reads a block-view day's intake, target and outcomes, with missing ones as null", () => {
+    expect(correlationDayFromBlockPoint({ calories: 2100, carb: 240, carbTargetG: 260, avgRpe: 7, compliancePct: 88 })).toEqual({
+      calories: 2100,
+      carbG: 240,
+      carbTargetG: 260,
+      avgRpe: 7,
+      compliancePct: 88,
+    });
+    expect(correlationDayFromBlockPoint({ calories: 0, carb: 0 })).toEqual({
+      calories: 0,
+      carbG: 0,
+      carbTargetG: null,
+      avgRpe: null,
+      compliancePct: null,
+    });
   });
 });

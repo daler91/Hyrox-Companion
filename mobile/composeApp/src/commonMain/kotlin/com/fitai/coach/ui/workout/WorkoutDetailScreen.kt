@@ -610,8 +610,18 @@ private fun Stats(workout: WorkoutLogDetail, distanceUnit: String?) {
         if (!workout.countsAsTraining) add("not counted as training")
     }
     if (parts.isNotEmpty()) Text(parts.joinToString(" · "), style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
+    mafStatus(workout.mafCompliance)?.let { MafStatusRow(it) }
     deviceDetails(workout, distanceUnit).takeIf { it.isNotEmpty() }?.let { details ->
         Text("Recorded: ${details.joinToString(" · ")}", style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+    }
+}
+
+/** The average heart rate against the MAF ceiling, and what to do about it (the web's Avg HR tile status). */
+@Composable
+private fun MafStatusRow(status: MafStatus) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+        FitaiBadge(status.label, tone = status.tone)
+        Text(status.cue, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
     }
 }
 

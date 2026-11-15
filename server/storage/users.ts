@@ -1,4 +1,4 @@
-import { calculateMafHr } from "@shared/maf";
+import { calculateMafHr, type MafCategory, type MafConsistency, type MafResult, type MafTrend } from "@shared/maf";
 import {
   type ChatFactProposal,
   type ChatFactProposalStatus,
@@ -151,6 +151,41 @@ async function settleChatFactProposal(
     .where(pendingFactProposalRow(userId, id))
     .returning({ id: chatMessages.id });
   return rows.length > 0;
+}
+
+type MafAnswers = Pick<
+  User,
+  "trainingStyleId" | "mafAge" | "mafCategory" | "mafConsistency" | "mafTrend" | "mafInjuryIllnessMedication"
+>;
+
+/**
+ * The MAF ceiling the answers give (calculateMafHr), or null unless the
+ * athlete trains the MAF method and has an age and answers to compute it
+ * from. A stored category is Maffetone's own question answered directly and
+ * suffices alone; the legacy proxy trio is the fallback for athletes who
+ * answered the old questions (audit M6).
+ */
+export function mafResultFor(answers: Partial<MafAnswers> | undefined): MafResult | null {
+  const hasMafAnswers =
+    answers?.mafCategory != null ||
+    (answers?.mafConsistency != null && answers?.mafTrend != null && answers?.mafInjuryIllnessMedication != null);
+  if (answers?.trainingStyleId !== "maf_method" || answers.mafAge == null || !hasMafAnswers) return null;
+  return calculateMafHr({
+    age: answers.mafAge,
+    category: answers.mafCategory as MafCategory | null,
+    injuryIllnessMedication: answers.mafInjuryIllnessMedication ?? false,
+    consistency: (answers.mafConsistency ?? "moderate") as MafConsistency,
+    trend: (answers.mafTrend ?? "flat") as MafTrend,
+  });
+}
+
+/** [before] with what [patch] sends in place of it: the answers as they will be saved. */
+function answersAfter(before: Partial<MafAnswers> | undefined, patch: Partial<Record<keyof MafAnswers, unknown>>): Partial<MafAnswers> {
+  const answers: Partial<MafAnswers> = { ...before };
+  for (const [key, value] of Object.entries(patch) as Array<[keyof MafAnswers, unknown]>) {
+    if (value !== undefined) Object.assign(answers, { [key]: value });
+  }
+  return answers;
 }
 
 export class UserStorage {
@@ -317,29 +352,24 @@ export class UserStorage {
     preferences: UpdateUserPreferences,
   ): Promise<User | undefined> {
     const before = await this.getUser(userId);
+    // The ceiling is the server's to work out, never a client's to send: a
+    // client-sent mafHr is dropped, and the one the saved answers give written
+    // in the same update (docs/mobile-shared-logic.md, API field 3a). Undoing
+    // a change of answers so puts the old ceiling back with them.
+    const { mafHr: _clientMafHr, ...patch } = preferences;
+    const mafHr = mafResultFor(answersAfter(before, patch))?.ceiling;
     const [user] = await db
       .update(users)
       .set({
-        ...preferences,
+        ...patch,
+        ...(mafHr == null ? {} : { mafHr }),
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId))
       .returning();
 
-    // A stored category is Maffetone's own question answered directly and
-    // suffices alone; the legacy proxy trio is the fallback for athletes who
-    // answered the old questions (audit M6).
-    const hasMafAnswers =
-      user?.mafCategory != null ||
-      (user?.mafConsistency != null && user?.mafTrend != null && user?.mafInjuryIllnessMedication != null);
-    if (user?.trainingStyleId === "maf_method" && user.mafAge != null && hasMafAnswers) {
-      const maf = calculateMafHr({
-        age: user.mafAge,
-        category: user.mafCategory as import("@shared/maf").MafCategory | null,
-        injuryIllnessMedication: user.mafInjuryIllnessMedication ?? false,
-        consistency: (user.mafConsistency ?? "moderate") as "low" | "moderate" | "high",
-        trend: (user.mafTrend ?? "flat") as "improving" | "flat" | "declining",
-      });
+    const maf = mafResultFor(user);
+    if (user && maf) {
       const reason = JSON.stringify({ reasonCodes: maf.reasonCodes, explanation: maf.explanation, warning: maf.warning });
 
       // S4: updateUserPreferences runs on every settings save, so snapshot the

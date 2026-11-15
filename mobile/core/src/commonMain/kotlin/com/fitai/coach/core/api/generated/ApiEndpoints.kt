@@ -29,7 +29,7 @@ public object ApiEndpoints {
 
     /**
      * GET /api/v1/athlete-facts: List the athlete card
-     * Every fact, retired ones included, oldest first.
+     * Every fact, retired ones included, oldest first. X-Max-Active-Facts says how many active facts the card may hold; adding or restoring one more is refused with ATHLETE_FACT_LIMIT.
      */
     public object GetAthleteFacts : ApiEndpoint<Unit, List<AthleteFact>>(
         method = HttpMethod.Get,
@@ -1029,7 +1029,7 @@ public object ApiEndpoints {
 
     /**
      * GET /api/v1/nutrition/summary-range: Get daily fuelling progress for a range
-     * One point per day: intake totals, the effective target (resolved as GET /summary resolves it) and whether a post-workout meal was logged. `to` defaults to the athlete's local today. The range is inclusive, at most 731 days, within 1900-01-01..2100-12-31.
+     * One point per day: intake totals, the effective target (resolved as GET /summary resolves it) and whether a post-workout meal was logged. `to` defaults to the athlete's local today. The range is inclusive, within 1900-01-01..2100-12-31. A range over 731 days is narrowed to 731, centred on the athlete's today where it reaches far enough each side and otherwise kept to its nearer end; `from` and `to` in the response say what was served.
      * Query parameters: [GetNutritionSummaryRangeQuery].
      */
     public object GetNutritionSummaryRange : ApiEndpoint<Unit, GetNutritionSummaryRangeResponse>(

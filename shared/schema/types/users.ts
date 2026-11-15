@@ -106,7 +106,11 @@ export const updateUserPreferencesSchema = z.object({
     .nullable()
     .optional(),
   mafHrDataAvailable: z.boolean().nullable().optional(),
-  mafHr: z.number().int().min(70).max(220).nullable().optional(),
+  mafHr: z.number().int().min(70).max(220).nullable().optional().openapi({
+    deprecated: true,
+    description:
+      "Ignored. The server works the ceiling out itself (calculateMafHr) from mafAge and mafCategory whenever both are set on a maf_method athlete, and returns it",
+  }),
   mafBaselineTestScheduledAt: z.coerce.date().nullable().optional(),
 });
 

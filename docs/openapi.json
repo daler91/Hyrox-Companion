@@ -1319,6 +1319,41 @@
         ],
         "description": "A multi-day plan change the AI coach proposed from a chat message, with its current status"
       },
+      "SessionMafCompliance": {
+        "type": "object",
+        "properties": {
+          "compliancePct": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "100 when held at or under the ceiling; falls as the average runs over it"
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "compliant",
+              "mostly_compliant",
+              "over_ceiling"
+            ],
+            "description": "mostly_compliant: the average stayed under the ceiling but the peak went more than 5 bpm over it"
+          },
+          "nextAction": {
+            "type": "string",
+            "description": "A short coaching cue for the athlete"
+          },
+          "avgOverBy": {
+            "type": "integer",
+            "description": "Average heart rate minus the ceiling, in bpm; negative when under it"
+          }
+        },
+        "required": [
+          "compliancePct",
+          "classification",
+          "nextAction",
+          "avgOverBy"
+        ],
+        "description": "On a completed session with an average heart rate and running in it, for an athlete who trains the MAF method and has a ceiling: how the average sat against that ceiling. Omitted otherwise."
+      },
       "WorkoutLog": {
         "type": "object",
         "properties": {
@@ -2233,6 +2268,17 @@
             "minimum": 1,
             "maximum": 10,
             "description": "RPE (1-10) suggested by the recording's average heart rate, for the athlete to confirm. Never saved on its own. Null without heart rate, for strength and mind-body sports, or when the athlete has neither a max HR nor an age on file. Returned whether or not `rpe` is set."
+          },
+          "avgCadenceUnit": {
+            "type": "string",
+            "enum": [
+              "spm",
+              "rpm"
+            ],
+            "description": "With avgCadence: rpm (pedal revolutions) for a ride, spm (steps) otherwise, from the recording's sport; omitted without a cadence"
+          },
+          "mafCompliance": {
+            "$ref": "#/components/schemas/SessionMafCompliance"
           }
         },
         "required": [
@@ -3386,7 +3432,9 @@
             "type": "integer",
             "nullable": true,
             "minimum": 70,
-            "maximum": 220
+            "maximum": 220,
+            "deprecated": true,
+            "description": "Ignored. The server works the ceiling out itself (calculateMafHr) from mafAge and mafCategory whenever both are set on a maf_method athlete, and returns it"
           },
           "mafBaselineTestScheduledAt": {
             "type": "string",
@@ -3556,7 +3604,8 @@
           },
           "mainWorkout": {
             "type": "string",
-            "maxLength": 50000
+            "maxLength": 50000,
+            "description": "The workout as text. Left out or blank, the server writes a summary of `exercises` in the athlete's units, e.g. \"Back Squat: 5x5, 100kg; Easy Run: 5000 m\""
           },
           "accessory": {
             "type": "string",
@@ -4329,8 +4378,7 @@
         },
         "required": [
           "date",
-          "focus",
-          "mainWorkout"
+          "focus"
         ],
         "title": "CreateWorkoutRequest",
         "description": "Payload for creating a new workout log along with optional exercise sets and structure blocks. Device-provenance fields (source, stravaActivityId, garminActivityId, healthConnectId, startedAt) are server-owned and rejected here; planId is always derived from the resolved plan linkage."
@@ -6227,6 +6275,11 @@
               },
               "unscoredSessions": {
                 "type": "integer"
+              },
+              "divergence": {
+                "type": "string",
+                "nullable": true,
+                "description": "Where this week's load diverges between systems, in one sentence, or null when no system stands out. For example: \"Leg muscle load is at a six-week high (31% above your usual week), while aerobic load is normal.\""
               }
             },
             "required": [
@@ -6236,7 +6289,8 @@
               "sessionCount",
               "estimatedSessions",
               "unattributedSessions",
-              "unscoredSessions"
+              "unscoredSessions",
+              "divergence"
             ],
             "description": "Always sent by this server"
           }
@@ -10125,6 +10179,26 @@
           },
           "coachNotes": {
             "$ref": "#/components/schemas/TimelineCoachNotes"
+          },
+          "dayKind": {
+            "type": "string",
+            "enum": [
+              "session",
+              "rest",
+              "race"
+            ],
+            "description": "Sent on every entry. race: the athlete's race (focus is the server's \"Race Day\" marker, matched exactly so \"Race Pace\" is a session); rest: a planned day the plan words as rest (\"Rest\", \"Active recovery\", \"Complete rest or light walk\"), which when missed had nothing to miss; session otherwise"
+          },
+          "avgCadenceUnit": {
+            "type": "string",
+            "enum": [
+              "spm",
+              "rpm"
+            ],
+            "description": "With avgCadence: rpm (pedal revolutions) for a ride, spm (steps) otherwise, from deviceSportType; omitted without a cadence"
+          },
+          "mafCompliance": {
+            "$ref": "#/components/schemas/SessionMafCompliance"
           }
         },
         "required": [
@@ -26549,7 +26623,7 @@
           "Athlete facts"
         ],
         "summary": "List the athlete card",
-        "description": "Every fact, retired ones included, oldest first.",
+        "description": "Every fact, retired ones included, oldest first. X-Max-Active-Facts says how many active facts the card may hold; adding or restoring one more is refused with ATHLETE_FACT_LIMIT.",
         "security": [
           {
             "BearerAuth": []
@@ -26558,6 +26632,18 @@
         "responses": {
           "200": {
             "description": "The athlete's facts",
+            "headers": {
+              "X-Max-Active-Facts": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d+$",
+                  "description": "The most active facts a card may hold",
+                  "example": "20"
+                },
+                "required": true,
+                "description": "The most active facts a card may hold"
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -30828,7 +30914,7 @@
             "BearerAuth": []
           }
         ],
-        "description": "One point per day: intake totals, the effective target (resolved as GET /summary resolves it) and whether a post-workout meal was logged. `to` defaults to the athlete's local today. The range is inclusive, at most 731 days, within 1900-01-01..2100-12-31.",
+        "description": "One point per day: intake totals, the effective target (resolved as GET /summary resolves it) and whether a post-workout meal was logged. `to` defaults to the athlete's local today. The range is inclusive, within 1900-01-01..2100-12-31. A range over 731 days is narrowed to 731, centred on the athlete's today where it reaches far enough each side and otherwise kept to its nearer end; `from` and `to` in the response say what was served.",
         "parameters": [
           {
             "schema": {
@@ -31068,12 +31154,115 @@
                           "compliancePct"
                         ]
                       }
+                    },
+                    "correlation": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ok",
+                            "insufficient_data"
+                          ],
+                          "description": "ok once either comparison has enough days in both groups"
+                        },
+                        "rpe": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "hitDays": {
+                              "type": "integer"
+                            },
+                            "missDays": {
+                              "type": "integer"
+                            },
+                            "hitAvg": {
+                              "type": "number"
+                            },
+                            "missAvg": {
+                              "type": "number"
+                            },
+                            "delta": {
+                              "type": "number",
+                              "description": "hitAvg - missAvg, from the unrounded means; for RPE, negative means sessions felt easier on hit days"
+                            }
+                          },
+                          "required": [
+                            "hitDays",
+                            "missDays",
+                            "hitAvg",
+                            "missAvg",
+                            "delta"
+                          ],
+                          "description": "Mean session RPE on hit days against miss days, to one decimal; null under 3 days in either group"
+                        },
+                        "compliance": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "hitDays": {
+                              "type": "integer"
+                            },
+                            "missDays": {
+                              "type": "integer"
+                            },
+                            "hitAvg": {
+                              "type": "number"
+                            },
+                            "missAvg": {
+                              "type": "number"
+                            },
+                            "delta": {
+                              "type": "number",
+                              "description": "hitAvg - missAvg, from the unrounded means; for RPE, negative means sessions felt easier on hit days"
+                            }
+                          },
+                          "required": [
+                            "hitDays",
+                            "missDays",
+                            "hitAvg",
+                            "missAvg",
+                            "delta"
+                          ],
+                          "description": "Mean compliance (%) on hit days against miss days, whole; null under 3 days in either group"
+                        },
+                        "eligibleDays": {
+                          "type": "integer",
+                          "description": "Days with food logged, a carb target and an RPE or compliance"
+                        },
+                        "carbHitPct": {
+                          "type": "integer",
+                          "description": "A day hits its carbs at this percentage of the target (90)"
+                        },
+                        "reasonCodes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "no_eligible_days, insufficient_rpe_days, insufficient_compliance_days"
+                        },
+                        "explanation": {
+                          "type": "string",
+                          "description": "How the comparison is made, for the athlete"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "rpe",
+                        "compliance",
+                        "eligibleDays",
+                        "carbHitPct",
+                        "reasonCodes",
+                        "explanation"
+                      ],
+                      "description": "The range's days that reached at least 90% of their carb target against those that didn't, by session RPE and compliance (shared/fuellingCorrelation.ts). Only days with food logged count. An association, not causation."
                     }
                   },
                   "required": [
                     "from",
                     "to",
-                    "points"
+                    "points",
+                    "correlation"
                   ]
                 }
               }

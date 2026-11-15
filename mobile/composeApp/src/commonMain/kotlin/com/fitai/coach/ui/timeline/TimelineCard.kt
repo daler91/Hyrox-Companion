@@ -42,12 +42,15 @@ import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.theme.Spacing
 
-private const val RACE_FOCUS = "race"
-
-/** The status badge, checked in the web's order (timeline-workout-card/utils.tsx). */
+/**
+ * The status badge, checked in the web's order (timeline-workout-card/utils.tsx).
+ * What kind of day it is comes from the server (dayKind): the race, or a rest
+ * day, which when it goes by had nothing to miss.
+ */
 fun statusBadge(entry: TimelineEntry): Pair<String, BadgeTone> = when {
-    entry.focus.trim().lowercase() == RACE_FOCUS -> "Race day" to BadgeTone.Accent
+    entry.dayKind == TimelineEntry.DayKind.Race -> "Race day" to BadgeTone.Accent
     entry.excused == true -> "Not counted" to BadgeTone.Neutral
+    entry.status == TimelineEntry.Status.Missed && entry.dayKind == TimelineEntry.DayKind.Rest -> "Rest day" to BadgeTone.Neutral
     entry.status == TimelineEntry.Status.Missed && entry.recovery == TimelineEntry.Recovery.LetGo -> "Let go" to BadgeTone.Neutral
     entry.status == TimelineEntry.Status.Completed -> "Completed" to BadgeTone.Success
     entry.status == TimelineEntry.Status.Planned -> "Planned" to BadgeTone.Accent

@@ -66,6 +66,41 @@ describe("createWorkout legacy text parse", () => {
   });
 });
 
+// API field 11 (docs/mobile-shared-logic.md): a workout built from rows alone
+// gets its text from the server, so the app doesn't copy the web's summary.
+describe("createWorkout writes the text the athlete left out", () => {
+  const ROWS = { date: "2026-10-01", focus: "Strength", exercises: PARSED };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createWorkoutAndScheduleCoaching).mockResolvedValue({ id: "w1", exerciseSets: [] } as never);
+  });
+
+  it.each([
+    ["left out", undefined],
+    ["blank", "  "],
+  ])("summarises the exercises in the athlete's units when the text is %s", async (_case, mainWorkout) => {
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: USER_ID, weightUnit: "lbs", distanceUnit: "miles" } as never);
+
+    await createWorkout({ userId: USER_ID, payload: { ...ROWS, mainWorkout } });
+
+    expect(createWorkoutAndScheduleCoaching).toHaveBeenCalledWith(
+      expect.objectContaining({ mainWorkout: "Back Squat: 5 reps, 100lbs" }),
+      PARSED,
+      USER_ID,
+      undefined,
+    );
+  });
+
+  it("keeps the athlete's own text, and leaves a workout without rows or text empty", async () => {
+    await createWorkout({ userId: USER_ID, payload: { ...ROWS, mainWorkout: "Heavy singles" } });
+    expect(createWorkoutAndScheduleCoaching).toHaveBeenLastCalledWith(expect.objectContaining({ mainWorkout: "Heavy singles" }), PARSED, USER_ID, undefined);
+
+    await createWorkout({ userId: USER_ID, payload: { date: "2026-10-01", focus: "Run", planDayId: "d1" } });
+    expect(createWorkoutAndScheduleCoaching).toHaveBeenLastCalledWith(expect.objectContaining({ mainWorkout: "" }), undefined, USER_ID, undefined);
+  });
+});
+
 // D10 (CODEBASE_ANALYSIS_2026-10-03): the analytics routes cache an athlete's
 // logs and sets for minutes; each write must drop them before it answers.
 describe("workout use cases drop the athlete's cached analytics", () => {

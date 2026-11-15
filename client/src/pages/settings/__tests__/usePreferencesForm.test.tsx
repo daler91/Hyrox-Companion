@@ -449,7 +449,7 @@ describe("usePreferencesForm", () => {
       });
       expect(harness.toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Complete MAF setup" }));
       expect(savedPayload()).toMatchObject({ weightUnit: "lbs", trainingStyleId: "maf_method", mafCategory: null });
-      // Absent on the wire: the server keeps the proxy-derived ceiling.
+      // Absent on the wire: the server works the ceiling out from the stored proxies.
       expect(savedPayload().mafHr).toBeUndefined();
     });
 
@@ -480,8 +480,9 @@ describe("usePreferencesForm", () => {
       await waitFor(() => {
         expect(harness.updatePreferences).toHaveBeenCalledTimes(1);
       });
-      // 180 - 40, then -5 for this category.
-      expect(savedPayload()).toMatchObject({ mafCategory: "training_interrupted", mafHr: 135 });
+      // The answers go; the server works the ceiling out from them (180 - 40, then -5).
+      expect(savedPayload()).toMatchObject({ mafCategory: "training_interrupted", mafAge: 40 });
+      expect(savedPayload()).not.toHaveProperty("mafHr");
     });
 
     // The server accepts no category only beside the legacy consistency/trend
@@ -621,7 +622,9 @@ describe("usePreferencesForm", () => {
 
   // CL69 (CODEBASE_ANALYSIS_2026-10-03): Undo restored the age and category
   // but not the ceiling computed from them, so grading kept the undone one.
-  it("restores the MAF ceiling when it undoes a change to the age", async () => {
+  // The server now works the ceiling out from the answers on every save, so
+  // Undo puts the answers back and the server the ceiling with them.
+  it("undoes a change to the age by putting the answers back", async () => {
     const { result } = renderForm(
       serverPreferences({
         trainingStyleId: "maf_method",
@@ -641,10 +644,9 @@ describe("usePreferencesForm", () => {
       result.current.handleSave();
     });
     await waitFor(() => {
-      expect(harness.updatePreferences).toHaveBeenCalledWith(
-        expect.objectContaining({ mafAge: 50, mafHr: 130 }),
-      );
+      expect(harness.updatePreferences).toHaveBeenCalledWith(expect.objectContaining({ mafAge: 50 }));
     });
+    expect(harness.updatePreferences.mock.calls.at(-1)?.[0]).not.toHaveProperty("mafHr");
     const toastCall = harness.toast.mock.calls.at(-1)?.[0] as {
       action?: { props: { onClick: () => void } };
     };
@@ -659,8 +661,9 @@ describe("usePreferencesForm", () => {
       expect(harness.updatePreferences).toHaveBeenCalledTimes(2);
     });
     expect(harness.updatePreferences).toHaveBeenLastCalledWith(
-      expect.objectContaining({ mafAge: 40, mafHr: 140 }),
+      expect.objectContaining({ mafAge: 40, mafCategory: "consistent_up_to_2y" }),
     );
+    expect(harness.updatePreferences.mock.calls.at(-1)?.[0]).not.toHaveProperty("mafHr");
     expect(result.current.draft.mafAgeInput).toBe("40");
   });
 });

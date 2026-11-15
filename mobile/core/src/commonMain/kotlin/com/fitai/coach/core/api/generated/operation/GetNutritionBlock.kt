@@ -3,6 +3,8 @@
 
 package com.fitai.coach.core.api.generated
 
+import com.fitai.coach.core.api.WireEnum
+import com.fitai.coach.core.api.WireEnumSerializer
 import kotlinx.serialization.Serializable
 
 /**
@@ -13,6 +15,10 @@ public data class GetNutritionBlockResponse(
     public val from: String,
     public val to: String,
     public val points: List<GetNutritionBlockResponse.PointsItem>,
+    /**
+     * The range's days that reached at least 90% of their carb target against those that didn't, by session RPE and compliance (shared/fuellingCorrelation.ts). Only days with food logged count. An association, not causation.
+     */
+    public val correlation: GetNutritionBlockResponse.Correlation,
 ) {
     @Serializable
     public data class PointsItem(
@@ -36,6 +42,85 @@ public data class GetNutritionBlockResponse(
          */
         public val compliancePct: Double? = null,
     )
+
+    /**
+     * The range's days that reached at least 90% of their carb target against those that didn't, by session RPE and compliance (shared/fuellingCorrelation.ts). Only days with food logged count. An association, not causation.
+     */
+    @Serializable
+    public data class Correlation(
+        /**
+         * ok once either comparison has enough days in both groups
+         */
+        public val status: GetNutritionBlockResponse.Correlation.Status,
+        /**
+         * Mean session RPE on hit days against miss days, to one decimal; null under 3 days in either group
+         */
+        public val rpe: GetNutritionBlockResponse.Correlation.Rpe? = null,
+        /**
+         * Mean compliance (%) on hit days against miss days, whole; null under 3 days in either group
+         */
+        public val compliance: GetNutritionBlockResponse.Correlation.Compliance? = null,
+        /**
+         * Days with food logged, a carb target and an RPE or compliance
+         */
+        public val eligibleDays: Long,
+        /**
+         * A day hits its carbs at this percentage of the target (90)
+         */
+        public val carbHitPct: Long,
+        /**
+         * no_eligible_days, insufficient_rpe_days, insufficient_compliance_days
+         */
+        public val reasonCodes: List<String>,
+        /**
+         * How the comparison is made, for the athlete
+         */
+        public val explanation: String,
+    ) {
+        /**
+         * ok once either comparison has enough days in both groups
+         */
+        @Serializable(with = Status.Serializer::class)
+        public enum class Status(override val wireValue: String) : WireEnum {
+            Ok("ok"),
+            InsufficientData("insufficient_data"),
+            /** A value this build does not know; never sent. */
+            Unknown(""),
+            ;
+
+            internal object Serializer : WireEnumSerializer<Status>("Status", Status.entries, Unknown)
+        }
+
+        /**
+         * Mean session RPE on hit days against miss days, to one decimal; null under 3 days in either group
+         */
+        @Serializable
+        public data class Rpe(
+            public val hitDays: Long,
+            public val missDays: Long,
+            public val hitAvg: Double,
+            public val missAvg: Double,
+            /**
+             * hitAvg - missAvg, from the unrounded means; for RPE, negative means sessions felt easier on hit days
+             */
+            public val delta: Double,
+        )
+
+        /**
+         * Mean compliance (%) on hit days against miss days, whole; null under 3 days in either group
+         */
+        @Serializable
+        public data class Compliance(
+            public val hitDays: Long,
+            public val missDays: Long,
+            public val hitAvg: Double,
+            public val missAvg: Double,
+            /**
+             * hitAvg - missAvg, from the unrounded means; for RPE, negative means sessions felt easier on hit days
+             */
+            public val delta: Double,
+        )
+    }
 }
 
 /**

@@ -24,7 +24,7 @@
 // calibrated against them, and nothing reads the UTSS scale: the sRPE base is
 // the whole point, since it is the one scale every session shares.
 
-import { BODY_SYSTEMS } from "@shared/bodySystemLoad";
+import { BODY_SYSTEMS, describeBodySystemDivergence } from "@shared/bodySystemLoad";
 import { addDaysToISODate as addDays } from "@shared/dateUtils";
 import {
   estimatePlannedSession,
@@ -550,10 +550,12 @@ export function calculateBodySystemLoad(
     options,
   );
   const blocks = weeks.map((week) => weekBlock(daily, week, firstLogDate));
+  const systems = BODY_SYSTEMS.map((system) => summarise(system, blocks));
   return {
     asOf: currentDate,
     weeks,
-    systems: BODY_SYSTEMS.map((system) => summarise(system, blocks)),
+    systems,
     ...counts,
+    divergence: describeBodySystemDivergence({ systems }),
   };
 }

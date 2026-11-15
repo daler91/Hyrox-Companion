@@ -715,6 +715,15 @@ describe("nutrition routes", () => {
       expect(jun2).toMatchObject({ carbTargetG: 250, avgRpe: 7, compliancePct: 84 });
       const jun1 = res.body.points.find((p: { date: string }) => p.date === "2026-06-01");
       expect(jun1).toMatchObject({ carbTargetG: 250, avgRpe: null, compliancePct: null });
+      // The comparison comes with the points; with no food logged there is no day to score.
+      expect(res.body.correlation).toMatchObject({
+        status: "insufficient_data",
+        rpe: null,
+        compliance: null,
+        eligibleDays: 0,
+        carbHitPct: 90,
+        reasonCodes: ["no_eligible_days"],
+      });
     });
 
     it("merges intake and training load into zero-filled daily points", async () => {
@@ -1014,8 +1023,6 @@ describe.each(["/api/v1/nutrition/block", "/api/v1/nutrition/summary-range"])(
     });
 
     it.each([
-      ["an explicit span one day over the cap", `from=2025-01-01&to=${addDaysToISODate("2025-01-01", NUTRITION_RANGE_MAX_DAYS)}`],
-      ["a from-only span one day over the cap", `from=${addDaysToISODate(today, -NUTRITION_RANGE_MAX_DAYS)}`],
       ["from after to", "from=2026-06-02&to=2026-06-01"],
       ["a from after the athlete's today with no to", "from=2026-06-11"],
       ["a far-future one-day range", "from=9999-12-31&to=9999-12-31"],
@@ -1027,6 +1034,44 @@ describe.each(["/api/v1/nutrition/block", "/api/v1/nutrition/summary-range"])(
       expect(storage.nutrition.listEntriesWithFoodForDateRange).not.toHaveBeenCalled();
       expect(storage.analytics.getWorkoutLogsByDateRange).not.toHaveBeenCalled();
     });
+
+    const overCap: Array<[string, string]> = [
+      ["an explicit span one day over the cap", `from=2025-01-01&to=${addDaysToISODate("2025-01-01", NUTRITION_RANGE_MAX_DAYS)}`],
+      ["a from-only span one day over the cap", `from=${addDaysToISODate(today, -NUTRITION_RANGE_MAX_DAYS)}`],
+    ];
+
+    if (path === "/api/v1/nutrition/block") {
+      it.each(overCap)("400s on %s before reading anything", async (_label, query) => {
+        const res = await request(app).get(`${path}?${query}`);
+        expect(res.status).toBe(400);
+        expect(storage.nutrition.listEntriesWithFoodForDateRange).not.toHaveBeenCalled();
+      });
+    } else {
+      it.each(overCap)("narrows %s to the cap instead of refusing it", async (_label, query) => {
+        const res = await request(app).get(`${path}?${query}`);
+        expect(res.status).toBe(200);
+        expect(res.body.days).toHaveLength(NUTRITION_RANGE_MAX_DAYS);
+        expect(res.body.to).toBe(addDaysToISODate(res.body.from, NUTRITION_RANGE_MAX_DAYS - 1));
+      });
+
+      it("narrows a years-wide range to the cap centred on the athlete's today", async () => {
+        const res = await request(app).get(`${path}?from=2020-01-01&to=2030-12-31`);
+        expect(res.status).toBe(200);
+        const half = (NUTRITION_RANGE_MAX_DAYS - 1) / 2;
+        expect(res.body).toMatchObject({ from: addDaysToISODate(today, -half), to: addDaysToISODate(today, half) });
+        expect(storage.nutrition.listEntriesWithFoodForDateRange).toHaveBeenCalledWith(
+          expect.any(String),
+          addDaysToISODate(today, -half),
+          addDaysToISODate(today, half),
+        );
+      });
+
+      it("keeps a wide range wholly in the past to its newest end", async () => {
+        const res = await request(app).get(`${path}?from=2020-01-01&to=2024-12-31`);
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ from: addDaysToISODate("2024-12-31", -(NUTRITION_RANGE_MAX_DAYS - 1)), to: "2024-12-31" });
+      });
+    }
   },
 );
 

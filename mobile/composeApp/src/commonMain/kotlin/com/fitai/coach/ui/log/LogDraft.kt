@@ -8,7 +8,6 @@ import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.core.dates.isIsoCalendarDate
 import com.fitai.coach.core.units.kgToUserWeight
 import com.fitai.coach.core.units.userWeightToKg
-import com.fitai.coach.ui.format.exerciseLabel
 import com.fitai.coach.ui.workout.exerciseGroups
 import com.fitai.coach.ui.workout.parseTimeOfDay
 import kotlinx.serialization.Serializable
@@ -112,10 +111,4 @@ fun ParsedExercise.withSetRows(): ParsedExercise = if (sets.isNotEmpty()) {
     this
 } else {
     copy(sets = listOf(ParsedExercise.SetsItem(setNumber = 1, reps = reps, weight = weight, distance = distance, time = time)))
-}
-
-/** "Back squat 3 sets; Run" — the workout's text when the athlete only built rows. */
-fun summarize(exercises: List<ParsedExercise>): String = exercises.joinToString("; ") { exercise ->
-    val label = exerciseLabel(exercise.exerciseName, exercise.customLabel)
-    if (exercise.sets.size > 1) "$label ${exercise.sets.size} sets" else label
 }

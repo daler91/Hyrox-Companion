@@ -27,7 +27,8 @@ import {
   isBulkDeleteWorkoutsNotFoundError,
 } from "../../services/bulkDeleteWorkouts";
 import { combineWorkouts } from "../../services/combineWorkouts";
-import { loadSuggestedRpe } from "../../services/rpeSuggestion";
+import { suggestedRpeFor } from "../../services/rpeSuggestion";
+import { workoutDerivedFields } from "../../services/sessionDerivedFields";
 import { requestSessionStreamForLog } from "../../services/sessionStreamHooks";
 import { deriveMissingWorkoutSetsFromStructure, updateWorkoutStructureBlockScore } from "../../services/workoutService";
 import { assignWorkoutPlanDayUseCase, createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
@@ -168,13 +169,18 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     }
     // ⚡ Bolt Performance Optimization: same independent-reads pattern as
     // GET /api/v1/workouts/latest above — parallelize instead of awaiting sequentially.
-    const [initialSets, initialBlocks, suggestedRpe] = await Promise.all([
+    // The profile is read once, and only for a log with heart rate: the RPE
+    // suggestion and the MAF score are all here that need it, and most manual
+    // logs carry none.
+    const athleteRead = (log.avgHeartrate ?? 0) > 0 ? storage.users.getUser(userId) : Promise.resolve(undefined);
+    const [initialSets, initialBlocks, athlete] = await Promise.all([
       storage.workouts.getExerciseSetsByWorkoutLog(log.id),
       storage.workouts.getWorkoutStructureByWorkoutLog(log.id),
-      // The heart-rate RPE the review sheet offers for the athlete to confirm;
-      // never saved on its own (services/rpeSuggestion.ts).
-      loadSuggestedRpe(log, userId),
+      athleteRead,
     ]);
+    // The heart-rate RPE the review sheet offers for the athlete to confirm;
+    // never saved on its own (services/rpeSuggestion.ts).
+    const suggestedRpe = suggestedRpeFor(log, athlete);
     let exerciseSets = initialSets;
     let structureBlocks = initialBlocks;
     if (exerciseSets.length === 0 && structureBlocks.length > 0) {
@@ -184,7 +190,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
         storage.workouts.getWorkoutStructureByWorkoutLog(log.id),
       ]);
     }
-    res.json({ ...log, exerciseSets, structureBlocks, suggestedRpe });
+    res.json({ ...log, exerciseSets, structureBlocks, suggestedRpe, ...workoutDerivedFields(log, exerciseSets, athlete) });
   }));
 
   protectedPost(router, "/api/v1/workouts", { limiter: rateLimiter("workout", 40), middleware: [validateBody(createWorkoutRouteSchema)] }, async (req: Request<Record<string, never>, unknown, z.infer<typeof createWorkoutRouteSchema>>, res: Response) => {

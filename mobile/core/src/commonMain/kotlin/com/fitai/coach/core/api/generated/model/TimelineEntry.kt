@@ -130,6 +130,15 @@ public data class TimelineEntry(
     public val structureBlocks: List<WorkoutStructureBlock>? = null,
     public val sessionEstimate: TimelineSessionEstimate? = null,
     public val coachNotes: TimelineCoachNotes? = null,
+    /**
+     * Sent on every entry. race: the athlete's race (focus is the server's "Race Day" marker, matched exactly so "Race Pace" is a session); rest: a planned day the plan words as rest ("Rest", "Active recovery", "Complete rest or light walk"), which when missed had nothing to miss; session otherwise
+     */
+    public val dayKind: TimelineEntry.DayKind? = null,
+    /**
+     * With avgCadence: rpm (pedal revolutions) for a ride, spm (steps) otherwise, from deviceSportType; omitted without a cadence
+     */
+    public val avgCadenceUnit: TimelineEntry.AvgCadenceUnit? = null,
+    public val mafCompliance: SessionMafCompliance? = null,
 ) {
     @Serializable(with = Type.Serializer::class)
     public enum class Type(override val wireValue: String) : WireEnum {
@@ -210,5 +219,34 @@ public data class TimelineEntry(
         ;
 
         internal object Serializer : WireEnumSerializer<DeviceLinkSource>("DeviceLinkSource", DeviceLinkSource.entries, Unknown)
+    }
+
+    /**
+     * Sent on every entry. race: the athlete's race (focus is the server's "Race Day" marker, matched exactly so "Race Pace" is a session); rest: a planned day the plan words as rest ("Rest", "Active recovery", "Complete rest or light walk"), which when missed had nothing to miss; session otherwise
+     */
+    @Serializable(with = DayKind.Serializer::class)
+    public enum class DayKind(override val wireValue: String) : WireEnum {
+        Session("session"),
+        Rest("rest"),
+        Race("race"),
+        /** A value this build does not know; never sent. */
+        Unknown(""),
+        ;
+
+        internal object Serializer : WireEnumSerializer<DayKind>("DayKind", DayKind.entries, Unknown)
+    }
+
+    /**
+     * With avgCadence: rpm (pedal revolutions) for a ride, spm (steps) otherwise, from deviceSportType; omitted without a cadence
+     */
+    @Serializable(with = AvgCadenceUnit.Serializer::class)
+    public enum class AvgCadenceUnit(override val wireValue: String) : WireEnum {
+        Spm("spm"),
+        Rpm("rpm"),
+        /** A value this build does not know; never sent. */
+        Unknown(""),
+        ;
+
+        internal object Serializer : WireEnumSerializer<AvgCadenceUnit>("AvgCadenceUnit", AvgCadenceUnit.entries, Unknown)
     }
 }

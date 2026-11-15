@@ -352,6 +352,34 @@ describe("Workouts Routes", () => {
   });
   
 
+  it("labels a workout's cadence and scores a MAF athlete's run against their ceiling", async () => {
+    const { storage } = await import("../../storage");
+    vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValueOnce({
+      id: "workout-1",
+      userId: "test_user_id",
+      source: "manual",
+      focus: "Easy run",
+      mainWorkout: "Easy run",
+      avgHeartrate: 138,
+      maxHeartrate: 142,
+      avgCadence: 171,
+      deviceActivity: { raw: { sport_type: "Run" } },
+    } as never);
+    vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValueOnce([{ id: "s1", exerciseName: "easy_run" }] as never);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", trainingStyleId: "maf_method", mafHr: 140 } as never);
+
+    const response = await request(app).get("/api/v1/workouts/workout-1");
+
+    expect(response.status).toBe(200);
+    expect(response.body.avgCadenceUnit).toBe("spm");
+    expect(response.body.mafCompliance).toEqual({
+      compliancePct: 100,
+      classification: "compliant",
+      nextAction: "On target — keep building aerobic volume at this effort.",
+      avgOverBy: -2,
+    });
+  });
+
   it("rejects text-only workout create/update on non-legacy routes", async () => {
     const createRes = await request(app).post("/api/v1/workouts").send({ date: "2026-01-02", focus: "Conditioning", mainWorkout: "just text" });
     expect(createRes.status).toBe(422);

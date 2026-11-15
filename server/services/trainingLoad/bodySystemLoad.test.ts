@@ -138,9 +138,11 @@ describe("calculateBodySystemLoad", () => {
       status: "minimal",
     });
 
-    expect(describeBodySystemDivergence(overview)).toBe(
-      "Leg muscle load is at a six-week high (100% above your usual week), while aerobic and running impact loads are normal.",
-    );
+    const sentence =
+      "Leg muscle load is at a six-week high (100% above your usual week), while aerobic and running impact loads are normal.";
+    expect(describeBodySystemDivergence(overview)).toBe(sentence);
+    // Sent with the overview, so a client doesn't rebuild the sentence itself.
+    expect(overview.divergence).toBe(sentence);
   });
 
   it("reports the six rolling blocks it compared, oldest first", () => {
@@ -182,6 +184,7 @@ describe("calculateBodySystemLoad", () => {
     }
     // First log on 09-16: the 09-12..09-18 block is a real, partial week.
     expect(system(overview, "aerobic").weekly).toEqual([null, null, null, null, 180, 180]);
+    expect(overview.divergence).toBeNull();
   });
 
   it("calls a real week of load against almost none in the four before it new", () => {

@@ -1,7 +1,4 @@
 import type { ParsedExercise } from "@shared/schema";
-import { EXERCISE_DEFINITIONS } from "@shared/schema/exercises";
-import { getWorkoutDistanceDisplay } from "@shared/unitConversion";
-import { formatMinutes, minutes } from "@shared/units";
 import type { MutableRefObject } from "react";
 
 import type { StructuredExercise } from "@/lib/structuredExercise";
@@ -45,62 +42,4 @@ export function exerciseToPayload(ex: StructuredExercise | ParsedExercise) {
   };
 }
 
-function areSetsUniform(sets: NonNullable<StructuredExercise["sets"]>): boolean {
-  if (sets.length <= 1) return true;
-  const firstSet = sets[0];
-  for (let i = 1; i < sets.length; i++) {
-    if (sets[i].reps !== firstSet.reps || sets[i].weight !== firstSet.weight) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function formatExerciseSummary(ex: StructuredExercise, weightUnit: string, distanceUnit: string): string {
-  const def = EXERCISE_DEFINITIONS[ex.exerciseName];
-  const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
-  const sets = ex.sets || [];
-
-  if (sets.length === 0) {
-    return `${name}: completed`;
-  }
-
-  const firstSet = sets[0];
-  const allSame = areSetsUniform(sets);
-
-  const parts: string[] = [];
-  if (allSame && sets.length > 1 && firstSet.reps) {
-    parts.push(`${sets.length}x${firstSet.reps}`);
-  } else if (firstSet.reps) {
-    parts.push(`${sets.length > 1 ? sets.length + " sets, " : ""}${firstSet.reps} reps`);
-  } else if (sets.length > 1) {
-    parts.push(`${sets.length} sets`);
-  }
-
-  if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
-  if (firstSet.distance) parts.push(getWorkoutDistanceDisplay(firstSet.distance, distanceUnit).text);
-  if (firstSet.time) parts.push(formatMinutes(minutes(firstSet.time)));
-
-  return `${name}: ${parts.join(", ") || "completed"}`;
-}
-
-export function generateSummary(exercises: StructuredExercise[], weightUnit: string, distanceUnit: string): string {
-  const hasStructuredHints = exercises.some((ex) => (ex.sets || []).some((set) => Boolean(set.notes)));
-  if (!hasStructuredHints) {
-    const summaries: string[] = [];
-    for (const ex of exercises) summaries.push(formatExerciseSummary(ex, weightUnit, distanceUnit));
-    return summaries.join("; ");
-  }
-
-  const blocks: string[] = [];
-  for (const ex of exercises) {
-    const headline = formatExerciseSummary(ex, weightUnit, distanceUnit);
-    const steps = (ex.sets || []).map((set, idx) => {
-      const stepLabel = `S${idx + 1}`;
-      if (!set.notes) return stepLabel;
-      return `${stepLabel}(cue: ${set.notes})`;
-    });
-    blocks.push(steps.length > 0 ? `${headline} [${steps.join(" -> ")}]` : headline);
-  }
-  return blocks.join("; ");
-}
+export { generateSummary } from "@shared/workoutSummary";

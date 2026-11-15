@@ -256,45 +256,29 @@ data class StyleAuditEntry(val changedAt: String, val fromStyleId: String, val t
 /** The audit keeps the last ten changes. */
 const val MAX_AUDIT_ENTRIES = 10
 
-/** Maffetone's category question, with the beats a minute each moves the ceiling (shared/maf.ts). */
-data class MafCategoryOption(val category: MafCategory, val label: String, val adjustment: Int)
+/**
+ * Maffetone's category question (shared/maf.ts), each answer saying how far it
+ * moves the ceiling. The server works the ceiling out from the age and the
+ * answer and sends it back with the preferences.
+ */
+data class MafCategoryOption(val category: MafCategory, val label: String)
 
 val MAF_CATEGORIES = listOf(
-    MafCategoryOption(
-        MafCategory.RecoveringOrMedicated,
-        "Recovering from major illness or surgery, or on regular medication (−10 bpm)",
-        -10,
-    ),
+    MafCategoryOption(MafCategory.RecoveringOrMedicated, "Recovering from major illness or surgery, or on regular medication (−10 bpm)"),
     MafCategoryOption(
         MafCategory.TrainingInterrupted,
         "Injured, regressing, frequent colds, allergies/asthma, or new/inconsistent training (−5 bpm)",
-        -5,
     ),
-    MafCategoryOption(MafCategory.ConsistentUpTo2y, "Training consistently (up to 2 years) without those problems", 0),
-    MafCategoryOption(MafCategory.Consistent2yPlusImproving, "Training 2+ years without those problems, and improving (+5 bpm)", 5),
+    MafCategoryOption(MafCategory.ConsistentUpTo2y, "Training consistently (up to 2 years) without those problems"),
+    MafCategoryOption(MafCategory.Consistent2yPlusImproving, "Training 2+ years without those problems, and improving (+5 bpm)"),
 )
-
-private const val MAF_BASE = 180
-private const val UNDER_16_CEILING = 165
-private const val MAF_MIN_FORMULA_AGE = 16
-
-/** The MAF ceiling: 180 minus age, moved by the category (calculateMafHr's category path; a flat 165 under 16). */
-fun mafCeiling(age: Int, category: MafCategory): Int =
-    if (age <
-        MAF_MIN_FORMULA_AGE
-    ) {
-        UNDER_16_CEILING
-    } else {
-        MAF_BASE - age +
-            (MAF_CATEGORIES.firstOrNull { it.category == category }?.adjustment ?: 0)
-    }
 
 /** The MAF setup dialog's answers, as typed. */
 data class MafSetup(val age: String, val category: MafCategory?, val hrDataAvailable: Boolean?) {
     val validAge: Int? get() = age.trim().toIntOrNull()?.takeIf { boundError(it.toDouble(), PreferenceBounds.MafAge, "MAF age") == null }
     val error: String? get() = if (validAge == null || category == null) "Enter a valid age and select your category." else null
 
-    /** The answers and the ceiling they give; null until they are complete. */
+    /** The answers, for the server to work the ceiling out from; null until they are complete. */
     fun patch(): UpdateUserPreferences? {
         val years = validAge
         val chosen = category
@@ -305,7 +289,6 @@ data class MafSetup(val age: String, val category: MafCategory?, val hrDataAvail
                 mafAge = Patch.of(years),
                 mafCategory = Patch.of(chosen),
                 mafHrDataAvailable = Patch.of(hrDataAvailable),
-                mafHr = Patch.of(mafCeiling(years, chosen)),
             )
         }
     }

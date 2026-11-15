@@ -35,7 +35,21 @@ class AthleteCardModelTest {
         assertTrue(isAthleteFactDue("2026-11-13", "2026-11-13"))
         assertFalse(isAthleteFactDue("2026-11-14", "2026-11-13"))
         assertFalse(card.atCap)
-        assertTrue(groupAthleteFacts((1..MAX_ACTIVE_ATHLETE_FACTS).map { fact("f$it") }, "2026-11-13").atCap)
+    }
+
+    @Test
+    fun theCardIsFullAtTheServersCapAndNeverBeforeTheServerHasSaidWhatItIs() {
+        val three = (1..3).map { fact("f$it") }
+        assertFalse(groupAthleteFacts(three, "2026-11-13").atCap)
+        assertFalse(groupAthleteFacts(three + fact("r", active = false), "2026-11-13", maxActive = 4).atCap)
+
+        val full = groupAthleteFacts(three, "2026-11-13", maxActive = 3)
+        assertTrue(full.atCap)
+        assertEquals("Your card holds up to 3 facts. Retire one that no longer applies to add another.", addFactHint(full))
+        assertEquals(
+            "One thing per fact, in your own words. It stays on your card until you retire it.",
+            addFactHint(groupAthleteFacts(three, "2026-11-13", maxActive = 4)),
+        )
     }
 
     @Test

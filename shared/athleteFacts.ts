@@ -19,6 +19,9 @@ export const ATHLETE_FACT_MAX_LENGTH = 140;
  */
 export const MAX_ACTIVE_ATHLETE_FACTS = 20;
 
+/** The response header GET /api/v1/athlete-facts carries the cap in. */
+export const MAX_ACTIVE_FACTS_HEADER = "X-Max-Active-Facts";
+
 /** What the athlete is told when a new or restored fact would go over the cap. */
 export const ATHLETE_FACT_LIMIT_MESSAGE = `Your card holds up to ${MAX_ACTIVE_ATHLETE_FACTS} facts. Retire one that no longer applies first.`;
 

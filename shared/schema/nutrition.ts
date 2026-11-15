@@ -1,5 +1,6 @@
 import { dayDiff, isIsoCalendarDate } from "../dateUtils";
 import type { EnergyBalanceSummary } from "../energyBalance";
+import type { FuellingCorrelationResult } from "../fuellingCorrelation";
 import type { MealFuelTargets } from "../mealFuelling";
 import { NUTRITION_RANGE_MAX_DAYS } from "../nutritionRange";
 import type { Per100gMacros } from "../nutritionScaling";
@@ -321,12 +322,19 @@ const rangeDate = isoDate.refine(
   },
 );
 
-function checkRangeSpan({ from, to }: { from: string; to?: string }, ctx: z.RefinementCtx): void {
+function checkRangeOrder({ from, to }: { from: string; to?: string }, ctx: z.RefinementCtx): void {
   // A date that is not a real day already has its issue; comparing it would
   // name it twice. C49 (CODEBASE_ANALYSIS_2026-10-03)
   if (to === undefined || ctx.issues.length > 0) return;
   if (from > to) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "from must be on or before to", path: ["from"] });
+  }
+}
+
+function checkRangeSpan({ from, to }: { from: string; to?: string }, ctx: z.RefinementCtx): void {
+  if (to === undefined || ctx.issues.length > 0) return;
+  if (from > to) {
+    checkRangeOrder({ from, to }, ctx);
   } else if (dayDiff(from, to) >= NUTRITION_RANGE_MAX_DAYS) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -343,10 +351,25 @@ export const blockViewQuerySchema = z
   .superRefine(checkRangeSpan);
 export type BlockViewQuery = z.infer<typeof blockViewQuerySchema>;
 
-/** The block / summary-range window once `to` is resolved: same rules, `to` required. */
+/** The block window once `to` is resolved: same rules, `to` required. */
 export const nutritionRangeSchema = z
   .object({ from: rangeDate, to: rangeDate })
   .superRefine(checkRangeSpan);
+
+/**
+ * The summary-range query: real dates in order, any span. A span over the cap
+ * is narrowed around the athlete's today by the route (clampNutritionRange),
+ * not refused, so a client needn't size its own request.
+ */
+export const fuellingRangeQuerySchema = z
+  .object({ from: rangeDate, to: rangeDate.optional() })
+  .superRefine(checkRangeOrder);
+export type FuellingRangeQuery = z.infer<typeof fuellingRangeQuerySchema>;
+
+/** The summary-range window once `to` is resolved. */
+export const fuellingRangeSchema = z
+  .object({ from: rangeDate, to: rangeDate })
+  .superRefine(checkRangeOrder);
 
 /** Phase 3 — how far the logged fuelling is from the session target (target −
  *  logged). Positive = still to go; negative = already over. */
@@ -413,6 +436,8 @@ export interface BlockViewResponse {
   from: string;
   to: string;
   points: BlockViewPoint[];
+  /** Roadmap G — the points' carb-target hit days against their misses (analyzeFuellingCorrelation). */
+  correlation: FuellingCorrelationResult;
 }
 
 // ---------------------------------------------------------------------------
