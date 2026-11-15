@@ -126,10 +126,14 @@ All of this ships to production first. The web is unaffected.
      registered once in `entities.ts`, so Phase 2 generates one class each. Webhooks,
      unsubscribe links, health probes and operator/debug endpoints are excluded, each with
      its reason, in `test/docs/openapiCoverage.test.ts`.
-   - **Follow-ups found while documenting:** `X-Idempotency-Key` (and its 409) is not yet
-     described on mutations; `GET /api/v1/plans/days/{dayId}/sets` returns two shapes
-     depending on `includeStructure`; the AI-suggestions debug endpoint is gated only by
-     sign-in.
+   - **Follow-ups found while documenting:**
+     - `X-Idempotency-Key` and its 409 are now described on every authenticated write: the
+       `IdempotencyKey` header parameter, added by `documentIdempotency` in
+       `shared/openapiRoutes/common.ts`, and a "Retries" section in the document's description.
+     - `GET /api/v1/plans/days/{dayId}/sets` returns two shapes depending on
+       `includeStructure`; its registration documents both.
+     - The AI-suggestions debug endpoint is gated only by sign-in, but it returns only the
+       caller's own plan day (`getPlanDay(id, userId)`), so it is left as it is.
 4. **Device push tokens.**
    - Add a `device_push_tokens` table (`id`, `user_id` → `users` on delete cascade, `platform`,
      unique `token`, `app_version`, `created_at`, `last_seen_at`) beside `push_subscriptions`

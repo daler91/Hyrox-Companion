@@ -3,7 +3,7 @@
   "info": {
     "version": "1.0.0",
     "title": "fitai.coach Workout API",
-    "description": "API for managing workouts, exercises, and training plans.\n\n### Coverage\nThis document is generated from the Zod schemas in `shared/openapi.ts` and\nthe path modules in `shared/openapiRoutes/`, and describes every client route\nunder `/api/v1`. `test/docs/openapiCoverage.test.ts` keeps it that way: a\nnew route fails CI until it is registered. Webhooks, unsubscribe links, health\nprobes and operator endpoints are left out on purpose; that test lists each\nwith its reason.\n\n### Errors\nErrors use `ErrorResponse` (`{ error, code, details? }`), except validation\nfailures from the Zod middleware, which use `ValidationErrorResponse`\n(`{ code: \"VALIDATION_ERROR\", message, details.issues }`). `code` is a member\nof the ErrorCode catalogue in `server/errors.ts`.\n\n### Native app\nThe mobile app sends `X-App-Platform` and `X-App-Version` on every request;\na build below the server's minimum gets `426` with `AppUpdateRequiredResponse`.\nBearer-authenticated requests need no CSRF token.\n\n### Authentication\nThis API is protected using JWT Bearer authentication provided by Clerk.\nTo authenticate your requests:\n1. Obtain a valid JWT session token for your user from Clerk. If you are building a frontend integration, you can use Clerk's `getToken()` method from their SDKs.\n2. Include the token in the `Authorization` header of your HTTP requests as follows:\n   `Authorization: Bearer <your-clerk-jwt-token>`\n\nClick the **Authorize** button below to enter your JWT token for use within this Swagger UI."
+    "description": "API for managing workouts, exercises, and training plans.\n\n### Coverage\nThis document is generated from the Zod schemas in `shared/openapi.ts` and\nthe path modules in `shared/openapiRoutes/`, and describes every client route\nunder `/api/v1`. `test/docs/openapiCoverage.test.ts` keeps it that way: a\nnew route fails CI until it is registered. Webhooks, unsubscribe links, health\nprobes and operator endpoints are left out on purpose; that test lists each\nwith its reason.\n\n### Errors\nErrors use `ErrorResponse` (`{ error, code, details? }`), except validation\nfailures from the Zod middleware, which use `ValidationErrorResponse`\n(`{ code: \"VALIDATION_ERROR\", message, details.issues }`). `code` is a member\nof the ErrorCode catalogue in `server/errors.ts`.\n\n### Native app\nThe mobile app sends `X-App-Platform` and `X-App-Version` on every request;\na build below the server's minimum gets `426` with `AppUpdateRequiredResponse`.\nBearer-authenticated requests need no CSRF token.\n\n### Retries\nEvery authenticated write (POST, PUT, PATCH, DELETE) accepts an optional\n`X-Idempotency-Key`. A repeat with the same key within 7 days returns the\nfirst response without running the write again; while the first is still\nrunning, a repeat gets `409` with code `IDEMPOTENT_REQUEST_IN_PROGRESS`.\nThe web and app offline queues send a key with every queued write.\n\n### Authentication\nThis API is protected using JWT Bearer authentication provided by Clerk.\nTo authenticate your requests:\n1. Obtain a valid JWT session token for your user from Clerk. If you are building a frontend integration, you can use Clerk's `getToken()` method from their SDKs.\n2. Include the token in the `Authorization` header of your HTTP requests as follows:\n   `Authorization: Bearer <your-clerk-jwt-token>`\n\nClick the **Authorize** button below to enter your JWT token for use within this Swagger UI."
   },
   "servers": [
     {
@@ -11286,6 +11286,12 @@
         ],
         "description": "A 429 from an AI route: its rate limit, or the athlete's AI budget"
       },
+      "IdempotencyKey": {
+        "type": "string",
+        "maxLength": 255,
+        "example": "6f9c2a1e-3b4d-4c5e-8f70-1a2b3c4d5e6f",
+        "description": "Optional: a key unique to this write, such as a UUID. A repeat with the same key from the same athlete within 7 days returns the first request's response instead of running the write again. Only a 2xx response is kept, so a failed attempt can be retried with the same key. A key longer than 255 characters gets 400 BAD_REQUEST."
+      },
       "WorkoutId": {
         "type": "string",
         "example": "123e4567-e89b-12d3-a456-426614174000",
@@ -11293,6 +11299,15 @@
       }
     },
     "parameters": {
+      "IdempotencyKey": {
+        "schema": {
+          "$ref": "#/components/schemas/IdempotencyKey"
+        },
+        "required": false,
+        "description": "Optional: a key unique to this write, such as a UUID. A repeat with the same key from the same athlete within 7 days returns the first request's response instead of running the write again. Only a 2xx response is kept, so a failed attempt can be retried with the same key. A key longer than 255 characters gets 400 BAD_REQUEST.",
+        "name": "X-Idempotency-Key",
+        "in": "header"
+      },
       "WorkoutId": {
         "schema": {
           "$ref": "#/components/schemas/WorkoutId"
@@ -11433,8 +11448,23 @@
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       },
       "get": {
         "tags": [
@@ -11571,6 +11601,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -11670,6 +11703,16 @@
           },
           "404": {
             "description": "Workout not found"
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       },
@@ -11687,6 +11730,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -11720,6 +11766,16 @@
           },
           "404": {
             "description": "Workout not found"
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -11800,8 +11856,23 @@
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       },
       "get": {
         "tags": [
@@ -11986,6 +12057,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -12006,7 +12087,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       },
       "get": {
         "tags": [
@@ -12134,6 +12220,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -12154,7 +12250,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/push/devices": {
@@ -12242,6 +12343,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -12262,7 +12373,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -12326,6 +12442,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -12346,7 +12472,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/push/vapid-key": {
@@ -12507,6 +12638,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -12527,7 +12668,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/push/unsubscribe": {
@@ -12593,6 +12739,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -12613,7 +12769,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/push/test": {
@@ -12664,6 +12825,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -12684,7 +12855,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/emails/check": {
@@ -12735,6 +12911,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -12755,7 +12941,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/strava/status": {
@@ -13035,6 +13226,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -13065,7 +13266,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/strava/disconnect": {
@@ -13093,6 +13299,16 @@
           },
           "401": {
             "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13131,7 +13347,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/strava/sync": {
@@ -13218,6 +13439,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -13258,7 +13489,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/garmin/status": {
@@ -13435,7 +13671,7 @@
             }
           },
           "409": {
-            "description": "GARMIN_BUSY: another connect or sync for this athlete is still running",
+            "description": "GARMIN_BUSY: another connect or sync for this athlete is still running. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13474,7 +13710,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/garmin/disconnect": {
@@ -13502,6 +13743,16 @@
           },
           "401": {
             "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13540,7 +13791,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/garmin/sync": {
@@ -13612,7 +13868,7 @@
             }
           },
           "409": {
-            "description": "GARMIN_BUSY: another connect or sync for this athlete is still running",
+            "description": "GARMIN_BUSY: another connect or sync for this athlete is still running. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13661,7 +13917,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/health-connect/sync": {
@@ -13831,6 +14092,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -13851,7 +14122,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/training-overview": {
@@ -14254,6 +14530,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -14274,7 +14560,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/personal-records": {
@@ -14759,6 +15050,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -14799,7 +15100,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/overview-analysis": {
@@ -14926,6 +15232,9 @@
             "description": "The Analytics page range: a day count (1-366, the last N days ending on the athlete's today) or \"all\". POST defaults to 90; GET without it returns whatever is stored.",
             "name": "range",
             "in": "query"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -14961,6 +15270,16 @@
           },
           "403": {
             "description": "AI_COACH_DISABLED: the athlete has not turned AI coaching on (Settings)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -15037,6 +15356,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -15235,6 +15557,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -15283,6 +15615,9 @@
             "description": "The exercise set id",
             "name": "setId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -15479,7 +15814,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT: expectedVersion is stale; details carries currentVersion and expectedVersion. Reload the set and retry.",
+            "description": "CONFLICT: expectedVersion is stale; details carries currentVersion and expectedVersion. Reload the set and retry. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -15534,6 +15869,9 @@
             "description": "The exercise set id",
             "name": "setId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -15559,6 +15897,16 @@
           },
           "404": {
             "description": "NOT_FOUND: the set belongs to another workout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -15605,6 +15953,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -15677,7 +16028,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT: setIds does not match the sets stored now (another device added or removed one)",
+            "description": "CONFLICT: setIds does not match the sets stored now (another device added or removed one). Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -15724,6 +16075,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -15747,6 +16101,16 @@
           },
           "401": {
             "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -15803,6 +16167,9 @@
             "description": "The structure block id",
             "name": "blockId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -15968,6 +16335,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such block on this workout for this user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -16358,6 +16735,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -16421,6 +16801,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -16459,6 +16849,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -16524,7 +16917,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT: {id} is not a standalone Strava import, or the target already has a device activity",
+            "description": "CONFLICT: {id} is not a standalone Strava import, or the target already has a device activity. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -16569,6 +16962,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -16623,7 +17019,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT: the workout has no linked Strava activity",
+            "description": "CONFLICT: the workout has no linked Strava activity. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -16670,6 +17066,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -16695,6 +17094,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such workout for this user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -16930,6 +17339,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -16950,7 +17369,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/workouts/bulk-delete": {
@@ -17076,6 +17500,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -17096,7 +17530,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/workouts/{id}/session-grade": {
@@ -17200,6 +17639,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -17343,6 +17785,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -17379,6 +17831,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -17492,6 +17947,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -17528,6 +17993,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -17553,6 +18021,16 @@
           },
           "404": {
             "description": "NOT_FOUND: the workout is not tagged as a MAF test",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -17674,6 +18152,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -17714,7 +18202,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/parse-exercises-from-image": {
@@ -17816,6 +18309,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "413": {
             "description": "PAYLOAD_TOO_LARGE: the body is over 10 MB",
             "content": {
@@ -17866,7 +18369,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/parse-workout-structure": {
@@ -17956,6 +18464,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -17996,7 +18514,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/parse-workout-structure-from-image": {
@@ -18095,6 +18618,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "413": {
             "description": "PAYLOAD_TOO_LARGE: the body is over 10 MB",
             "content": {
@@ -18145,7 +18678,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/workouts/{id}/reparse": {
@@ -18163,6 +18701,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -18253,6 +18794,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "422": {
             "description": "PARSE_WRITE_THROUGH_REQUIRED: parsing produced no exercise sets; nothing was changed",
             "content": {
@@ -18321,6 +18872,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WorkoutId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -18409,6 +18963,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such workout for this user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -18553,6 +19117,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -18583,7 +19157,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/custom-exercises": {
@@ -18710,6 +19289,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -18730,7 +19319,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/workouts/migration/reviews": {
@@ -18991,6 +19585,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -19011,7 +19615,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/export": {
@@ -19293,6 +19902,9 @@
             "description": "Training plan id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -19356,6 +19968,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -19400,6 +20022,9 @@
             "description": "Training plan id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -19441,6 +20066,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such plan for this athlete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -19550,6 +20185,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -19570,7 +20215,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/plans/sample": {
@@ -19637,6 +20287,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -19657,7 +20317,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/plans/generate": {
@@ -19799,7 +20464,7 @@
             }
           },
           "409": {
-            "description": "PLAN_GENERATION_IN_PROGRESS: a generation is already running for this athlete",
+            "description": "PLAN_GENERATION_IN_PROGRESS: a generation is already running for this athlete. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -19860,7 +20525,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/plans/{id}/generation-status": {
@@ -19985,6 +20655,9 @@
             "description": "Training plan id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -20048,6 +20721,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -20094,6 +20777,9 @@
             "description": "Training plan id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -20158,7 +20844,7 @@
             }
           },
           "409": {
-            "description": "PLAN_OVERLAP: restoring would put two live plans over the same dates; the message names the other plan",
+            "description": "PLAN_OVERLAP: restoring would put two live plans over the same dates; the message names the other plan. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -20213,6 +20899,9 @@
             "description": "Training plan id",
             "name": "planId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -20282,6 +20971,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -20339,6 +21038,9 @@
             "description": "Plan day id",
             "name": "dayId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -20433,6 +21135,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such plan day for this athlete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -20487,6 +21199,9 @@
             "description": "Plan day id",
             "name": "dayId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -20589,6 +21304,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -20633,6 +21358,9 @@
             "description": "Plan day id",
             "name": "dayId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -20674,6 +21402,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such plan day for this athlete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -20728,6 +21466,9 @@
             "description": "Plan day id",
             "name": "dayId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -20807,6 +21548,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such plan day for this athlete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -20948,6 +21699,9 @@
             "description": "Plan day id",
             "name": "dayId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -21088,7 +21842,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT: as for the preview; also an unavailable option, nothing to reopen, or the day changed while the athlete was deciding",
+            "description": "CONFLICT: as for the preview; also an unavailable option, nothing to reopen, or the day changed while the athlete was deciding. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21240,6 +21994,9 @@
             "description": "Plan day id",
             "name": "dayId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -21438,6 +22195,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -21494,6 +22261,9 @@
             "description": "Exercise set id",
             "name": "setId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -21690,7 +22460,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT: expectedVersion did not match; details carries currentVersion and expectedVersion",
+            "description": "CONFLICT: expectedVersion did not match; details carries currentVersion and expectedVersion. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21752,6 +22522,9 @@
             "description": "Exercise set id",
             "name": "setId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -21777,6 +22550,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such set on this athlete's plan day",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21831,6 +22614,9 @@
             "description": "Plan day id",
             "name": "dayId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -21903,7 +22689,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT: setIds does not name exactly the day's sets (the list changed since it was loaded)",
+            "description": "CONFLICT: setIds does not name exactly the day's sets (the list changed since it was loaded). Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21958,6 +22744,9 @@
             "description": "Plan day id",
             "name": "dayId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -22458,6 +23247,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -22504,6 +23303,9 @@
             "description": "Plan day id",
             "name": "dayId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -22577,6 +23379,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such plan day for this athlete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22693,6 +23505,9 @@
             "description": "Plan day id",
             "name": "dayId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -22774,6 +23589,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such plan day for this athlete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22900,6 +23725,9 @@
             "description": "Plan day id",
             "name": "dayId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -22952,6 +23780,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such plan day for this athlete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -23208,6 +24046,9 @@
             "description": "Proposal id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -23316,7 +24157,7 @@
             }
           },
           "409": {
-            "description": "not_pending: already applied, dismissed or replaced; stale: its days changed since it was made (the proposal is invalidated)",
+            "description": "not_pending: already applied, dismissed or replaced; stale: its days changed since it was made (the proposal is invalidated). Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -23370,6 +24211,9 @@
             "description": "Proposal id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -23441,7 +24285,7 @@
             }
           },
           "409": {
-            "description": "Nothing was undone",
+            "description": "Nothing was undone. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -23519,6 +24363,9 @@
             "description": "Proposal id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -23552,6 +24399,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such proposal for this athlete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -23753,6 +24610,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "413": {
             "description": "PAYLOAD_TOO_LARGE: the body is over this route's 5 MB limit",
             "content": {
@@ -23820,7 +24687,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/chat": {
@@ -24015,6 +24887,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "413": {
             "description": "PAYLOAD_TOO_LARGE: the body is over this route's 5 MB limit",
             "content": {
@@ -24082,7 +24964,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/chat/history": {
@@ -24255,6 +25142,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -24275,7 +25172,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/chat/welcome": {
@@ -24437,6 +25339,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -24457,7 +25369,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/chat/messages/{id}": {
@@ -24482,6 +25399,9 @@
             "description": "The coach reply's message id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -24566,6 +25486,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -24612,6 +25542,9 @@
             "description": "The message id of the coach reply that carried the factProposal",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -24688,7 +25621,7 @@
             }
           },
           "409": {
-            "description": "ATHLETE_FACT_LIMIT: the card already holds its maximum of active facts; the offer stays pending",
+            "description": "ATHLETE_FACT_LIMIT: the card already holds its maximum of active facts; the offer stays pending. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -24885,6 +25818,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "413": {
             "description": "PAYLOAD_TOO_LARGE: the body is over this route's 2 MB limit",
             "content": {
@@ -24942,7 +25885,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/coaching-materials/summaries": {
@@ -25025,6 +25973,9 @@
             "description": "The coaching material's id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -25128,6 +26079,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "413": {
             "description": "PAYLOAD_TOO_LARGE: the body is over this route's 2 MB limit",
             "content": {
@@ -25208,6 +26169,9 @@
             "description": "The coaching material's id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -25233,6 +26197,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such material of the athlete's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -25504,6 +26478,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -25551,7 +26535,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/athlete-facts": {
@@ -25706,7 +26695,7 @@
             }
           },
           "409": {
-            "description": "ATHLETE_FACT_LIMIT: the card already holds its maximum of active facts",
+            "description": "ATHLETE_FACT_LIMIT: the card already holds its maximum of active facts. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -25735,7 +26724,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/athlete-facts/import": {
@@ -25785,6 +26779,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -25805,7 +26809,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/athlete-facts/{id}": {
@@ -25830,6 +26839,9 @@
             "description": "The fact's id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -25909,7 +26921,7 @@
             }
           },
           "409": {
-            "description": "ATHLETE_FACT_LIMIT: restoring it would go over the active cap; ATHLETE_FACT_DUPLICATE: another fact already says the new wording",
+            "description": "ATHLETE_FACT_LIMIT: restoring it would go over the active cap; ATHLETE_FACT_DUPLICATE: another fact already says the new wording. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -25961,6 +26973,9 @@
             "description": "The fact's id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -25986,6 +27001,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such fact of the athlete's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -26267,6 +27292,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -26324,7 +27359,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/timeline/ai-suggestions/apply": {
@@ -26474,6 +27514,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -26494,7 +27544,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/timeline-annotations": {
@@ -26641,6 +27696,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -26661,7 +27726,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/timeline-annotations/{id}": {
@@ -26686,6 +27756,9 @@
             "description": "The annotation's id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -26769,6 +27842,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -26812,6 +27895,9 @@
             "description": "The annotation's id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -26837,6 +27923,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such annotation of the athlete's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -27006,6 +28102,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -27026,7 +28132,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/recycle-bin/{id}/restore": {
@@ -27051,6 +28162,9 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -27132,7 +28246,7 @@
             }
           },
           "409": {
-            "description": "PLAN_OVERLAP: restoring this live plan would put it over another live plan's dates; RECYCLE_BIN_CONFLICT: the record, or its device activity, exists again",
+            "description": "PLAN_OVERLAP: restoring this live plan would put it over another live plan's dates; RECYCLE_BIN_CONFLICT: the record, or its device activity, exists again. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -27186,6 +28300,9 @@
             "required": true,
             "name": "batchId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -27277,7 +28394,7 @@
             }
           },
           "409": {
-            "description": "RECYCLE_BIN_CONFLICT: the record, or its device activity, exists again",
+            "description": "RECYCLE_BIN_CONFLICT: the record, or its device activity, exists again. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -27331,6 +28448,9 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -27366,6 +28486,16 @@
           },
           "404": {
             "description": "NOT_FOUND: no such item of the athlete's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -27710,6 +28840,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -27730,7 +28870,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/nutrition/foods": {
@@ -27871,6 +29016,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -27891,7 +29046,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/nutrition/foods/{id}": {
@@ -28007,6 +29167,9 @@
             "description": "Food id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -28112,7 +29275,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT: another athlete has logged or used this food, so its name and nutrition cannot change",
+            "description": "CONFLICT: another athlete has logged or used this food, so its name and nutrition cannot change. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -28163,6 +29326,9 @@
             "description": "Food id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -28197,7 +29363,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT: a log entry or recipe uses the food, or it is a recipe's backing food (delete the recipe)",
+            "description": "CONFLICT: a log entry or recipe uses the food, or it is a recipe's backing food (delete the recipe). Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -28251,6 +29417,9 @@
             "description": "Food id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -28320,6 +29489,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -28373,6 +29552,9 @@
             "required": true,
             "name": "servingId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -28398,6 +29580,16 @@
           },
           "404": {
             "description": "NOT_FOUND: Serving not found, or not the athlete's to delete, or nutrition is disabled on this server (NUTRITION_ENABLED is not \"true\")",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -28567,6 +29759,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -28587,7 +29789,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/nutrition/favorites/{foodId}": {
@@ -28609,6 +29816,9 @@
             "required": true,
             "name": "foodId",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -28634,6 +29844,16 @@
           },
           "404": {
             "description": "NOT_FOUND: Favorite not found, or nutrition is disabled on this server (NUTRITION_ENABLED is not \"true\")",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -28769,6 +29989,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -28789,7 +30019,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/nutrition/logs/{id}": {
@@ -28814,6 +30049,9 @@
             "description": "Log entry id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -28889,6 +30127,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -28931,6 +30179,9 @@
             "description": "Log entry id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -28956,6 +30207,16 @@
           },
           "404": {
             "description": "NOT_FOUND: Log entry not found, or nutrition is disabled on this server (NUTRITION_ENABLED is not \"true\")",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -29088,6 +30349,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -29108,7 +30379,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/nutrition/logs/batch": {
@@ -29252,6 +30528,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -29272,7 +30558,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/nutrition/summary": {
@@ -30351,6 +31642,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -30371,7 +31672,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/nutrition/meal-targets": {
@@ -30524,6 +31830,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -30544,7 +31860,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/nutrition/meal-targets/{mealType}": {
@@ -30568,6 +31889,9 @@
             "description": "The meal slot a food log entry is filed under",
             "name": "mealType",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -30593,6 +31917,16 @@
           },
           "404": {
             "description": "NOT_FOUND: Unknown meal, or nutrition is disabled on this server (NUTRITION_ENABLED is not \"true\")",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -30862,6 +32196,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -30902,7 +32246,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/nutrition/parse/photo": {
@@ -31013,6 +32362,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "413": {
             "description": "PAYLOAD_TOO_LARGE: the body is over 10 MB",
             "content": {
@@ -31063,7 +32422,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/nutrition/parse/label": {
@@ -31328,6 +32692,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "413": {
             "description": "PAYLOAD_TOO_LARGE: the body is over 10 MB",
             "content": {
@@ -31378,7 +32752,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/nutrition/insights": {
@@ -31555,6 +32934,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -31595,7 +32984,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/nutrition/recipes": {
@@ -31796,6 +33190,16 @@
               }
             }
           },
+          "409": {
+            "description": "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "426": {
             "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
             "content": {
@@ -31816,7 +33220,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
       }
     },
     "/api/v1/nutrition/recipes/{id}": {
@@ -31916,6 +33325,9 @@
             "description": "Recipe id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -32018,7 +33430,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT: other athletes have logged this recipe, so its name and ingredients cannot change",
+            "description": "CONFLICT: other athletes have logged this recipe, so its name and ingredients cannot change. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {
@@ -32070,6 +33482,9 @@
             "description": "Recipe id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
@@ -32104,7 +33519,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT: the recipe is an ingredient of another of the athlete's recipes",
+            "description": "CONFLICT: the recipe is an ingredient of another of the athlete's recipes. Or IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. Retry shortly: once it has finished, the retry gets its response.",
             "content": {
               "application/json": {
                 "schema": {

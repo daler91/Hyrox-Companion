@@ -31,6 +31,46 @@ export interface OpenApiCommon {
   success(description: string): Record<number, ResponseConfig>;
 }
 
+/** The header the offline queues (web and app) send so a replayed write runs once. */
+export const IDEMPOTENCY_KEY_HEADER = "X-Idempotency-Key";
+
+/** The 409 server/middleware/idempotency.ts sends while a request with the same key is still running. */
+export const IDEMPOTENCY_IN_PROGRESS =
+  "IDEMPOTENT_REQUEST_IN_PROGRESS: a request with the same X-Idempotency-Key is still being processed. " +
+  "Retry shortly: once it has finished, the retry gets its response.";
+
+const MUTATING_METHODS = ["post", "put", "patch", "delete"] as const;
+
+interface OperationLike {
+  security?: unknown[];
+  parameters?: Array<Record<string, unknown>>;
+  responses?: Record<string, { description?: string; content?: unknown }>;
+}
+
+/**
+ * Adds `X-Idempotency-Key` and its 409 to every authenticated mutation.
+ * server/middleware/idempotency.ts runs on all of them: protectedPost,
+ * protectedPatch and protectedDelete mount it with auth (routeGuards.ts), and
+ * the Strava and Garmin routes spread the same guards. A 409 an operation
+ * already documents keeps its own text, with this case added.
+ */
+export function documentIdempotency<T extends { paths?: object }>(doc: T): T {
+  const paths = (doc.paths ?? {}) as Record<string, Record<string, OperationLike | undefined>>;
+  for (const item of Object.values(paths)) {
+    for (const method of MUTATING_METHODS) {
+      const op = item[method];
+      if (!op?.security?.length) continue;
+      op.parameters = [...(op.parameters ?? []), { $ref: "#/components/parameters/IdempotencyKey" }];
+      const responses = (op.responses ??= {});
+      const conflict = responses["409"];
+      responses["409"] = conflict
+        ? { ...conflict, description: `${(conflict.description ?? "").replace(/\.?$/, ".")} Or ${IDEMPOTENCY_IN_PROGRESS}` }
+        : { description: IDEMPOTENCY_IN_PROGRESS, content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } };
+    }
+  }
+  return doc;
+}
+
 export function registerCommonComponents(registry: OpenAPIRegistry): OpenApiCommon {
   const bearerAuth = registry.registerComponent("securitySchemes", "BearerAuth", {
     type: "http",
@@ -39,6 +79,22 @@ export function registerCommonComponents(registry: OpenAPIRegistry): OpenApiComm
     description: "Enter your Clerk JWT token in the format: Bearer <token>",
   });
   const security = [{ [bearerAuth.name]: [] }];
+
+  registry.registerParameter(
+    "IdempotencyKey",
+    z
+      .string()
+      .max(255)
+      .openapi({
+        param: { name: IDEMPOTENCY_KEY_HEADER, in: "header", required: false },
+        example: "6f9c2a1e-3b4d-4c5e-8f70-1a2b3c4d5e6f",
+        description:
+          "Optional: a key unique to this write, such as a UUID. A repeat with the same key from the same " +
+          "athlete within 7 days returns the first request's response instead of running the write again. " +
+          "Only a 2xx response is kept, so a failed attempt can be retried with the same key. A key longer " +
+          "than 255 characters gets 400 BAD_REQUEST.",
+      }),
+  );
 
   const ErrorResponse = registry.register(
     "ErrorResponse",
