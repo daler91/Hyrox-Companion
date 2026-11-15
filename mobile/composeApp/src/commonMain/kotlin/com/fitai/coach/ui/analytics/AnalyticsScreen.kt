@@ -4,10 +4,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
@@ -18,7 +21,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,7 +33,6 @@ import com.fitai.coach.core.api.generated.PersonalRecordValue
 import com.fitai.coach.core.api.generated.TrainingOverview
 import com.fitai.coach.core.data.AnalyticsRange
 import com.fitai.coach.core.dates.todayIn
-import com.fitai.coach.core.units.metersToUserDistance
 import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.ButtonSize
 import com.fitai.coach.ui.components.ButtonVariant
@@ -38,10 +42,13 @@ import com.fitai.coach.ui.components.FitaiBadge
 import com.fitai.coach.ui.components.FitaiButton
 import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.components.FitaiChip
+import com.fitai.coach.ui.components.FitaiTabGrid
 import com.fitai.coach.ui.components.LoadingState
+import com.fitai.coach.ui.components.TabItem
 import com.fitai.coach.ui.format.formatClock
 import com.fitai.coach.ui.format.formatNumber
 import com.fitai.coach.ui.format.shortDate
+import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
@@ -81,23 +88,36 @@ fun AnalyticsScreen(navigation: AnalyticsNavigation) {
             verticalArrangement = Arrangement.spacedBy(Spacing.Md),
         ) {
             item {
-                Text(
-                    "analytics",
-                    style = FitaiTheme.typography.h1,
-                    color = FitaiTheme.colors.text,
-                    modifier = Modifier.semantics {
-                        heading()
-                    },
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                    Text(
+                        "analytics",
+                        style = FitaiTheme.typography.h1,
+                        color = FitaiTheme.colors.text,
+                        modifier = Modifier.semantics {
+                            heading()
+                        },
+                    )
+                    Text(
+                        "Training overview, progression, and personal records",
+                        style = FitaiTheme.typography.body,
+                        color = FitaiTheme.colors.textMuted,
+                    )
+                }
             }
             // A link rather than a tab: the review is one Monday-to-Sunday week, this page the range below (Analytics.tsx).
-            item { FitaiButton("Weekly review", onClick = navigation.openReview, variant = ButtonVariant.Secondary, size = ButtonSize.Sm) }
             item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-                    items(analyticsTabs(user?.trainingStyleId)) { tab ->
-                        FitaiChip(tab.label, selected = state.tab == tab, onClick = { vm.selectTab(tab) })
-                    }
-                }
+                FitaiButton(
+                    "Weekly review",
+                    onClick = navigation.openReview,
+                    variant = ButtonVariant.Secondary,
+                    size = ButtonSize.Sm,
+                    leadingIcon = LucideIcons.CalendarCheck,
+                )
+            }
+            // Every page on screen at once, as the web's grid: a row of chips hid all but the first three.
+            item {
+                val tabs = remember(user?.trainingStyleId) { analyticsTabs(user?.trainingStyleId).map { TabItem(it, it.label, it.icon) } }
+                FitaiTabGrid(tabs, selected = state.tab, onSelect = vm::selectTab, description = ANALYTICS_TABS)
             }
             if (state.tab.usesRange) {
                 item {
@@ -171,58 +191,37 @@ private fun LazyListScope.overview(overview: TrainingOverview, units: Units, cha
 
 @Composable
 private fun StatGrid(overview: TrainingOverview, units: Units) {
-    val now = overview.currentStats
-    val before = overview.previousStats
-    val distanceLabel = if (units.distance == "miles") "mi" else "km"
+    val stats = remember(overview, units.distance) { overviewStats(overview.currentStats, overview.previousStats, units.distance) }
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-            Stat("Per week", formatNumber(now.avgPerWeek), delta(now.avgPerWeek, before?.avgPerWeek), Modifier.weight(1f))
-            Stat(
-                "Workouts",
-                now.totalWorkouts.toString(),
-                delta(now.totalWorkouts.toDouble(), before?.totalWorkouts?.toDouble()),
-                Modifier.weight(1f),
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-            Stat(
-                "Running",
-                "${formatNumber(metersToUserDistance(now.totalRunningMeters, units.distance))} $distanceLabel",
-                delta(now.totalRunningMeters, before?.totalRunningMeters),
-                Modifier.weight(1f),
-            )
-            Stat("Avg duration", "${formatNumber(now.avgDuration)} min", delta(now.avgDuration, before?.avgDuration), Modifier.weight(1f))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-            Stat(
-                "Avg RPE",
-                now.avgRpe?.let(::formatNumber) ?: "—",
-                delta(now.avgRpe, before?.avgRpe, lowerIsBetter = true),
-                Modifier.weight(1f),
-            )
-            Stat(
-                "Adherence",
-                now.avgCompliancePct?.let { "${formatNumber(it)}%" } ?: "—",
-                delta(now.avgCompliancePct, before?.avgCompliancePct),
-                Modifier.weight(1f),
-            )
+        stats.chunked(STAT_COLUMNS).forEach { row ->
+            // Each row as tall as its taller tile, so a tile with a badge doesn't leave its neighbour short.
+            Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                row.forEach { Stat(it, Modifier.weight(1f).fillMaxHeight()) }
+            }
         }
     }
 }
 
 @Composable
-private fun Stat(label: String, value: String, change: Delta?, modifier: Modifier) {
+private fun Stat(stat: OverviewStat, modifier: Modifier) {
+    val colors = FitaiTheme.colors
+    val type = FitaiTheme.typography
     FitaiCard(modifier) {
-        Text(label, style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
-        Text(value, style = FitaiTheme.typography.metric, color = FitaiTheme.colors.text)
-        when (change) {
-            is Delta.Change -> FitaiBadge(
-                "${if (change.percent > 0) "+" else ""}${formatNumber(change.percent)}%",
-                tone = if (change.better) BadgeTone.Success else BadgeTone.Warning,
-            )
-            Delta.New -> FitaiBadge("new", tone = BadgeTone.Accent)
-            Delta.Same -> FitaiBadge("=")
-            null -> Unit
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+            Text(stat.label.uppercase(), style = type.label, color = colors.textMuted)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                Text(stat.value, style = type.metricSm, color = colors.text, modifier = Modifier.alignByBaseline())
+                stat.unit?.let { Text(it, style = type.bodySm, color = colors.textMuted, modifier = Modifier.alignByBaseline()) }
+            }
+            when (val change = stat.change) {
+                is Delta.Change -> FitaiBadge(
+                    "${if (change.percent > 0) "+" else ""}${formatNumber(change.percent)}%",
+                    tone = if (change.better) BadgeTone.Success else BadgeTone.Warning,
+                )
+                Delta.New -> FitaiBadge("new", tone = BadgeTone.Accent)
+                Delta.Same -> FitaiBadge("=")
+                null -> Unit
+            }
         }
     }
 }
@@ -362,3 +361,21 @@ private fun ProgressionChart(
         BarChart(days.map { Bar(it.date, value(it)) }, label = title)
     }
 }
+
+/** What a screen reader calls the grid of pages, and what tells its cells from the bottom bar's. */
+const val ANALYTICS_TABS = "Analytics sections"
+
+private val AnalyticsTab.icon: ImageVector
+    get() = when (this) {
+        AnalyticsTab.Overview -> LucideIcons.BarChart3
+        AnalyticsTab.Breakdown -> LucideIcons.PieChart
+        AnalyticsTab.Records -> LucideIcons.Trophy
+        AnalyticsTab.Progression -> LucideIcons.TrendingUp
+        AnalyticsTab.Sessions -> LucideIcons.Gauge
+        AnalyticsTab.Insights -> LucideIcons.Sparkles
+        AnalyticsTab.Predictor -> LucideIcons.Timer
+        AnalyticsTab.Maf -> LucideIcons.HeartPulse
+        AnalyticsTab.Fuelling -> LucideIcons.UtensilsCrossed
+    }
+
+private const val STAT_COLUMNS = 2

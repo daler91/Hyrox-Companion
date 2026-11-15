@@ -7,7 +7,9 @@ import com.fitai.coach.core.api.generated.NutritionLogEntryWithNutrition
 import com.fitai.coach.core.api.generated.NutritionMealFuelTarget
 import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.nutrition.Per100gMacros
+import com.fitai.coach.ui.format.formatNumber
 import kotlin.math.abs
+import kotlin.math.round
 
 /**
  * A portion the log sheet offers: grams, a named serving, or the food's own
@@ -96,3 +98,48 @@ fun NutritionLogEntryWithNutrition.Per100g.toMacros() = Per100gMacros(
 )
 
 private fun trimGrams(grams: Double): String = if (grams % 1.0 == 0.0) grams.toLong().toString() else grams.toString()
+
+/**
+ * One macro of the day for its tile: the number, its name with the unit, and
+ * the number against its target ("1226 / 2600") when there is one.
+ */
+data class DayMacro(val label: String, val value: Double, val target: Double?) {
+    /** A whole number: a tile is for a glance, and the decimals are in the entries. */
+    val shown: String get() = formatNumber(round(value))
+    val against: String? get() = target?.takeIf { it > 0 }?.let { "$shown / ${formatNumber(round(it))}" }
+
+    /** "Calories 1226 of 2600", as a screen reader says the tile. */
+    val spoken: String get() = "$label $shown" + (target?.takeIf { it > 0 }?.let { " of ${formatNumber(round(it))}" } ?: "")
+}
+
+/** The day's five tiles in the web's order (MacroProgressGrid); fibre has no target to chase. */
+fun dayMacros(summary: GetNutritionSummaryResponse): List<DayMacro> {
+    val target = summary.effectiveTarget
+    return listOf(
+        DayMacro("Calories", summary.totals.calories, target?.calories),
+        DayMacro("Protein (g)", summary.totals.protein, target?.proteinG),
+        DayMacro("Carbs (g)", summary.totals.carb, target?.carbG),
+        DayMacro("Fat (g)", summary.totals.fat, target?.fatG),
+        DayMacro("Fiber (g)", summary.totals.fiber, null),
+    )
+}
+
+/** One macro of a meal against the meal's target: "63/38g". */
+data class MealMacro(val label: String, val logged: Double, val target: Double) {
+    val against: String get() = "${formatNumber(round(logged))}/${formatNumber(round(target))}g"
+    val spoken: String get() = "$label ${formatNumber(round(logged))} of ${formatNumber(round(target))} grams"
+}
+
+/** Protein, carbs and fat the meal's entries add up to, against its target (MealMacroBars). */
+fun mealMacros(entries: List<NutritionLogEntryWithNutrition>, target: NutritionMealFuelTarget): List<MealMacro> = listOf(
+    MealMacro("Protein", entries.sumOf { it.nutrition.protein }, target.proteinG),
+    MealMacro("Carbs", entries.sumOf { it.nutrition.carb }, target.carbG),
+    MealMacro("Fat", entries.sumOf { it.nutrition.fat }, target.fatG),
+)
+
+/** "80 g · 303 kcal · P 10 C 54 F 5": what was eaten, in whole numbers. */
+fun entrySummary(entry: NutritionLogEntryWithNutrition): String {
+    val n = entry.nutrition
+    return "${formatNumber(entry.quantityG)} g · ${formatNumber(round(n.calories))} kcal · " +
+        "P ${formatNumber(round(n.protein))} C ${formatNumber(round(n.carb))} F ${formatNumber(round(n.fat))}"
+}

@@ -1,9 +1,10 @@
 package com.fitai.coach.ui
 
-import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
@@ -15,9 +16,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import com.fitai.coach.core.auth.AuthState
+import com.fitai.coach.ui.analytics.ANALYTICS_TABS
 import com.fitai.coach.ui.links.DeepLink
 import com.fitai.coach.ui.links.DeepLinks
 import java.time.LocalDate
@@ -199,8 +202,10 @@ class AppUiTest {
         appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
             awaitNode(hasContentDescription("Log Workout"))
             onNodeWithContentDescription("Log Workout").performClick()
+            // By its action, not by a tap at its place on screen: the page can still be settling when it is found.
+            val duplicate = hasText("Duplicate last workout") and hasClickAction()
             awaitNode(hasText("Duplicate last workout"))
-            onNodeWithText("Duplicate last workout").performClick()
+            onNode(duplicate).performSemanticsAction(SemanticsActions.OnClick)
 
             awaitNode(hasText("Back Squat"))
             onNodeWithText("Confirm exercises").assertExists()
@@ -221,6 +226,36 @@ class AppUiTest {
 
             waitUntil(timeoutMillis = 10_000) {
                 api.sent("PATCH", "/api/v1/preferences").any { it.body.orEmpty().contains("\"weightUnit\":\"lbs\"") }
+            }
+        }
+    }
+
+    @Test
+    fun theCoachButtonStaysOffTheLogFormAndEveryAnalyticsPageIsInTheGrid() {
+        val api = FakeApi().apply { establishedAccount() }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
+            awaitNode(hasContentDescription("open coach"))
+            onNodeWithContentDescription("Log Workout").performClick()
+            awaitNode(hasText("Continue to exercises"))
+            // The form's own Continue button sits where the coach button would float.
+            assertTrue(onAllNodes(hasContentDescription("open coach")).fetchSemanticsNodes().isEmpty())
+            awaitNode(hasText("Workout details"))
+            awaitNode(hasText("Describe your workout"))
+
+            onNodeWithContentDescription("Analytics").performClick()
+            awaitNode(hasContentDescription("open coach"))
+            // No page is scrolled out of sight: each has a cell in the grid.
+            for (page in listOf(
+                "Overview",
+                "Breakdown",
+                "Records",
+                "Progression",
+                "Session quality",
+                "Coach insights",
+                "Race predictor",
+                "Fuelling",
+            )) {
+                awaitNode(hasText(page) and hasAnyAncestor(hasContentDescription(ANALYTICS_TABS)))
             }
         }
     }
@@ -517,19 +552,11 @@ class AppUiTest {
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.openCard(focus: String) = onAllNodesWithText(focus).onLast().performClick()
 
-/** A list that scrolls sideways. */
-private val scrollsSideways = SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)
-
-/**
- * Scrolls the Analytics tab row (the page's first sideways list; the range
- * chips are the second) to [label] and taps it. The row is rebuilt when the
- * athlete's training style arrives (it decides the MAF tab), so the scroll is
- * retried until the row has settled.
- */
+/** Opens one of the Analytics pages by its name in the tab grid. */
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.openAnalyticsTab(label: String) {
-    waitUntil(timeoutMillis = 10_000) {
-        runCatching { onAllNodes(scrollsSideways).onFirst().performScrollToNode(hasText(label)) }.isSuccess
-    }
-    onNodeWithText(label).performClick()
+    // Every page is in the grid at the top: the cell is the one inside it, not a heading of the same name further down.
+    val cell = hasText(label) and hasAnyAncestor(hasContentDescription(ANALYTICS_TABS))
+    awaitNode(cell)
+    onNode(cell and hasClickAction()).performClick()
 }
