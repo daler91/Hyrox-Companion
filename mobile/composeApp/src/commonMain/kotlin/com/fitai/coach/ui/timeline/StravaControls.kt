@@ -1,8 +1,11 @@
 package com.fitai.coach.ui.timeline
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -130,19 +133,34 @@ fun StravaBadge(entry: TimelineEntry, controls: StravaControls) {
     }
 }
 
-/** "Was this your Easy Run? [Link] [Not this one]" (DeviceLinkSuggestion). */
+/**
+ * "Was this your Easy Run?" over its two answers (DeviceLinkSuggestion). The
+ * question has the box's width to itself: beside the buttons a long session
+ * name wrapped and pushed the second one off the card.
+ */
 @Composable
 fun LinkSuggestion(suggestion: DeviceLinkOption, controls: StravaControls) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
-    Row(
-        Modifier.fillMaxWidth().border(1.dp, colors.warning, Radius.Sm).padding(start = Spacing.Sm),
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(colors.warning.copy(alpha = LINK_PROMPT_TINT), Radius.Sm)
+            .border(1.dp, colors.warning.copy(alpha = LINK_PROMPT_BORDER), Radius.Sm)
+            .padding(start = Spacing.Md, top = Spacing.Sm, end = Spacing.Xs),
     ) {
-        Text("Was this your ${suggestion.label}?", style = type.bodySm, color = colors.text, modifier = Modifier.weight(1f))
-        TextButton(onClick = { controls.onLink(suggestion) }) { Text("Link", style = type.label, color = colors.accentText) }
-        TextButton(onClick = controls.onDismissSuggestion) { Text("Not this one", style = type.label, color = colors.textMuted) }
+        Text("Was this your ${suggestion.label}?", style = type.bodySm, color = colors.text)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { controls.onLink(suggestion) }, contentPadding = PaddingValues(end = Spacing.Lg)) {
+                Text("Link", style = type.label, color = colors.accentText)
+            }
+            // In the text colour: the muted one falls short of AA on the box's tint.
+            TextButton(onClick = controls.onDismissSuggestion) { Text("Not this one", style = type.label, color = colors.text) }
+        }
     }
 }
 
+/** How strongly the link prompt's box is tinted amber, over its card. */
+const val LINK_PROMPT_TINT = 0.08f
+private const val LINK_PROMPT_BORDER = 0.5f
 private const val MIN_TOUCH = 48

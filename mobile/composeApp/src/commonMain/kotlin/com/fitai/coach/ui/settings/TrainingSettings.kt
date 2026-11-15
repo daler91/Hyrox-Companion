@@ -55,12 +55,6 @@ fun TrainingSettings(toasts: SnackbarHostState) {
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
     val prefs = state.preferences ?: return
 
-    Text(
-        "Training",
-        style = FitaiTheme.typography.h2,
-        color = FitaiTheme.colors.text,
-        modifier = Modifier.padding(top = Spacing.Sm).semantics { heading() },
-    )
     RaceProfileCard(prefs, state.saving == "race") { vm.saveCard("race", it) }
     BodyCompositionCard(prefs, state.saving == "body") { vm.saveCard("body", it) }
     HeartRateCard(prefs, state.saving == "heart") { vm.saveCard("heart", it) }

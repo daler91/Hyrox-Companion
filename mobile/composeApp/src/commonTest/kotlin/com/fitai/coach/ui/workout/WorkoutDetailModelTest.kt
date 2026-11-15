@@ -197,10 +197,64 @@ class WorkoutDetailModelTest {
 
     @Test
     fun theCadenceTakesTheServersUnit() {
-        assertEquals(listOf("88 rpm cadence"), deviceDetails(recorded(""","avgCadence":88.4,"avgCadenceUnit":"rpm""""), "km"))
-        assertEquals(listOf("171 spm cadence"), deviceDetails(recorded(""","avgCadence":171,"avgCadenceUnit":"spm""""), "km"))
+        fun details(extra: String) = deviceDetails(recorded(extra), "km").map { it.text }
+        assertEquals(listOf("88 rpm cadence"), details(""","avgCadence":88.4,"avgCadenceUnit":"rpm""""))
+        assertEquals(listOf("171 spm cadence"), details(""","avgCadence":171,"avgCadenceUnit":"spm""""))
         // From a server too old to say, the number alone.
-        assertEquals(listOf("171 cadence"), deviceDetails(recorded(""","avgCadence":171"""), "km"))
+        assertEquals(listOf("171 cadence"), details(""","avgCadence":171"""))
+    }
+
+    @Test
+    fun theRecordingsFiguresComeApartFromWhatTheyMeasure() {
+        val ride = recorded(""","avgSpeed":8.3333,"avgWatts":210,"sufferScore":55""")
+        assertEquals(
+            listOf(DeviceDetail("30 km/h", "avg speed"), DeviceDetail("210 W", "power"), DeviceDetail("55", "relative effort")),
+            deviceDetails(ride, "km"),
+        )
+        // Nothing for a workout no recording is linked to, whatever it carries.
+        assertEquals(emptyList(), deviceDetails(ride.copy(source = "manual", stravaActivityId = null), "km"))
+    }
+
+    @Test
+    fun theSummaryCardHasATileForEachFigureTheWorkoutHas() {
+        val run = recorded(""","duration":23,"distanceMeters":3830,"avgHeartrate":169,"maxHeartrate":188,"calories":467,"rpe":7""")
+        assertEquals(
+            listOf(
+                SummaryStat("Duration", "23", "min"),
+                SummaryStat("Distance", "3.8", "km"),
+                SummaryStat("Avg HR", "169", "bpm"),
+                SummaryStat("Max HR", "188", "bpm"),
+                SummaryStat("Calories", "467", "kcal"),
+                SummaryStat("RPE", "7/10"),
+            ),
+            summaryStats(run, "km"),
+        )
+        assertEquals(SummaryStat("Distance", "2.4", "mi"), summaryStats(run, "miles")[1])
+        // A workout with nothing measured has no card at all.
+        assertEquals(emptyList(), summaryStats(recorded(""","duration":0,"calories":0"""), "km"))
+    }
+
+    @Test
+    fun theHeartRateTileCarriesTheMafStatusAndSaysIt() {
+        val over = recorded(
+            ""","avgHeartrate":169,"mafCompliance":{"compliancePct":40,"classification":"over_ceiling",""" +
+                """"nextAction":"Slow down","avgOverBy":19}""",
+        )
+        val tile = summaryStats(over, "km").single()
+        assertEquals(MafStatus("19 over MAF", BadgeTone.Danger, "Slow down"), tile.status)
+        assertEquals("Avg HR 169 bpm, 19 over MAF", tile.spoken)
+        assertEquals("RPE 7/10", SummaryStat("RPE", "7/10").spoken)
+    }
+
+    @Test
+    fun aRecordingThatStoodStillNamesItsDurationMovingTime() {
+        val stopped = ApiJson.decodeFromString(
+            WorkoutLogDetail.serializer(),
+            """{"id":"w1","userId":"u1","date":"2026-11-10","focus":"Run","mainWorkout":"","countsAsTraining":true,""" +
+                """"autoLinkRecordingOnly":false,"deviceActivity":{"raw":{"moving_time":1380,"elapsed_time":1500}},""" +
+                """"exerciseSets":[],"structureBlocks":[],"source":"strava","duration":23}""",
+        )
+        assertEquals("Moving time", summaryStats(stopped, "km").single().label)
     }
 
     @Test

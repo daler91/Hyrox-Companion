@@ -3,6 +3,8 @@ package com.fitai.coach.ui.theme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
+import com.fitai.coach.ui.components.CARD_TONE_FILL
+import com.fitai.coach.ui.timeline.LINK_PROMPT_TINT
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.test.Test
@@ -47,6 +49,36 @@ class ContrastTest {
         val toastAction = if (c.isDark) LightColors.accentText else DarkColors.accentText
         text("toast text", c.background, c.text)
         text("toast action", toastAction, c.text)
+    }
+
+    @Test
+    fun exerciseChipsMeetAaOnEveryCardTheySitOn() = bothThemes { c ->
+        // A timeline card is plain, or tinted green when done and amber when missed; the chip's own tint lies over that.
+        val cards = listOf(
+            "plain" to c.card,
+            "completed" to c.success.copy(alpha = CARD_TONE_FILL).compositeOver(c.card),
+            "missed" to c.warning.copy(alpha = CARD_TONE_FILL).compositeOver(c.card),
+        )
+        for (category in EXERCISE_CATEGORIES + "other") {
+            val chip = categoryChipColors(category, c)
+            for ((name, card) in cards) text("$category chip on a $name card", chip.content, chip.container.compositeOver(card))
+        }
+        // The muted lines on a toned card: its plan line, notes and recording figures.
+        for ((name, card) in cards) text("textMuted on a $name card", c.textMuted, card)
+    }
+
+    @Test
+    fun badgesAndTheLinkPromptMeetAaOnATonedCard() = bothThemes { c ->
+        val completed = c.success.copy(alpha = CARD_TONE_FILL).compositeOver(c.card)
+        val missed = c.warning.copy(alpha = CARD_TONE_FILL).compositeOver(c.card)
+        // A badge's own 10% tint lies over the card's.
+        text("completed badge on its card", c.success, c.success.copy(alpha = 0.1f).compositeOver(completed))
+        text("Strava badge on a completed card", c.warning, c.warning.copy(alpha = 0.1f).compositeOver(completed))
+        text("missed badge on its card", c.warning, c.warning.copy(alpha = 0.1f).compositeOver(missed))
+        // "Was this your …?" on a recording's card, with its two answers.
+        val prompt = c.warning.copy(alpha = LINK_PROMPT_TINT).compositeOver(completed)
+        text("link prompt question", c.text, prompt)
+        text("link prompt's Link", c.accentText, prompt)
     }
 
     @Test

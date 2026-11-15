@@ -37,6 +37,28 @@ scales up to 200%) are in `composeApp/src/androidHostTest/snapshots`; after an
 intended change, `./gradlew :composeApp:recordRoborazziAndroidHostTest`
 rewrites them for the commit.
 
+### Comparing with the web app
+
+The app's screens follow the web app's layout at phone width.
+`LayoutGalleryTest` draws the timeline, a workout, the coach panel and Settings
+to PNG files over a real server's data, to set beside the web app in a browser
+at the same size (391 x 868). It is skipped unless it is given a server:
+
+```sh
+# 1. A local web server that signs every request in as its dev user (never a deployed one).
+pnpm run build
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres NODE_ENV=test PORT=5000 \
+  ENCRYPTION_KEY=01234567890123456789012345678901 ALLOW_DEV_AUTH_BYPASS=true node dist/index.js &
+# 2. A plan, a missed session, two recordings and a coach conversation for that user.
+script/mobile-gallery/seed.sh
+# 3. The app's screens, into composeApp/build/gallery. --rerun: Gradle can't see the server's data change.
+cd mobile && FITAI_GALLERY_UPSTREAM=http://localhost:5000 ./gradlew :composeApp:jvmTest --rerun --tests '*LayoutGalleryTest*'
+```
+
+The images are dark-theme unless `FITAI_GALLERY_THEME=light`. The seed script
+deletes the dev user's plans and workouts, and refuses a database that isn't
+on localhost.
+
 detekt's findings in code written before it was added (the Phase 2 ports, which
 mirror their TypeScript originals) are recorded in `core/detekt-baseline.xml`;
 new code is held to the rules. ktlint follows `.editorconfig`.

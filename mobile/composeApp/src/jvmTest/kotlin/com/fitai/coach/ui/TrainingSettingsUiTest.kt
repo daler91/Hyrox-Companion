@@ -97,8 +97,7 @@ private const val PREFS =
 
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.openSettings() {
-    awaitNode(hasContentDescription("Settings"))
-    onNode(hasContentDescription("Settings")).performSemanticsAction(SemanticsActions.OnClick)
+    openSettingsTab("Training")
     awaitNode(hasText("Race profile"))
 }
 

@@ -6,6 +6,7 @@ import com.fitai.coach.core.api.generated.TimelineCoachNotes
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.api.generated.TrainingPlan
 import com.fitai.coach.ui.components.BadgeTone
+import com.fitai.coach.ui.components.CardTone
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -137,5 +138,48 @@ class TimelineStatusTest {
         // The sticky selection bar (item 1) stays on screen, but today above is still above.
         assertEquals(TodayDirection.Above, todayDirection(todayItem = 4, firstVisible = 8, visible = setOf(1, 8, 9)))
         assertNull(todayDirection(todayItem = -1, firstVisible = 0, visible = setOf(0, 1)))
+    }
+
+    // --- The card's tint, plan line and recording figures ---
+
+    @Test
+    fun aCardIsTintedByItsStatus() {
+        assertEquals(CardTone.Success, cardTone(entry(status = TimelineEntry.Status.Completed)))
+        assertEquals(CardTone.Warning, cardTone(entry(status = TimelineEntry.Status.Skipped)))
+        assertEquals(CardTone.Warning, cardTone(entry(status = TimelineEntry.Status.Missed).copy(recoverable = true)))
+        // A miss with nothing left to decide is plain, as a planned session is.
+        assertEquals(CardTone.Plain, cardTone(entry(status = TimelineEntry.Status.Missed)))
+        assertEquals(CardTone.Plain, cardTone(entry()))
+    }
+
+    @Test
+    fun thePlanLineNamesThePlanAndItsDay() {
+        assertEquals("8-Week Plan · Saturday", planLine(entry().copy(planName = "8-Week Plan", dayName = "Saturday")))
+        assertEquals("Saturday", planLine(entry().copy(planName = " ", dayName = "Saturday")))
+        assertNull(planLine(entry()))
+    }
+
+    @Test
+    fun aLinkedRecordingsFiguresReadAsOnTheWeb() {
+        val recorded = entry(status = TimelineEntry.Status.Completed, workoutLogId = "w1").copy(
+            stravaActivityId = "9001",
+            calories = 467,
+            avgWatts = 338,
+            avgCadence = 73.6,
+            avgCadenceUnit = TimelineEntry.AvgCadenceUnit.Spm,
+            avgSpeed = 2.75,
+            sufferScore = 71,
+        )
+        assertEquals(listOf("467 cal", "338W", "74 spm", "9.9 km/h", "Effort 71"), deviceStats(recorded, "km").map { it.text })
+        assertEquals("6.2 mph", deviceStats(recorded, "miles")[3].text)
+        // Zeroes are absent figures, and a session no recording is linked to has none to show.
+        assertEquals(
+            listOf("467 cal"),
+            deviceStats(recorded.copy(avgWatts = 0, avgCadence = null, avgSpeed = -1.0, sufferScore = null), "km").map {
+                it.text
+            },
+        )
+        assertEquals(emptyList(), deviceStats(recorded.copy(stravaActivityId = null), "km"))
+        assertEquals(listOf("467 cal"), deviceStats(entry().copy(source = "strava", calories = 467), "km").map { it.text })
     }
 }

@@ -1,11 +1,11 @@
 package com.fitai.coach.ui.timeline
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -39,6 +40,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -312,7 +314,8 @@ private fun TimelineList(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = Spacing.Lg, vertical = Spacing.Md),
+            // Room under the last card for the coach button that floats over the list.
+            contentPadding = PaddingValues(start = Spacing.Lg, top = Spacing.Md, end = Spacing.Lg, bottom = LIST_END_CLEARANCE.dp),
             verticalArrangement = Arrangement.spacedBy(Spacing.Md),
         ) {
             item(key = "header") {
@@ -422,10 +425,11 @@ private fun DayRow(
                     onMove = { date -> vm.move(entry, date) },
                     onPickDate = if (canMove(entry)) ({ onPickDate(entry) }) else null,
                 ),
-                chips = remember(entry, state.records) { exerciseChips(entry, state.records) },
+                chips = remember(entry, state.records, state.units) { exerciseChips(entry, state.records, state.units) },
                 fuelling = remember(entry, state.bodyweightKg) { FuellingTarget.of(entry, state.bodyweightKg) },
                 pending = state.isPending(entry),
                 mafCeiling = state.mafCeiling,
+                distanceUnit = state.units.distanceUnit,
                 strava = stravaControls(
                     entry,
                     day.entries,
@@ -550,17 +554,24 @@ private fun ReviewPromptCard(prompt: ReviewPrompt, onOpen: () -> Unit, onDismiss
 private fun DayHeader(day: TimelineDay, today: String, onAddNote: () -> Unit) {
     val label = dayLabel(day.date, today)
     val colors = FitaiTheme.colors
+    // The web's date row: a dot and the day on the left, the plan week and the note button at the card's right edge.
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+        Box(Modifier.size(8.dp).background(if (day.isToday) colors.accent else colors.borderStrong, CircleShape))
         Text(
             label,
             style = FitaiTheme.typography.h3,
-            color = if (day.isToday) colors.accent else colors.text,
-            modifier = Modifier.weight(1f, fill = false).semantics { heading() },
+            color = if (day.isToday) colors.accent else colors.textMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).semantics { heading() },
         )
         day.weekNumber?.let { FitaiBadge("Week $it") }
-        Spacer(Modifier.weight(1f))
         // Today's row spells it out: it's where new athletes learn notes exist (TimelineDateHeader).
-        TextButton(onClick = onAddNote, modifier = Modifier.semantics { contentDescription = "Log a note for $label" }) {
+        TextButton(
+            onClick = onAddNote,
+            contentPadding = PaddingValues(horizontal = Spacing.Sm),
+            modifier = Modifier.semantics { contentDescription = "Log a note for $label" },
+        ) {
             Icon(LucideIcons.StickyNote, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(16.dp))
             if (day.isToday) Text(" Note", style = FitaiTheme.typography.label, color = colors.textMuted)
         }
@@ -607,3 +618,6 @@ private fun Welcome(actions: WelcomeActions, creatingTemplate: Boolean) {
         FitaiButton("Log a note", onClick = actions.logNote, variant = ButtonVariant.Ghost, leadingIcon = LucideIcons.StickyNote)
     }
 }
+
+/** dp under the list's last card: the coach button (56) and its margin sit there. */
+private const val LIST_END_CLEARANCE = 96

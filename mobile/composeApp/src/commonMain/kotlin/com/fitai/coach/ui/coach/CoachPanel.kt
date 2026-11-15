@@ -1,9 +1,12 @@
 package com.fitai.coach.ui.coach
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -13,12 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -310,7 +314,12 @@ private fun AssistantBubble(item: ChatItem, state: CoachUiState, vm: CoachViewMo
             )
         }
         if (item.fromNotes) FitaiBadge("From your coaching notes")
-        if (item.content.isNotBlank()) MarkdownText(item.content)
+        if (item.content.isNotBlank()) {
+            // The reply in its own bordered bubble, as the athlete's is in a filled one: the two sides read apart at a glance.
+            Box(Modifier.background(colors.muted, Radius.Lg).border(1.dp, colors.border, Radius.Lg).padding(Spacing.Md)) {
+                MarkdownText(item.content)
+            }
+        }
         item.proposal?.let { proposal ->
             ProposalCard(
                 proposal,
@@ -417,6 +426,7 @@ private fun SuggestionCard(suggestion: AiSuggestion, applying: Boolean, onApply:
 /** The composer's extra ways in: a photo from the gallery or camera, and where dictation errors go. */
 private class ComposerInputs(val pickPhoto: (() -> Unit)?, val takePhoto: (() -> Unit)?, val onError: (String) -> Unit)
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Composer(state: CoachUiState, vm: CoachViewModel, inputs: ComposerInputs, seed: String) {
     var text by rememberSaveable(seed) { mutableStateOf(seed) }
@@ -427,13 +437,13 @@ private fun Composer(state: CoachUiState, vm: CoachViewModel, inputs: ComposerIn
     )
     Column(
         Modifier.fillMaxWidth().padding(horizontal = Spacing.Lg, vertical = Spacing.Sm),
-        verticalArrangement = Arrangement.spacedBy(Spacing.Xs),
+        verticalArrangement = Arrangement.spacedBy(Spacing.Sm),
     ) {
         if (!state.busy && state.quickActions.isNotEmpty()) {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-                items(state.quickActions, key = {
-                    it.label
-                }) { action -> FitaiChip(action.label, selected = false, onClick = { vm.quickAction(action) }) }
+            // Wrapped, not scrolled sideways: every prompt is on screen, none cut off at the panel's edge.
+            // The chips bring their own touch-target height, so the rows need no gap of their own.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                state.quickActions.forEach { action -> FitaiChip(action.label, selected = false, onClick = { vm.quickAction(action) }) }
             }
         }
         state.photo?.let {
@@ -444,7 +454,7 @@ private fun Composer(state: CoachUiState, vm: CoachViewModel, inputs: ComposerIn
                 }
             }
         }
-        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
             inputs.takePhoto?.let {
                 IconButton(onClick = it, enabled = state.photo == null) {
                     Icon(LucideIcons.Camera, contentDescription = "take a photo", tint = FitaiTheme.colors.text)
@@ -460,6 +470,8 @@ private fun Composer(state: CoachUiState, vm: CoachViewModel, inputs: ComposerIn
                 { text = it },
                 "Message your coach",
                 modifier = Modifier.weight(1f),
+                placeholder = "Ask about your training…",
+                showLabel = false,
                 singleLine = false,
                 supportingText = if (text.length > MAX_CHAT_MESSAGE * COUNTER_FROM) "${text.length}/$MAX_CHAT_MESSAGE" else null,
                 error = if (text.length > MAX_CHAT_MESSAGE) "Too long to send" else null,
@@ -478,11 +490,19 @@ private fun Composer(state: CoachUiState, vm: CoachViewModel, inputs: ComposerIn
             if (state.sending) {
                 IconButton(onClick = vm::stop) { Icon(LucideIcons.Square, contentDescription = "stop", tint = FitaiTheme.colors.text) }
             } else {
-                IconButton(
+                // The one filled control in the composer: sending is what the row is for.
+                FilledIconButton(
                     onClick = { if (vm.send(text)) text = "" },
                     enabled = !state.suggesting && (text.isNotBlank() || state.photo != null),
+                    shape = Radius.Md,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = FitaiTheme.colors.primary,
+                        contentColor = FitaiTheme.colors.onPrimary,
+                        disabledContainerColor = FitaiTheme.colors.muted,
+                        disabledContentColor = FitaiTheme.colors.textMuted,
+                    ),
                 ) {
-                    Icon(LucideIcons.Send, contentDescription = "send", tint = FitaiTheme.colors.accent)
+                    Icon(LucideIcons.Send, contentDescription = "send")
                 }
             }
         }

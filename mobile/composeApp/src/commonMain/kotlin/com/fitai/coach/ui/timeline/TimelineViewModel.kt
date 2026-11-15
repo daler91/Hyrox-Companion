@@ -18,6 +18,7 @@ import com.fitai.coach.core.data.TimelineRepository
 import com.fitai.coach.core.data.UserSession
 import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.core.dates.currentHourIn
+import com.fitai.coach.core.units.UnitPreferences
 import com.fitai.coach.ui.components.UndoOffer
 import com.fitai.coach.ui.format.userMessage
 import com.fitai.coach.ui.fuelling.DateRange
@@ -80,6 +81,8 @@ data class TimelineUiState(
     val pending: Set<String> = emptySet(),
     /** The athlete's MAF ceiling, shown on planned runs; null unless they train the MAF method. */
     val mafCeiling: Int? = null,
+    /** The athlete's units, for the weights and distances on a card's chips and its recording's speed. */
+    val units: UnitPreferences = UnitPreferences(),
     /** Setting a start date, after the template plan was created (or from the empty timeline). */
     val planStart: PlanStart = PlanStart(),
 )
@@ -180,6 +183,7 @@ class TimelineViewModel(
             selection = picking,
             pending = activity.pending,
             mafCeiling = prefs?.takeIf(::isMafAthlete)?.mafHr,
+            units = UnitPreferences(prefs?.weightUnit, prefs?.distanceUnit),
             planStart = activity.planStart,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), TimelineUiState())

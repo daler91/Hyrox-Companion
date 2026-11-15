@@ -1,9 +1,15 @@
 package com.fitai.coach.ui
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
@@ -23,6 +29,7 @@ import com.fitai.coach.core.health.HealthSyncStore
 import com.fitai.coach.core.push.PushPreference
 import com.fitai.coach.core.push.PushRegistration
 import com.fitai.coach.core.push.PushTokens
+import com.fitai.coach.ui.settings.SETTINGS_TABS
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
@@ -39,6 +46,9 @@ import kotlinx.coroutines.runBlocking
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.dsl.module
+import java.net.URI
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -66,8 +76,12 @@ class FakeAuth(initial: AuthState, private val userId: String = "u1") : AuthGate
     }
 }
 
-/** The server, faked: answers by method and path; 404 for anything else. Records every request. */
-class FakeApi {
+/**
+ * The server, faked: answers by method and path; 404 for anything else. Records every request.
+ * With [upstream] (a server's base URL, e.g. a local one), anything not answered here is passed
+ * on to it, so the app can be rendered over real data (see LayoutGalleryTest).
+ */
+class FakeApi(private val upstream: String? = null) {
     data class Sent(val method: String, val path: String, val body: String?, val query: String = "")
 
     val requests = CopyOnWriteArrayList<Sent>()
@@ -94,8 +108,10 @@ class FakeApi {
                     Sent(request.method.value, request.url.encodedPath, (request.body as? TextContent)?.text, request.url.encodedQuery)
                 requests += sent
                 delays["${sent.method} ${sent.path}"]?.let { delay(it) }
-                val (status, body) = routes["${sent.method} ${sent.path}"] ?: (404 to """{"error":"Not found","code":"NOT_FOUND"}""")
-                val extra = responseHeaders["${sent.method} ${sent.path}"].orEmpty().map { (name, value) -> name to listOf(value) }
+                val (status, body, headers) = routes["${sent.method} ${sent.path}"]?.let { (status, body) ->
+                    Triple(status, body, responseHeaders["${sent.method} ${sent.path}"].orEmpty())
+                } ?: upstream?.let { forward(it, sent) } ?: Triple(404, """{"error":"Not found","code":"NOT_FOUND"}""", emptyMap())
+                val extra = headers.map { (name, value) -> name to listOf(value) }
                 respond(
                     body,
                     HttpStatusCode.fromValue(status),
@@ -105,6 +121,19 @@ class FakeApi {
             ApiConfig("https://api.test", AppIdentity("android", "1.0")),
         ) { "test-token" },
     )
+
+    private val forwarder by lazy { java.net.http.HttpClient.newHttpClient() }
+
+    /** [sent], asked of the server at [base]: its status, body and its own (X-) headers. */
+    private fun forward(base: String, sent: Sent): Triple<Int, String, Map<String, String>> {
+        val uri = URI.create(base + sent.path + if (sent.query.isEmpty()) "" else "?${sent.query}")
+        val body = sent.body?.let(HttpRequest.BodyPublishers::ofString) ?: HttpRequest.BodyPublishers.noBody()
+        val request = HttpRequest.newBuilder(uri).method(sent.method, body)
+            .header("Content-Type", "application/json").header("Authorization", "Bearer gallery").build()
+        val response = forwarder.send(request, HttpResponse.BodyHandlers.ofString())
+        val headers = response.headers().map().filterKeys { it.startsWith("x-", ignoreCase = true) }.mapValues { it.value.first() }
+        return Triple(response.statusCode(), response.body(), headers)
+    }
 
     /** The athlete already read the privacy notice. */
     fun privacyAcknowledged() = on(
@@ -230,6 +259,21 @@ fun appTest(
         setContent { CompositionLocalProvider(LocalViewModelStoreOwner provides app) { App() } }
         block(app)
     }
+}
+
+/**
+ * Opens Settings from the bottom bar, then one of its pages by its tab's name
+ * ("Training", "Recycle bin"). Settings opens on Account, so a test of any
+ * other page starts here.
+ */
+@OptIn(ExperimentalTestApi::class)
+fun ComposeUiTest.openSettingsTab(tab: String) {
+    awaitNode(hasContentDescription("Settings"))
+    onNode(hasContentDescription("Settings")).performSemanticsAction(SemanticsActions.OnClick)
+    // The bottom bar has a "Training" of its own: the page's tab is the one inside the tab grid.
+    val cell = hasText(tab) and hasAnyAncestor(hasContentDescription(SETTINGS_TABS))
+    awaitNode(cell)
+    onNode(cell and hasClickAction()).performSemanticsAction(SemanticsActions.OnClick)
 }
 
 /**

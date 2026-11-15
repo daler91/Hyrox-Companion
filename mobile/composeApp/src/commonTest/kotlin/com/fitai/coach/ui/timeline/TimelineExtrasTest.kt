@@ -12,6 +12,7 @@ import com.fitai.coach.core.api.generated.TrainingPlan
 import com.fitai.coach.core.data.AnnotationDraft
 import com.fitai.coach.core.exercises.knownExerciseLabel
 import com.fitai.coach.core.plans.TrainingPhase
+import com.fitai.coach.core.units.UnitPreferences
 import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.format.exerciseLabel
 import com.fitai.coach.ui.format.formatClock
@@ -233,6 +234,19 @@ class TimelineExtrasTest {
                 it.text
             },
         )
+    }
+
+    @Test
+    fun aChipIsInTheAthletesUnitsAndCarriesItsCategory() {
+        val pounds = UnitPreferences(weightUnit = "lbs", distanceUnit = "km")
+        // Stamped in kilograms: converted for an athlete on pounds, to the whole pound a plate set makes.
+        val stamped = entry("a", workoutLogId = "w1", sets = listOf(set("s1", "back_squat", reps = 5, weight = 100.0)))
+        assertEquals("${exerciseLabel("back_squat")} 5r 220lbs", exerciseChips(stamped, emptyMap(), pounds).single().text)
+        // No stamp: the number already means the athlete's unit, so it is labelled with it, never assumed to be kg.
+        val unstamped = listOf(set("s1", "back_squat", reps = 8, weight = 175.0).copy(weightUnit = null))
+        val chip = exerciseChips(entry("b", sets = unstamped), emptyMap(), pounds).single()
+        assertEquals("${exerciseLabel("back_squat")} 8r 175lbs", chip.text)
+        assertEquals("strength", chip.category)
     }
 
     @Test

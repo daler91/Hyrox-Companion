@@ -1,16 +1,24 @@
 package com.fitai.coach.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -19,15 +27,23 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,6 +68,7 @@ import com.fitai.coach.ui.components.FitaiSwitchRow
 import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.format.shortDate
+import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.links.DeepLink
 import com.fitai.coach.ui.platform.LocalAppBuild
 import com.fitai.coach.ui.platform.rememberBrowser
@@ -60,6 +77,7 @@ import com.fitai.coach.ui.platform.rememberHealthConnectAccess
 import com.fitai.coach.ui.privacy.PRIVACY_POLICY_URL
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
+import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.theme.Spacing
 import org.koin.compose.koinInject
 
@@ -70,6 +88,9 @@ fun SettingsScreen(
     onRunSetup: (() -> Unit)? = null,
     stravaReturn: DeepLink.StravaReturn? = null,
     onStravaReturnHandled: () -> Unit = {},
+    /** The page to open on, for a link that came for one ("Connect a device", "Enable AI Coach"); null stays where it is. */
+    openTab: SettingsTab? = null,
+    onTabOpened: () -> Unit = {},
 ) {
     val session = LocalUserSession.current
     val sessions = koinInject<SessionManager>()
@@ -90,38 +111,59 @@ fun SettingsScreen(
     }
     val browser = rememberBrowser()
     var dialog by remember { mutableStateOf<String?>(null) }
+    var tab by rememberSaveable { mutableStateOf(SettingsTab.Account) }
+    LaunchedEffect(openTab) {
+        openTab?.let {
+            tab = it
+            onTabOpened()
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.Lg),
-            verticalArrangement = Arrangement.spacedBy(Spacing.Md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Lg),
         ) {
-            Text("settings", style = FitaiTheme.typography.h1, color = FitaiTheme.colors.text, modifier = Modifier.semantics { heading() })
-            Profile(state, onRunSetup)
-            state.preferences?.let { prefs -> Units(prefs, vm::update) }
-            TrainingSettings(toasts)
-            state.preferences?.let { prefs ->
-                Coach(prefs, vm::update)
-                EmailNotifications(prefs, vm::update)
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                Text(
+                    "settings",
+                    style = FitaiTheme.typography.h1,
+                    color = FitaiTheme.colors.text,
+                    modifier = Modifier.semantics {
+                        heading()
+                    },
+                )
+                Text("Manage your account and preferences", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
             }
-            PushNotifications(state, vm)
-            Integrations(state, vm, onConnectStrava = {
-                vm.connectStrava(browser::open)
-            }, onConnectGarmin = { dialog = GARMIN_FORM }, onDisconnect = {
-                dialog =
-                    it
-            })
-            RecycleBinSection(toasts)
-            Privacy(state, vm)
-            Account(onSignOut = {
-                dialog = if (state.pendingWrites >
-                    0
-                ) {
-                    "sign-out-unsynced"
-                } else {
-                    "sign-out"
+            SettingsTabs(tab, onSelect = { tab = it })
+            when (tab) {
+                SettingsTab.Account -> {
+                    Profile(state)
+                    state.preferences?.let { prefs -> Units(prefs, vm::update) }
+                    onRunSetup?.let { GettingStarted(it) }
+                    Account(
+                        onSignOut = { dialog = if (state.pendingWrites > 0) "sign-out-unsynced" else "sign-out" },
+                        onDelete = { dialog = "delete" },
+                    )
                 }
-            }, onDelete = { dialog = "delete" })
+                SettingsTab.Training -> {
+                    TrainingSettings(toasts)
+                    state.preferences?.let { prefs -> Coach(prefs, vm::update) }
+                }
+                SettingsTab.Integrations -> Integrations(
+                    state,
+                    vm,
+                    onConnectStrava = { vm.connectStrava(browser::open) },
+                    onConnectGarmin = { dialog = GARMIN_FORM },
+                    onDisconnect = { dialog = it },
+                )
+                SettingsTab.Notifications -> {
+                    state.preferences?.let { prefs -> EmailNotifications(prefs, vm::update) }
+                    PushNotifications(state, vm)
+                }
+                SettingsTab.Data -> Privacy(state, vm)
+                SettingsTab.RecycleBin -> RecycleBinSection(toasts)
+            }
             LocalAppBuild.current.description.takeIf { it.isNotEmpty() }?.let { build ->
                 Text(
                     build,
@@ -131,17 +173,85 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+            // Room for the coach button that floats over the page's end.
+            Spacer(Modifier.height(END_CLEARANCE.dp))
         }
         FitaiToastHost(toasts, Modifier.align(Alignment.BottomCenter))
     }
     Dialogs(dialog, state, vm, onClose = { dialog = null })
 }
 
+/** The settings pages, as the web's tabs name and order them. */
+enum class SettingsTab(val label: String) {
+    Account("Account"),
+    Training("Training"),
+    Integrations("Integrations"),
+    Notifications("Notifications"),
+    Data("Data & Privacy"),
+    RecycleBin("Recycle bin"),
+}
+
+private val SettingsTab.icon: ImageVector
+    get() = when (this) {
+        SettingsTab.Account -> LucideIcons.User
+        SettingsTab.Training -> LucideIcons.Dumbbell
+        SettingsTab.Integrations -> LucideIcons.Link2
+        SettingsTab.Notifications -> LucideIcons.Bell
+        SettingsTab.Data -> LucideIcons.Database
+        SettingsTab.RecycleBin -> LucideIcons.Trash
+    }
+
+/**
+ * The pages as a two-column grid (the web's TabsList at phone width): six
+ * names don't fit one row, and a scrolling row would hide half of them.
+ */
 @Composable
-internal fun Section(title: String, content: @Composable () -> Unit) {
-    FitaiCard {
-        Text(title, style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text, modifier = Modifier.semantics { heading() })
-        content()
+private fun SettingsTabs(selected: SettingsTab, onSelect: (SettingsTab) -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(FitaiTheme.colors.muted, Radius.Lg)
+            .padding(Spacing.Xs)
+            .selectableGroup()
+            .semantics { contentDescription = SETTINGS_TABS },
+        verticalArrangement = Arrangement.spacedBy(Spacing.Xs),
+    ) {
+        SettingsTab.entries.chunked(TAB_COLUMNS).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                row.forEach { tab -> TabCell(tab, tab == selected, Modifier.weight(1f)) { onSelect(tab) } }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabCell(tab: SettingsTab, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val colors = FitaiTheme.colors
+    val content = if (selected) colors.text else colors.textMuted
+    Row(
+        modifier
+            .heightIn(min = MIN_TOUCH.dp)
+            .clip(Radius.Md)
+            .background(if (selected) colors.background else Color.Transparent)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .padding(horizontal = Spacing.Sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.Sm, Alignment.CenterHorizontally),
+    ) {
+        Icon(tab.icon, contentDescription = null, tint = content, modifier = Modifier.size(16.dp))
+        Text(tab.label, style = FitaiTheme.typography.button, color = content, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** A settings card: its name, a line on what it is for, then its rows, the card as wide as the page. */
+@Composable
+internal fun Section(title: String, description: String? = null, content: @Composable () -> Unit) {
+    FitaiCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+            Text(title, style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text, modifier = Modifier.semantics { heading() })
+            description?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted) }
+            content()
+        }
     }
 }
 
@@ -149,45 +259,77 @@ internal fun Section(title: String, content: @Composable () -> Unit) {
 internal fun Toggle(label: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) =
     FitaiSwitchRow(label, checked, onChange, enabled = enabled)
 
+/** A setting by name, what it affects under it, and its control at the row's end. */
 @Composable
-private fun Profile(state: SettingsUiState, onRunSetup: (() -> Unit)?) {
+private fun SettingRow(label: String, description: String, control: @Composable () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Md)) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = FitaiTheme.typography.button, color = FitaiTheme.colors.text)
+            Text(description, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+        }
+        control()
+    }
+}
+
+@Composable
+private fun Profile(state: SettingsUiState) {
     val user = state.user
     val name = listOfNotNull(user?.firstName, user?.lastName).joinToString(" ").ifBlank { user?.email ?: "User" }
-    Section("Profile") {
-        Text(name, style = FitaiTheme.typography.body, color = FitaiTheme.colors.text)
-        user?.email?.takeIf { it != name }?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted) }
-        Text("Managed through your login provider.", style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
-        onRunSetup?.let { FitaiButton("Run setup again", onClick = it, variant = ButtonVariant.Ghost) }
+    val type = FitaiTheme.typography
+    val colors = FitaiTheme.colors
+    Section("Profile", "Your personal information") {
+        Column {
+            Text("Display name", style = type.button, color = colors.text)
+            Text(name, style = type.body, color = colors.textMuted)
+        }
+        user?.email?.takeIf { it != name }?.let { email ->
+            Column {
+                Text("Email", style = type.button, color = colors.text)
+                Text(email, style = type.body, color = colors.textMuted)
+            }
+        }
+        Text("Your name is managed through your login provider.", style = type.caption, color = colors.textMuted)
     }
 }
 
 @Composable
 private fun Units(prefs: PreferencesResponse, update: (UpdateUserPreferences) -> Unit) {
-    Section("Units") {
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-            FitaiChip("kg", selected = prefs.weightUnit != "lbs", onClick = {
-                update(UpdateUserPreferences(weightUnit = UpdateUserPreferences.WeightUnit.Kg))
-            })
-            FitaiChip("lbs", selected = prefs.weightUnit == "lbs", onClick = {
-                update(UpdateUserPreferences(weightUnit = UpdateUserPreferences.WeightUnit.Lbs))
-            })
+    Section("Units", "Choose your preferred measurement units") {
+        SettingRow("Weight unit", "For sled weights, wall balls, etc.") {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                FitaiChip("kg", selected = prefs.weightUnit != "lbs", onClick = {
+                    update(UpdateUserPreferences(weightUnit = UpdateUserPreferences.WeightUnit.Kg))
+                })
+                FitaiChip("lbs", selected = prefs.weightUnit == "lbs", onClick = {
+                    update(UpdateUserPreferences(weightUnit = UpdateUserPreferences.WeightUnit.Lbs))
+                })
+            }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-            FitaiChip("km", selected = prefs.distanceUnit != "miles", onClick = {
-                update(UpdateUserPreferences(distanceUnit = UpdateUserPreferences.DistanceUnit.Km))
-            })
-            FitaiChip(
-                "miles",
-                selected = prefs.distanceUnit == "miles",
-                onClick = { update(UpdateUserPreferences(distanceUnit = UpdateUserPreferences.DistanceUnit.Miles)) },
-            )
+        SettingRow("Distance unit", "For running, rowing, etc.") {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                FitaiChip("km", selected = prefs.distanceUnit != "miles", onClick = {
+                    update(UpdateUserPreferences(distanceUnit = UpdateUserPreferences.DistanceUnit.Km))
+                })
+                FitaiChip(
+                    "miles",
+                    selected = prefs.distanceUnit == "miles",
+                    onClick = { update(UpdateUserPreferences(distanceUnit = UpdateUserPreferences.DistanceUnit.Miles)) },
+                )
+            }
         }
     }
 }
 
 @Composable
+private fun GettingStarted(onRunSetup: () -> Unit) {
+    Section("Getting started", "Run the welcome flow again if you skipped it or want to pick a different training plan.") {
+        FitaiButton("Run setup again", onClick = onRunSetup, variant = ButtonVariant.Secondary, leadingIcon = LucideIcons.RotateCw)
+    }
+}
+
+@Composable
 private fun Coach(prefs: PreferencesResponse, update: (UpdateUserPreferences) -> Unit) {
-    Section("AI coach") {
+    Section("AI coach", "Chat with a coach that knows your plan and your training.") {
         Toggle("AI coach", prefs.aiCoachEnabled == true) { update(UpdateUserPreferences(aiCoachEnabled = it)) }
         Toggle(
             "Apply the coach's plan changes automatically",
@@ -265,7 +407,7 @@ private fun Integrations(
     onConnectGarmin: () -> Unit,
     onDisconnect: (String) -> Unit,
 ) {
-    Section("Integrations") {
+    Section("Integrations", "Connect external services to sync your workouts") {
         val strava = state.strava
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
             Text("Strava", style = FitaiTheme.typography.label, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))
@@ -344,7 +486,7 @@ private fun Integrations(
 private fun Privacy(state: SettingsUiState, vm: SettingsViewModel) {
     val uri = LocalUriHandler.current
     val sharer = rememberFileSharer()
-    Section("Data & privacy") {
+    Section("Data & privacy", "Your diagnostics, your data and how it is handled.") {
         Toggle(
             "Send error diagnostics",
             state.errorReporting == true,
@@ -375,8 +517,10 @@ private fun Privacy(state: SettingsUiState, vm: SettingsViewModel) {
 
 @Composable
 private fun Account(onSignOut: () -> Unit, onDelete: () -> Unit) {
-    Section("Account") {
+    Section("Account", "Sign out on this phone. Your account and everything in it are kept.") {
         FitaiButton("Sign out", onClick = onSignOut, variant = ButtonVariant.Secondary, modifier = Modifier.fillMaxWidth())
+    }
+    Section("Danger zone", "Permanently delete your account and all associated data. This action cannot be undone.") {
         FitaiButton("Delete my account", onClick = onDelete, variant = ButtonVariant.Danger, modifier = Modifier.fillMaxWidth())
     }
 }
@@ -486,3 +630,12 @@ private fun DeleteAccountDialog(busy: Boolean, onConfirm: () -> Unit, onDismiss:
         dismissButton = { FitaiButton("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost) },
     )
 }
+
+/** What a screen reader calls the grid of pages. */
+const val SETTINGS_TABS = "Settings sections"
+
+private const val TAB_COLUMNS = 2
+private const val MIN_TOUCH = 48
+
+/** dp under the page's last card: the coach button (56) and its margin sit there. */
+private const val END_CLEARANCE = 72

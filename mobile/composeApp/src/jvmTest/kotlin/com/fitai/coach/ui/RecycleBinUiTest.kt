@@ -80,8 +80,7 @@ private const val BIN =
 
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.openBin() {
-    awaitNode(hasContentDescription("Settings"))
-    onNode(hasContentDescription("Settings")).performSemanticsAction(SemanticsActions.OnClick)
+    openSettingsTab("Recycle bin")
     val open = hasText("Open recycle bin (2 items)") and hasClickAction()
     waitUntil(timeoutMillis = 10_000) { onAllNodes(hasScrollAction()).fetchSemanticsNodes().isNotEmpty() }
     waitUntil(timeoutMillis = 10_000) { onAllNodes(open).fetchSemanticsNodes().isNotEmpty() }
