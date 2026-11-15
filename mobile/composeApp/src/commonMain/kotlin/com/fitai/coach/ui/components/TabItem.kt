@@ -29,7 +29,7 @@ import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.theme.Spacing
 
 /** One page of a screen: what selecting it stands for, its name and its icon. */
-class TabItem<T>(val value: T, val label: String, val icon: ImageVector)
+data class TabItem<T>(val value: T, val label: String, val icon: ImageVector)
 
 /**
  * A screen's pages as a two-column grid (the web's TabsList at phone width).
