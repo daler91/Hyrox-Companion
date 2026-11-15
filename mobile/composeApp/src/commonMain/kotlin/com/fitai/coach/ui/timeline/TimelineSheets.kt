@@ -82,7 +82,7 @@ private fun SessionSheet(onDismiss: () -> Unit, content: @Composable () -> Unit)
 }
 
 /** What a session's sheet shows of it, and the changes it can make in place. */
-class SheetSession(
+data class SheetSession(
     val entry: TimelineEntry,
     /** Its exercises, as the card's chips. */
     val chips: List<ExerciseChip>,
@@ -302,7 +302,7 @@ private fun PriorityControl(session: SheetSession) {
 }
 
 /** What an upcoming session's sheet offers (PreviewActions). */
-class PreviewActions(val onAskCoach: () -> Unit, val onMove: () -> Unit, val onSkip: () -> Unit, val onEdit: () -> Unit)
+data class PreviewActions(val onAskCoach: () -> Unit, val onMove: () -> Unit, val onSkip: () -> Unit, val onEdit: () -> Unit)
 
 /**
  * A session still to come (PreviewSheet): what it is and why, how much it
@@ -317,12 +317,15 @@ fun PreviewSheet(session: SheetSession, actions: PreviewActions, onDismiss: () -
         WhyThisWorkout(session.entry)
         PriorityControl(session)
         FuellingPlanPanel(session.entry, session.fuelling)
-        SheetAction("Ask coach", LucideIcons.MessageSquare, actions.onAskCoach, ButtonVariant.Primary)
+        SheetAction(ASK_COACH, LucideIcons.MessageSquare, actions.onAskCoach, ButtonVariant.Primary)
         SheetAction("Move to another day", LucideIcons.CalendarClock, actions.onMove, ButtonVariant.Secondary)
         SheetAction("Skip", LucideIcons.SkipForward, actions.onSkip, ButtonVariant.Secondary)
         SheetAction("Edit workout", LucideIcons.Pencil, actions.onEdit, ButtonVariant.Ghost)
     }
 }
+
+/** The action every session sheet has. */
+private const val ASK_COACH = "Ask coach"
 
 /** One of a sheet's stacked, full-width actions (ReadOnlyWorkoutActionGrid at phone width). */
 @Composable
@@ -331,7 +334,7 @@ private fun SheetAction(label: String, icon: ImageVector, onClick: () -> Unit, v
 }
 
 /** What the sheet for a session to log can do. */
-class LogActions(
+data class LogActions(
     val onComplete: (rpe: Int?, notes: String) -> Unit,
     val onAskCoach: () -> Unit,
     val onSkip: () -> Unit,
@@ -371,7 +374,7 @@ fun LogSheet(session: SheetSession, actions: LogActions, onDismiss: () -> Unit) 
             size = ButtonSize.Lg,
             modifier = Modifier.fillMaxWidth(),
         )
-        SheetAction("Ask coach", LucideIcons.MessageSquare, actions.onAskCoach, ButtonVariant.Secondary)
+        SheetAction(ASK_COACH, LucideIcons.MessageSquare, actions.onAskCoach, ButtonVariant.Secondary)
         SheetAction("Edit workout", LucideIcons.Pencil, actions.onEdit, ButtonVariant.Ghost)
         SheetAction("Skip", LucideIcons.SkipForward, actions.onSkip, ButtonVariant.Ghost)
     }
@@ -385,7 +388,7 @@ private fun recoveryPrompt(entry: TimelineEntry): String = when {
 }
 
 /** What a skipped session's sheet offers (SkippedActions). */
-class SkippedActions(val onUndo: () -> Unit, val onAskCoach: () -> Unit, val onDelete: () -> Unit)
+data class SkippedActions(val onUndo: () -> Unit, val onAskCoach: () -> Unit, val onDelete: () -> Unit)
 
 /** A skipped session (SkippedSheet): put it back on the plan, ask the coach, or take it off the plan altogether. */
 @Composable
@@ -398,7 +401,7 @@ fun SkippedSheet(session: SheetSession, actions: SkippedActions, onDismiss: () -
         WorkoutSection(session)
         WhyThisWorkout(entry)
         SheetAction("Undo skip", LucideIcons.RotateCcw, actions.onUndo, ButtonVariant.Primary)
-        SheetAction("Ask coach", LucideIcons.MessageSquare, actions.onAskCoach, ButtonVariant.Secondary)
+        SheetAction(ASK_COACH, LucideIcons.MessageSquare, actions.onAskCoach, ButtonVariant.Secondary)
         SheetAction("Delete from plan", LucideIcons.Trash, { confirmDelete = true }, ButtonVariant.Ghost)
     }
     if (confirmDelete) {

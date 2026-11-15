@@ -209,7 +209,7 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
                 close()
                 navigation.editPlanDay(entry.id)
             }
-            val session = SheetSession(
+            val sheetSession = SheetSession(
                 entry,
                 chips = remember(entry, state.records, state.units) { exerciseChips(entry, state.records, state.units) },
                 fuelling = planFuelling,
@@ -222,7 +222,7 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
                     navigation.openWorkout(requireNotNull(entry.workoutLogId))
                 }
                 EntrySurface.Preview -> PreviewSheet(
-                    session,
+                    sheetSession,
                     PreviewActions(
                         onAskCoach = askCoach,
                         onMove = { sheet = OpenSheet.PickDate(entry.id) },
@@ -232,7 +232,7 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
                     onDismiss = close,
                 )
                 EntrySurface.Log -> LogSheet(
-                    session,
+                    sheetSession,
                     LogActions(
                         onComplete = { rpe, notes ->
                             haptics.performHapticFeedback(HapticFeedbackType.Confirm)
@@ -254,7 +254,7 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
                     onDismiss = close,
                 )
                 EntrySurface.Skipped -> SkippedSheet(
-                    session,
+                    sheetSession,
                     SkippedActions(
                         onUndo = {
                             vm.reopen(entry)
