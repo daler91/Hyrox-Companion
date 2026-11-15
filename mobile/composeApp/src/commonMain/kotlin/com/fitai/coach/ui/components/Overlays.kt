@@ -11,22 +11,32 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.fitai.coach.ui.theme.DarkColors
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.LightColors
 import com.fitai.coach.ui.theme.Radius
 
-/** A modal bottom sheet with the brand's 20 dp sheet corners. */
+/**
+ * A modal bottom sheet with the brand's 20 dp sheet corners. It is card
+ * coloured unless [containerColor] says otherwise: a sheet made of cards
+ * takes the page colour, so they stand off it.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FitaiBottomSheet(onDismissRequest: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun FitaiBottomSheet(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    containerColor: Color = FitaiTheme.colors.card,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val colors = FitaiTheme.colors
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = Radius.Xl,
-        containerColor = colors.card,
+        containerColor = containerColor,
         contentColor = colors.text,
         content = content,
     )

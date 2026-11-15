@@ -4,6 +4,7 @@ import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.ui.format.dayLabel
 import com.fitai.coach.ui.format.exerciseLabel
 import com.fitai.coach.ui.format.formatClock
+import com.fitai.coach.ui.format.formatMinutes
 import com.fitai.coach.ui.format.shortDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -99,6 +100,11 @@ class TimelineRowsTest {
         assertEquals("Nov 3", shortDate("2026-11-03"))
         assertEquals("1:30", formatClock(1.5))
         assertEquals("1:02:05", formatClock(62 + 5 / 60.0))
+        // A chip's time is the web's: seconds under a minute, else minutes with at most one decimal.
+        assertEquals("45s", formatMinutes(0.75))
+        assertEquals("10min", formatMinutes(10.0))
+        assertEquals("23.1min", formatMinutes(23.133))
+        assertEquals("60min", formatMinutes(59.96))
         assertEquals("My move", exerciseLabel("custom:my_move"))
         assertEquals("My burpees", exerciseLabel("burpee_broad_jump", "My burpees"))
         assertEquals("Not in catalogue", exerciseLabel("not_in_catalogue", customLabel = "2x"))

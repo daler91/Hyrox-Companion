@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,18 +37,24 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.core.dates.todayIn
+import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.ButtonSize
 import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.EmptyState
@@ -60,6 +68,7 @@ import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.components.offerUndo
 import com.fitai.coach.ui.format.dayLabel
+import com.fitai.coach.ui.fuelling.DayFuelling
 import com.fitai.coach.ui.fuelling.FuellingDayChip
 import com.fitai.coach.ui.fuelling.FuellingTarget
 import com.fitai.coach.ui.fuelling.PlanFuelling
@@ -191,67 +200,72 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
             }, onDismiss = { sheet = null })
         }
         is OpenSheet.Surface -> sheetEntry?.let { entry ->
-            val label = dayLabel(entry.date, today)
             val close = { sheet = null }
+            val askCoach = {
+                close()
+                navigation.askCoach(entry)
+            }
+            val edit = {
+                close()
+                navigation.editPlanDay(entry.id)
+            }
+            val sheetSession = SheetSession(
+                entry,
+                chips = remember(entry, state.records, state.units) { exerciseChips(entry, state.records, state.units) },
+                fuelling = planFuelling,
+                onRename = { title -> vm.renameSession(entry, title) },
+                onSetPriority = { tier -> vm.setPriority(entry, tier) },
+            )
             when (surfaceFor(entry, today)) {
                 EntrySurface.WorkoutDetail -> LaunchedEffect(open) {
                     close()
                     navigation.openWorkout(requireNotNull(entry.workoutLogId))
                 }
                 EntrySurface.Preview -> PreviewSheet(
-                    entry,
-                    label,
-                    planFuelling,
-                    onSkip = { sheet = OpenSheet.Skip(entry.id) },
-                    onAskCoach = {
-                        close()
-                        navigation.askCoach(entry)
-                    },
-                    onEdit = {
-                        close()
-                        navigation.editPlanDay(entry.id)
-                    },
+                    sheetSession,
+                    PreviewActions(
+                        onAskCoach = askCoach,
+                        onMove = { sheet = OpenSheet.PickDate(entry.id) },
+                        onSkip = { sheet = OpenSheet.Skip(entry.id) },
+                        onEdit = edit,
+                    ),
                     onDismiss = close,
                 )
                 EntrySurface.Log -> LogSheet(
-                    entry,
-                    label,
-                    planFuelling,
-                    onComplete = { rpe, notes ->
-                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                        vm.markDone(entry, rpe, notes)
-                        close()
-                    },
-                    onSkip = { sheet = OpenSheet.Skip(entry.id) },
-                    onRecover = if (offersRecovery(entry)) {
-                        {
+                    sheetSession,
+                    LogActions(
+                        onComplete = { rpe, notes ->
+                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                            vm.markDone(entry, rpe, notes)
                             close()
-                            vm.openRecovery(entry)
-                        }
-                    } else {
-                        null
-                    },
-                    onEdit = {
-                        close()
-                        navigation.editPlanDay(entry.id)
-                    },
+                        },
+                        onAskCoach = askCoach,
+                        onSkip = { sheet = OpenSheet.Skip(entry.id) },
+                        onRecover = if (offersRecovery(entry)) {
+                            {
+                                close()
+                                vm.openRecovery(entry)
+                            }
+                        } else {
+                            null
+                        },
+                        onEdit = edit,
+                    ),
                     onDismiss = close,
                 )
                 EntrySurface.Skipped -> SkippedSheet(
-                    entry,
-                    label,
-                    onUndo = {
-                        vm.reopen(entry)
-                        close()
-                    },
-                    onAskCoach = {
-                        close()
-                        navigation.askCoach(entry)
-                    },
-                    onDelete = {
-                        close()
-                        vm.deletePlanDay(entry)
-                    },
+                    sheetSession,
+                    SkippedActions(
+                        onUndo = {
+                            vm.reopen(entry)
+                            close()
+                        },
+                        onAskCoach = askCoach,
+                        onDelete = {
+                            close()
+                            vm.deletePlanDay(entry)
+                        },
+                    ),
                     onDismiss = close,
                 )
                 EntrySurface.None -> LaunchedEffect(open) { close() }
@@ -379,7 +393,11 @@ private fun TimelineList(
     }
 }
 
-/** One day: its header and fuelling, its training notes, then its sessions, or "Rest day" with none. */
+/**
+ * One day, as the web's date group: its header, then its notes and sessions
+ * set in from the header's dot ("Rest day" with neither). Today has the
+ * accent rail down its left edge.
+ */
 @Composable
 private fun DayRow(
     day: TimelineDay,
@@ -391,54 +409,94 @@ private fun DayRow(
     onPickDate: (TimelineEntry) -> Unit,
     onNote: (date: String, editingId: String?) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-        DayHeader(day, state.today, onAddNote = { onNote(day.date, null) })
-        state.fuelling[day.date]?.let { fuelling ->
-            FuellingDayChip(fuelling, onClick = { navigation.openNutrition(day.date) })
-        }
-        day.annotations.forEach { annotation ->
-            AnnotationCard(
-                annotation,
-                onEdit = { onNote(annotation.startDate, annotation.id) },
-                onDelete = { vm.deleteAnnotation(annotation.id) },
+    val rail = FitaiTheme.colors.accent
+    Column(
+        Modifier.drawBehind {
+            if (!day.isToday) return@drawBehind
+            val width = TODAY_RAIL.toPx()
+            // In the list's own side padding, at the screen's edge, where the web draws it.
+            drawRoundRect(
+                rail,
+                topLeft = Offset(-Spacing.Lg.toPx(), 0f),
+                size = Size(width, size.height),
+                cornerRadius = CornerRadius(
+                    width / 2,
+                ),
             )
+        },
+        verticalArrangement = Arrangement.spacedBy(Spacing.Sm),
+    ) {
+        DayHeader(
+            day,
+            state.today,
+            fuelling = state.fuelling[day.date],
+            onOpenNutrition = { navigation.openNutrition(day.date) },
+            onAddNote = { onNote(day.date, null) },
+        )
+        Column(Modifier.padding(start = DAY_INDENT), verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+            DayContent(day, state, vm, tomorrow, onOpen = onOpen, onPickDate = onPickDate, onNote = onNote)
         }
-        if (day.entries.isEmpty() && day.annotations.isEmpty()) {
-            Text("Rest day — nothing scheduled.", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
-        }
-        day.entries.forEach { entry ->
-            val picking = state.selection
-            if (picking != null) {
-                SelectableTimelineCard(entry, picked = picking.picks(entry), enabled = !picking.deleting) {
-                    vm.toggleSelected(entry)
-                }
-                return@forEach
+    }
+}
+
+/** How far a day's cards sit in from its header's dot (the web's `ml-6`). */
+private val DAY_INDENT = 24.dp
+private val TODAY_RAIL = 4.dp
+
+/** A day's notes and sessions. */
+@Composable
+private fun DayContent(
+    day: TimelineDay,
+    state: TimelineUiState,
+    vm: TimelineViewModel,
+    tomorrow: String,
+    onOpen: (TimelineEntry) -> Unit,
+    onPickDate: (TimelineEntry) -> Unit,
+    onNote: (date: String, editingId: String?) -> Unit,
+) {
+    day.annotations.forEach { annotation ->
+        AnnotationCard(
+            annotation,
+            onEdit = { onNote(annotation.startDate, annotation.id) },
+            onDelete = { vm.deleteAnnotation(annotation.id) },
+        )
+    }
+    if (day.entries.isEmpty() && day.annotations.isEmpty()) {
+        Text("Rest day — nothing scheduled.", style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+    }
+    day.entries.forEach { entry ->
+        val picking = state.selection
+        if (picking != null) {
+            SelectableTimelineCard(entry, picked = picking.picks(entry), enabled = !picking.deleting) {
+                vm.toggleSelected(entry)
             }
-            TimelineCard(
-                entry = entry,
-                quickComplete = canQuickComplete(entry, tomorrow),
-                onOpen = { onOpen(entry) },
-                actions = CardActions(
-                    onComplete = { vm.markDone(entry) },
-                    onUndoRecovery = { vm.undoRecovery(entry) },
-                    moves = quickMoves(entry, state.today),
-                    onMove = { date -> vm.move(entry, date) },
-                    onPickDate = if (canMove(entry)) ({ onPickDate(entry) }) else null,
-                ),
-                chips = remember(entry, state.records, state.units) { exerciseChips(entry, state.records, state.units) },
-                fuelling = remember(entry, state.bodyweightKg) { FuellingTarget.of(entry, state.bodyweightKg) },
-                pending = state.isPending(entry),
-                mafCeiling = state.mafCeiling,
-                distanceUnit = state.units.distanceUnit,
-                strava = stravaControls(
-                    entry,
-                    day.entries,
-                    onLink = { target -> vm.linkRecording(entry, target) },
-                    onUnlink = { vm.unlinkRecording(entry) },
-                    onDismissSuggestion = { vm.dismissSuggestion(entry) },
-                ),
-            )
+            return@forEach
         }
+        TimelineCard(
+            entry = entry,
+            quickComplete = canQuickComplete(entry, tomorrow),
+            onOpen = { onOpen(entry) },
+            actions = CardActions(
+                onComplete = { vm.markDone(entry) },
+                onUndoRecovery = { vm.undoRecovery(entry) },
+                moves = quickMoves(entry, state.today),
+                onMove = { date -> vm.move(entry, date) },
+                onPickDate = if (canMove(entry)) ({ onPickDate(entry) }) else null,
+            ),
+            chips = remember(entry, state.records, state.units) { exerciseChips(entry, state.records, state.units) },
+            fuelling = remember(entry, state.bodyweightKg) { FuellingTarget.of(entry, state.bodyweightKg) },
+            pending = state.isPending(entry),
+            mafCeiling = state.mafCeiling,
+            distanceUnit = state.units.distanceUnit,
+            today = state.today,
+            strava = stravaControls(
+                entry,
+                day.entries,
+                onLink = { target -> vm.linkRecording(entry, target) },
+                onUnlink = { vm.unlinkRecording(entry) },
+                onDismissSuggestion = { vm.dismissSuggestion(entry) },
+            ),
+        )
     }
 }
 
@@ -550,31 +608,54 @@ private fun ReviewPromptCard(prompt: ReviewPrompt, onOpen: () -> Unit, onDismiss
     }
 }
 
+/**
+ * The web's date row (TimelineDateHeader): a dot and the day, then at the
+ * right edge the day's fuelling, the plan week and the note button. Those
+ * three wrap among themselves on a narrow screen, so the day keeps one line.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DayHeader(day: TimelineDay, today: String, onAddNote: () -> Unit) {
+private fun DayHeader(day: TimelineDay, today: String, fuelling: DayFuelling?, onOpenNutrition: () -> Unit, onAddNote: () -> Unit) {
     val label = dayLabel(day.date, today)
     val colors = FitaiTheme.colors
-    // The web's date row: a dot and the day on the left, the plan week and the note button at the card's right edge.
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-        Box(Modifier.size(8.dp).background(if (day.isToday) colors.accent else colors.borderStrong, CircleShape))
+    val type = FitaiTheme.typography
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Md)) {
+        Box(Modifier.size(12.dp).background(if (day.isToday) colors.accent else colors.borderStrong, CircleShape))
         Text(
             label,
-            style = FitaiTheme.typography.h3,
-            color = if (day.isToday) colors.accent else colors.textMuted,
+            style = if (day.isToday) type.body.copy(fontWeight = FontWeight.SemiBold) else type.body,
+            color = if (day.isToday) colors.accentText else colors.textMuted,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).semantics { heading() },
+            modifier = Modifier.semantics { heading() },
         )
-        day.weekNumber?.let { FitaiBadge("Week $it") }
-        // Today's row spells it out: it's where new athletes learn notes exist (TimelineDateHeader).
-        TextButton(
-            onClick = onAddNote,
-            contentPadding = PaddingValues(horizontal = Spacing.Sm),
-            modifier = Modifier.semantics { contentDescription = "Log a note for $label" },
+        FlowRow(
+            Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.Xs, Alignment.End),
+            itemVerticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(LucideIcons.StickyNote, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(16.dp))
-            if (day.isToday) Text(" Note", style = FitaiTheme.typography.label, color = colors.textMuted)
+            fuelling?.let { FuellingDayChip(it, onClick = onOpenNutrition) }
+            day.weekNumber?.let {
+                FitaiBadge("Week $it", tone = BadgeTone.Outline, contentColor = if (day.isToday) colors.accentText else Color.Unspecified)
+            }
+            NoteButton(label, spelledOut = day.isToday, onClick = onAddNote)
         }
+    }
+}
+
+/** "Log a note" for a day. Today's spells it out: it's where new athletes learn notes exist; other days show the icon alone. */
+@Composable
+private fun NoteButton(dayLabel: String, spelledOut: Boolean, onClick: () -> Unit) {
+    val colors = FitaiTheme.colors
+    val described = Modifier.semantics { contentDescription = "Log a note for $dayLabel" }
+    if (!spelledOut) {
+        IconButton(onClick = onClick, modifier = described) {
+            Icon(LucideIcons.StickyNote, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(16.dp))
+        }
+        return
+    }
+    TextButton(onClick = onClick, contentPadding = PaddingValues(horizontal = Spacing.Sm), modifier = described) {
+        Icon(LucideIcons.StickyNote, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(16.dp))
+        Text(" Note", style = FitaiTheme.typography.caption, color = colors.textMuted)
     }
 }
 

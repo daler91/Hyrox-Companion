@@ -134,6 +134,18 @@ object LucideIcons {
         )
     }
 
+    val CalendarClock: ImageVector by lazy {
+        lucide(
+            "CalendarClock",
+            "M16 14v2.2l1.6 1",
+            "M16 2v3",
+            "M21 7.338V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h2.338",
+            "M3 9h5.859",
+            "M8 2v3",
+            "M10 16A6 6 0 1 0 22 16A6 6 0 1 0 10 16Z",
+        )
+    }
+
     val CalendarDays: ImageVector by lazy {
         lucide(
             "CalendarDays",
@@ -147,6 +159,18 @@ object LucideIcons {
             "M8 17h.01",
             "M12 17h.01",
             "M16 17h.01",
+        )
+    }
+
+    val CalendarOff: ImageVector by lazy {
+        lucide(
+            "CalendarOff",
+            "M16 2v3",
+            "m2 2 20 20",
+            "M21 9h-5.5",
+            "M3 9h6",
+            "M3.586 3.586A2 2 0 003 5v14a2 2 0 002 2h14a2 2 0 001.414-.586",
+            "M8.656 3H19a2 2 0 012 2v10.344",
         )
     }
 
@@ -210,6 +234,13 @@ object LucideIcons {
         )
     }
 
+    val Circle: ImageVector by lazy {
+        lucide(
+            "Circle",
+            "M2 12A10 10 0 1 0 22 12A10 10 0 1 0 2 12Z",
+        )
+    }
+
     val CircleCheck: ImageVector by lazy {
         lucide(
             "CircleCheck",
@@ -230,6 +261,14 @@ object LucideIcons {
         )
     }
 
+    val Clock: ImageVector by lazy {
+        lucide(
+            "Clock",
+            "M2 12A10 10 0 1 0 22 12A10 10 0 1 0 2 12Z",
+            "M12 6v6l4 2",
+        )
+    }
+
     val CloudUpload: ImageVector by lazy {
         lucide(
             "CloudUpload",
@@ -246,6 +285,14 @@ object LucideIcons {
             "M12 15L18 15",
             "M10 8H20A2 2 0 0 1 22 10V20A2 2 0 0 1 20 22H10A2 2 0 0 1 8 20V10A2 2 0 0 1 10 8Z",
             "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2",
+        )
+    }
+
+    val CornerDownRight: ImageVector by lazy {
+        lucide(
+            "CornerDownRight",
+            "m15 10 5 5-5 5",
+            "M4 4v7a4 4 0 0 0 4 4h12",
         )
     }
 
@@ -275,6 +322,22 @@ object LucideIcons {
             "M11 12A1 1 0 1 0 13 12A1 1 0 1 0 11 12Z",
             "M18 12A1 1 0 1 0 20 12A1 1 0 1 0 18 12Z",
             "M4 12A1 1 0 1 0 6 12A1 1 0 1 0 4 12Z",
+        )
+    }
+
+    val Feather: ImageVector by lazy {
+        lucide(
+            "Feather",
+            "M14.086 18.412A2 2 0 0112.67 19H5v-7.672a2 2 0 01.586-1.414L11.75 3.75a6 6 0 118.49 8.49z",
+            "M16 8 2 22",
+            "M17.488 15H9",
+        )
+    }
+
+    val Flag: ImageVector by lazy {
+        lucide(
+            "Flag",
+            "M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528",
         )
     }
 
@@ -367,6 +430,13 @@ object LucideIcons {
         lucide(
             "Minus",
             "M5 12h14",
+        )
+    }
+
+    val Moon: ImageVector by lazy {
+        lucide(
+            "Moon",
+            "M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401",
         )
     }
 
@@ -464,6 +534,17 @@ object LucideIcons {
         )
     }
 
+    val Scissors: ImageVector by lazy {
+        lucide(
+            "Scissors",
+            "M3 6A3 3 0 1 0 9 6A3 3 0 1 0 3 6Z",
+            "M8.12 8.12 12 12",
+            "M20 4 8.12 15.88",
+            "M3 18A3 3 0 1 0 9 18A3 3 0 1 0 3 18Z",
+            "M14.8 14.8 20 20",
+        )
+    }
+
     val Search: ImageVector by lazy {
         lucide(
             "Search",
@@ -485,6 +566,14 @@ object LucideIcons {
             "Settings",
             "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915",
             "M9 12A3 3 0 1 0 15 12A3 3 0 1 0 9 12Z",
+        )
+    }
+
+    val SkipForward: ImageVector by lazy {
+        lucide(
+            "SkipForward",
+            "M21 4v16",
+            "M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z",
         )
     }
 
@@ -644,6 +733,15 @@ object LucideIcons {
             "X",
             "M18 6 6 18",
             "m6 6 12 12",
+        )
+    }
+
+    val XCircle: ImageVector by lazy {
+        lucide(
+            "XCircle",
+            "M2 12A10 10 0 1 0 22 12A10 10 0 1 0 2 12Z",
+            "m15 9-6 6",
+            "m9 9 6 6",
         )
     }
 

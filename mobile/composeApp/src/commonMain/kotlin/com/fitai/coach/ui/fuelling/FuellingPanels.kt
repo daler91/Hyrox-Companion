@@ -3,16 +3,17 @@ package com.fitai.coach.ui.fuelling
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -96,7 +97,7 @@ fun FuellingAroundSessionPanel(fuelling: GetNutritionSessionFuellingByWorkoutIdR
 internal fun FuellingTitle(text: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
         Icon(LucideIcons.UtensilsCrossed, contentDescription = null, tint = FitaiTheme.colors.textMuted, modifier = Modifier.size(16.dp))
-        Text(text, style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text)
+        Text(text, style = FitaiTheme.typography.bodySm.copy(fontWeight = FontWeight.SemiBold), color = FitaiTheme.colors.text)
     }
 }
 
@@ -204,7 +205,7 @@ internal fun PostTargetLine(postCarbG: Double, postProteinG: Double, carbRemaini
 
 @Composable
 private fun TargetText(text: AnnotatedString) {
-    Text(text, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+    Text(text, style = FitaiTheme.typography.caption, color = FitaiTheme.colors.textMuted)
 }
 
 private fun AnnotatedString.Builder.strong(color: Color, text: String) {
@@ -223,18 +224,26 @@ internal fun FuellingGuidanceNote(explanation: String) {
             hideLabel = "Hide how these targets are worked out",
             onToggle = { open = !open },
         )
-        if (open) Text(explanation, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+        if (open) Text(explanation, style = FitaiTheme.typography.caption, color = FitaiTheme.colors.textMuted)
     }
 }
 
-/** A muted line with an info button after it that shows or hides more. */
+/** A small muted line with an info mark after it; tapping the line shows or hides more (the web's tooltip). */
 @Composable
 internal fun ExplainedLine(text: String, open: Boolean, showLabel: String, hideLabel: String, onToggle: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(text, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted, modifier = Modifier.weight(1f, fill = false))
-        IconButton(onClick = onToggle) {
-            Icon(LucideIcons.Info, contentDescription = if (open) hideLabel else showLabel, tint = FitaiTheme.colors.textMuted)
-        }
+    val colors = FitaiTheme.colors
+    Row(
+        Modifier.clickable(role = Role.Button, onClick = onToggle).padding(vertical = Spacing.Xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.Xs),
+    ) {
+        Text(text, style = FitaiTheme.typography.caption, color = colors.textMuted, modifier = Modifier.weight(1f, fill = false))
+        Icon(
+            LucideIcons.Info,
+            contentDescription = if (open) hideLabel else showLabel,
+            tint = colors.textMuted,
+            modifier = Modifier.size(14.dp),
+        )
     }
 }
 
@@ -256,7 +265,7 @@ fun FuellingTargetChip(target: FuellingTarget) {
         horizontalArrangement = Arrangement.spacedBy(Spacing.Xs),
     ) {
         Icon(LucideIcons.UtensilsCrossed, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(12.dp))
-        Text(fuellingTargetText(target, colors.text), style = FitaiTheme.typography.bodySm, color = colors.textMuted)
+        Text(fuellingTargetText(target, colors.text), style = FitaiTheme.typography.caption, color = colors.textMuted)
     }
 }
 
@@ -305,7 +314,7 @@ fun FuellingDayChip(day: DayFuelling, onClick: () -> Unit) {
         border = BorderStroke(1.dp, colors.border),
     ) {
         Row(
-            Modifier.padding(horizontal = Spacing.Sm, vertical = Spacing.Xs),
+            Modifier.heightIn(min = DAY_CHIP_HEIGHT).padding(horizontal = Spacing.Sm),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.Xs),
         ) {
@@ -315,7 +324,7 @@ fun FuellingDayChip(day: DayFuelling, onClick: () -> Unit) {
                     strong(if (day.caloriesOver) colors.warning else colors.text, day.calories.toString())
                     day.caloriesTarget?.let { append("/$it") }
                 },
-                style = type.bodySm,
+                style = type.caption,
                 color = colors.textMuted,
             )
             if (day.protein != null && day.proteinTarget != null) {
@@ -325,7 +334,7 @@ fun FuellingDayChip(day: DayFuelling, onClick: () -> Unit) {
                         strong(colors.text, grams(day.protein))
                         append("/${grams(day.proteinTarget)}")
                     },
-                    style = type.bodySm,
+                    style = type.caption,
                     color = colors.textMuted,
                 )
             }
@@ -340,3 +349,6 @@ fun FuellingDayChip(day: DayFuelling, onClick: () -> Unit) {
         }
     }
 }
+
+/** The web chip's `h-8`. */
+private val DAY_CHIP_HEIGHT = 32.dp

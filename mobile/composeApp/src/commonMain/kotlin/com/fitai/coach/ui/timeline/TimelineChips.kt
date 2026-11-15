@@ -20,6 +20,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.exercises.isRunningExerciseName
+import com.fitai.coach.ui.components.BadgeTone
+import com.fitai.coach.ui.components.FitaiBadge
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Radius
@@ -61,7 +63,7 @@ fun MafCeilingChip(ceiling: Int) {
                 withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = colors.text)) { append("$ceiling") }
                 append(" bpm")
             },
-            style = FitaiTheme.typography.bodySm,
+            style = FitaiTheme.typography.caption,
             color = colors.textMuted,
         )
     }
@@ -70,17 +72,5 @@ fun MafCeilingChip(ceiling: Int) {
 /** A card whose changes are still waiting to go to the server (the web's "Pending sync" badge). */
 @Composable
 fun PendingSyncBadge() {
-    val colors = FitaiTheme.colors
-    Row(
-        Modifier
-            .background(colors.warning.copy(alpha = PENDING_TINT), Radius.Sm)
-            .padding(horizontal = Spacing.Sm, vertical = Spacing.Xxs),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.Xs),
-    ) {
-        Icon(LucideIcons.CloudUpload, contentDescription = null, tint = colors.warning, modifier = Modifier.size(12.dp))
-        Text("Pending sync", style = FitaiTheme.typography.label, color = colors.warning)
-    }
+    FitaiBadge("Pending sync", tone = BadgeTone.Warning, icon = LucideIcons.CloudUpload)
 }
-
-private const val PENDING_TINT = 0.1f

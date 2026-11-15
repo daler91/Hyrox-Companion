@@ -1,8 +1,11 @@
 package com.fitai.coach.ui.shell
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -12,6 +15,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -50,7 +55,7 @@ import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.settings.SettingsScreen
 import com.fitai.coach.ui.settings.SettingsTab
 import com.fitai.coach.ui.theme.FitaiTheme
-import com.fitai.coach.ui.theme.Radius
+import com.fitai.coach.ui.theme.Spacing
 import com.fitai.coach.ui.timeline.TimelineNavigation
 import com.fitai.coach.ui.timeline.TimelineScreen
 import com.fitai.coach.ui.workout.WorkoutDetailScreen
@@ -162,13 +167,7 @@ fun AppShell() {
         floatingActionButton = {
             // Not over the log form: the web offers the coach from the timeline, and here it sat on the form's own Continue button.
             if (backStack.currentTab != TopLevel.LogWorkout) {
-                FloatingActionButton(
-                    onClick = { openCoach(null) },
-                    shape = Radius.Lg,
-                    containerColor = colors.primary,
-                    contentColor = colors.onPrimary,
-                    modifier = Modifier.semantics { contentDescription = "open coach" },
-                ) { Icon(LucideIcons.MessageSquare, contentDescription = null) }
+                CoachButton(onClick = { openCoach(null) })
             }
         },
     ) { padding ->
@@ -286,3 +285,32 @@ private fun BottomBar(current: TopLevel, onSelect: (TopLevel) -> Unit) {
 
 /** On the toasts that end setup (connectDeviceToastAction.tsx): connecting a device is what brings athletes back in week one. */
 private const val CONNECT_DEVICE = "Connect a device"
+
+/**
+ * The floating way in to the coach: a pill that says what it is, at the size
+ * of the web's "AI Coach" button rather than Material's taller one.
+ */
+@Composable
+private fun CoachButton(onClick: () -> Unit) {
+    val colors = FitaiTheme.colors
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = colors.primary,
+        contentColor = colors.onPrimary,
+        shadowElevation = COACH_BUTTON_ELEVATION,
+        // Spoken with the words it shows, so "tap AI Coach" finds it by voice.
+        modifier = Modifier.semantics { contentDescription = "open AI Coach" },
+    ) {
+        Row(
+            Modifier.padding(horizontal = Spacing.Lg, vertical = Spacing.Md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.Sm),
+        ) {
+            Icon(LucideIcons.MessageSquare, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text("AI Coach", style = FitaiTheme.typography.button)
+        }
+    }
+}
+
+private val COACH_BUTTON_ELEVATION = 6.dp

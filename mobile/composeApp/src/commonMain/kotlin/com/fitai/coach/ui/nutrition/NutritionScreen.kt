@@ -541,7 +541,7 @@ private fun MealHeader(meal: Meal, entries: List<NutritionLogEntryWithNutrition>
             target?.caption()?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.accentText) }
         }
         Text(
-            "${formatNumber(logged.roundToWhole())}${target?.let { " / ${formatNumber(it.calories.roundToWhole())}" } ?: ""} kcal",
+            "${formatNumber(logged.roundToWhole())}${target?.let { " / ${formatNumber(it.calories.roundToWhole())}" }.orEmpty()} kcal",
             style = FitaiTheme.typography.bodySm,
             color = FitaiTheme.colors.textMuted,
         )

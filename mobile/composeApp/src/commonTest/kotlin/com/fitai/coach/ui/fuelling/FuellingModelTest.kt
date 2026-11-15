@@ -114,6 +114,35 @@ class FuellingModelTest {
     }
 
     @Test
+    fun theSheetStartsFromTheEstimateTheCardsChipUsesSoTheTwoAgree() {
+        val estimate = TimelineSessionEstimate(durationMin = 29.6, rpe = 6.2, source = TimelineSessionEstimate.Source.Sets, clamped = false)
+        val planned = entry(expectedDurationMin = null, expectedRpe = null, plannedTimeOfDayMin = null).copy(sessionEstimate = estimate)
+
+        // Before the server's fuller estimate answers (or when it can't, offline), the sheet has the card's figures.
+        val draft = PlanDraft(planned)
+        assertEquals(30, draft.duration)
+        assertEquals(6, draft.rpe)
+        // With a duration to go on, the fields are folded away and the hint says it's an estimate.
+        assertFalse(draft.expanded)
+        assertTrue(usesEstimate(planned, serverFoundOne = false))
+
+        // The server's replaces it when it comes; what the athlete saved replaces both, and is no estimate.
+        draft.useEstimate(estimate(durationMin = 34.0, rpe = 7.0))
+        assertEquals(34, draft.duration)
+        val saved = planned.copy(expectedDurationMin = 45, expectedRpe = 5)
+        assertEquals(45 to 5, startingDuration(saved) to startingRpe(saved))
+        assertFalse(usesEstimate(saved, serverFoundOne = true))
+
+        // Nothing to estimate from: no figures, and only the server finding something makes it an estimate.
+        val bare = entry(null, null, null)
+        assertNull(startingDuration(bare))
+        assertFalse(usesEstimate(bare, serverFoundOne = false))
+        assertTrue(usesEstimate(bare, serverFoundOne = true))
+        val none = TimelineSessionEstimate(source = TimelineSessionEstimate.Source.None, clamped = false)
+        assertFalse(usesEstimate(bare.copy(sessionEstimate = none), serverFoundOne = false))
+    }
+
+    @Test
     fun theDurationStepsAndTypesWithinWhatTheServerTakes() {
         val draft = PlanDraft(entry(expectedDurationMin = null, expectedRpe = null, plannedTimeOfDayMin = null))
         assertEquals(PatchPlansDaysByDayIdRequest(expectedDurationMin = Patch.Value(5)), draft.stepDuration(5))

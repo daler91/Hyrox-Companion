@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.fitai.coach.core.api.Patch
@@ -66,15 +67,17 @@ class PlanFuelling(
 
 /**
  * The fuelling panel's working values for one session. Saved expected values
- * win; otherwise the server's estimate fills them in, until the athlete
- * changes that field, so an estimate arriving late never overwrites an edit.
- * Each change returns the edit to save.
+ * win; otherwise it starts from the estimate the timeline carries for the
+ * session (what its card's chip is worked out from, so the two agree from the
+ * first frame), and the server's fuller estimate replaces that when it comes,
+ * until the athlete changes that field: an estimate arriving late never
+ * overwrites an edit. Each change returns the edit to save.
  */
 @Stable
 class PlanDraft(private val entry: TimelineEntry) {
-    var durationText: String by mutableStateOf(entry.expectedDurationMin?.toString().orEmpty())
+    var durationText: String by mutableStateOf(startingDuration(entry)?.toString().orEmpty())
         private set
-    var rpe: Int? by mutableStateOf(entry.expectedRpe)
+    var rpe: Int? by mutableStateOf(startingRpe(entry))
         private set
     var timeText: String by mutableStateOf(entry.plannedTimeOfDayMin?.let(::formatTimeOfDay).orEmpty())
         private set
@@ -173,17 +176,21 @@ fun FuellingPlanPanel(entry: TimelineEntry, fuelling: PlanFuelling) {
     val hint = planHint(
         noBodyweight = "no_bodyweight_defaults" in target.reasonCodes,
         hasDuration = draft.duration != null,
-        usingEstimate =
-        entry.expectedDurationMin == null && ready != null &&
-            ready.source != GetNutritionPlannedSessionEstimateByPlanDayIdResponse.Source.None,
+        usingEstimate = usesEstimate(
+            entry,
+            serverFoundOne =
+            ready != null && ready.source != GetNutritionPlannedSessionEstimateByPlanDayIdResponse.Source.None,
+        ),
     )
     val save = { edit: PatchPlansDaysByDayIdRequest -> fuelling.onEdit(entry, edit) }
 
-    FitaiCard(Modifier.fillMaxWidth()) {
+    FitaiCard(Modifier.fillMaxWidth(), contentPadding = Spacing.Lg) {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.Md)) {
             FuellingTitle("Fuel for this session")
-            Labelled("Before training") { PreCarbTargetLine(target.preCarbG) }
-            Labelled("After training") { PostTargetLine(target.postCarbG, target.postProteinG) }
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                Labelled("Before training") { PreCarbTargetLine(target.preCarbG) }
+                Labelled("After training") { PostTargetLine(target.postCarbG, target.postProteinG) }
+            }
             hint?.let { PlanHintLine(it, rationale = ready?.rationale?.takeIf { ready.refined }) }
             HorizontalDivider(color = FitaiTheme.colors.border)
             AdjustHeader(adjustSummary(draft.duration, draft.rpe, draft.timeText.takeIf { draft.timeOfDay != null }), draft.expanded) {
@@ -197,8 +204,8 @@ fun FuellingPlanPanel(entry: TimelineEntry, fuelling: PlanFuelling) {
 
 @Composable
 private fun Labelled(label: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-        Text(label, style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xxs)) {
+        Text(label, style = FitaiTheme.typography.caption.copy(fontWeight = FontWeight.Medium), color = FitaiTheme.colors.textMuted)
         content()
     }
 }
@@ -207,13 +214,13 @@ private fun Labelled(label: String, content: @Composable () -> Unit) {
 @Composable
 private fun PlanHintLine(hint: PlanHint, rationale: String?) {
     if (rationale == null) {
-        Text(hint.text, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+        Text(hint.text, style = FitaiTheme.typography.caption, color = FitaiTheme.colors.textMuted)
         return
     }
     var open by remember(rationale) { mutableStateOf(false) }
     Column {
         ExplainedLine(hint.text, open, showLabel = "Why this estimate", hideLabel = "Hide why this estimate") { open = !open }
-        if (open) Text(rationale, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+        if (open) Text(rationale, style = FitaiTheme.typography.caption, color = FitaiTheme.colors.textMuted)
     }
 }
 
@@ -230,7 +237,7 @@ private fun AdjustHeader(summary: String, expanded: Boolean, onToggle: () -> Uni
     ) {
         Text(
             "Adjust session estimate" + summary.takeIf { it.isNotEmpty() }?.let { " · $it" }.orEmpty(),
-            style = FitaiTheme.typography.label,
+            style = FitaiTheme.typography.caption.copy(fontWeight = FontWeight.Medium),
             color = FitaiTheme.colors.textMuted,
             modifier = Modifier.weight(1f),
         )

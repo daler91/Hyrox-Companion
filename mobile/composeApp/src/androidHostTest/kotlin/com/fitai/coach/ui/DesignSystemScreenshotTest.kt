@@ -32,6 +32,7 @@ import com.fitai.coach.ui.components.FitaiChip
 import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.components.NexusMark
+import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -105,17 +106,24 @@ class DesignSystemScreenshotTest(private val dark: Boolean, private val fontScal
     @Test
     fun cards() = capture("cards") {
         FitaiCard(Modifier.fillMaxWidth()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                FitaiBadge("planned")
-                FitaiBadge("today", tone = BadgeTone.Accent)
-                FitaiBadge("done", tone = BadgeTone.Success)
+            // Wrapping, as a timeline card's badges do: at a large font size they take more lines, not less room each.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(Spacing.Sm),
+                verticalArrangement = Arrangement.spacedBy(Spacing.Sm),
+            ) {
+                FitaiBadge("Planned", tone = BadgeTone.Info, icon = LucideIcons.Clock)
+                FitaiBadge("Key", tone = BadgeTone.Accent, icon = LucideIcons.Star)
+                FitaiBadge("Completed", tone = BadgeTone.Success, icon = LucideIcons.CircleCheck)
+                FitaiBadge("8-Week Plan", tone = BadgeTone.Outline, icon = LucideIcons.BookOpen)
+                FitaiBadge("Saturday", tone = BadgeTone.Secondary)
+                FitaiBadge("Rest day")
             }
             Text("tempo run", style = FitaiTheme.typography.h3, modifier = Modifier.padding(top = Spacing.Md))
             Text("8 km · 4:50/km", style = FitaiTheme.typography.mono, color = FitaiTheme.colors.textMuted)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-            FitaiBadge("missed", tone = BadgeTone.Danger)
-            FitaiBadge("recovery", tone = BadgeTone.Warning)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm), verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+            FitaiBadge("Over ceiling", tone = BadgeTone.Danger)
+            FitaiBadge("Missed", tone = BadgeTone.Warning, icon = LucideIcons.XCircle)
         }
         NexusMark()
     }

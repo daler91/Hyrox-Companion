@@ -109,7 +109,7 @@ data class DayMacro(val label: String, val value: Double, val target: Double?) {
     val against: String? get() = target?.takeIf { it > 0 }?.let { "$shown / ${formatNumber(round(it))}" }
 
     /** "Calories 1226 of 2600", as a screen reader says the tile. */
-    val spoken: String get() = "$label $shown" + (target?.takeIf { it > 0 }?.let { " of ${formatNumber(round(it))}" } ?: "")
+    val spoken: String get() = "$label $shown" + target?.takeIf { it > 0 }?.let { " of ${formatNumber(round(it))}" }.orEmpty()
 }
 
 /** The day's five tiles in the web's order (MacroProgressGrid); fibre has no target to chase. */

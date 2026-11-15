@@ -398,7 +398,7 @@ private fun SuggestionCard(suggestion: AiSuggestion, applying: Boolean, onApply:
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
                 FitaiBadge(suggestion.date)
                 FitaiBadge(
-                    suggestion.priority.wireValue.ifEmpty { "low" },
+                    suggestion.priority.wireValue.ifEmpty { "low" }.replaceFirstChar(Char::uppercase),
                     tone = when (suggestion.priority) {
                         AiSuggestion.Priority.High -> BadgeTone.Danger
                         AiSuggestion.Priority.Medium -> BadgeTone.Warning

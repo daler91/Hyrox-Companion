@@ -638,8 +638,9 @@ private fun SummaryCard(workout: WorkoutLogDetail, distanceUnit: String?) {
     }
 }
 
+/** One figure of a summary card: its name, the number and its unit. */
 @Composable
-private fun StatTile(stat: SummaryStat, modifier: Modifier) {
+internal fun StatTile(stat: SummaryStat, modifier: Modifier) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
     Column(

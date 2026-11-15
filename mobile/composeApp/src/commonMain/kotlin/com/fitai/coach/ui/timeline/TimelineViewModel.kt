@@ -3,6 +3,7 @@ package com.fitai.coach.ui.timeline
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitai.coach.core.api.ApiException
+import com.fitai.coach.core.api.Patch
 import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdRequest
 import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdStatusRequest
 import com.fitai.coach.core.api.generated.PersonalRecord
@@ -25,6 +26,7 @@ import com.fitai.coach.ui.fuelling.DateRange
 import com.fitai.coach.ui.fuelling.DayFuelling
 import com.fitai.coach.ui.fuelling.EstimateResult
 import com.fitai.coach.ui.fuelling.then
+import com.fitai.coach.ui.planday.PriorityTier
 import com.fitai.coach.ui.review.ReviewPrompt
 import com.fitai.coach.ui.review.reviewPrompt
 import com.fitai.coach.ui.workout.isMafAthlete
@@ -534,6 +536,20 @@ class TimelineViewModel(
                     toasts.send(e.userMessage("Couldn't save your expected session details"))
                 }
             }
+        }
+    }
+
+    /** Renames a planned session from its sheet; works offline. */
+    fun renameSession(entry: TimelineEntry, title: String) {
+        if (title.isBlank() || title == entry.focus) return
+        act("Couldn't rename the session") { timeline.editPlanDay(entry, PatchPlansDaysByDayIdRequest(focus = title)) }
+    }
+
+    /** Marks a planned session key, supporting or optional from its sheet; works offline. */
+    fun setPriority(entry: TimelineEntry, tier: PriorityTier) {
+        if (PriorityTier.of(entry.priority) == tier) return
+        act("Couldn't change the priority") {
+            timeline.editPlanDay(entry, PatchPlansDaysByDayIdRequest(priority = Patch.of(tier.wire)))
         }
     }
 

@@ -4,6 +4,7 @@ import com.fitai.coach.core.api.Patch
 import com.fitai.coach.core.api.generated.GetNutritionSummaryRangeResponse
 import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdRequest
 import com.fitai.coach.core.api.generated.TimelineEntry
+import com.fitai.coach.core.api.generated.TimelineSessionEstimate
 import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.core.dates.dayDiff
 import com.fitai.coach.core.nutrition.SessionFuellingTargetInput
@@ -35,6 +36,28 @@ fun planHint(noBodyweight: Boolean, hasDuration: Boolean, usingEstimate: Boolean
     !hasDuration -> PlanHint.NoDuration
     usingEstimate -> PlanHint.Estimated
     else -> null
+}
+
+/**
+ * The duration a planned session's fuelling starts from: the one the athlete
+ * saved, else the timeline's estimate from the prescription. Null with neither.
+ */
+fun startingDuration(entry: TimelineEntry): Int? =
+    entry.expectedDurationMin ?: entry.sessionEstimate?.durationMin?.roundToInt()?.let(::clampDuration)
+
+/** The effort a planned session's fuelling starts from, as [startingDuration]. */
+fun startingRpe(entry: TimelineEntry): Int? = entry.expectedRpe ?: entry.sessionEstimate?.rpe?.roundToInt()
+
+/**
+ * Whether a planned session's duration is an estimate from its prescription,
+ * so its targets say so: nothing saved, and either the timeline's estimate or
+ * the server's ([serverFoundOne]) had something to go on.
+ */
+fun usesEstimate(entry: TimelineEntry, serverFoundOne: Boolean): Boolean {
+    val source = entry.sessionEstimate?.source
+    val timelineFoundOne =
+        source != null && source != TimelineSessionEstimate.Source.None && source != TimelineSessionEstimate.Source.Unknown
+    return entry.expectedDurationMin == null && (serverFoundOne || timelineFoundOne)
 }
 
 /** "60 min · RPE 7 · at 07:30", what the collapsed "Adjust session estimate" row says it's set to. */

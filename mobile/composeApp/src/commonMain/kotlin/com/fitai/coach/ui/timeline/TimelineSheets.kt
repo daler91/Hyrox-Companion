@@ -1,17 +1,25 @@
 package com.fitai.coach.ui.timeline
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,21 +29,26 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdStatusRequest.SkipReason
 import com.fitai.coach.core.api.generated.PlanDayRecoveryMoveOption
 import com.fitai.coach.core.api.generated.PlanDayRecoveryPreview
+import com.fitai.coach.core.api.generated.TimelineCoachNotes
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.data.RecoveryAction
 import com.fitai.coach.core.dates.addDaysToIsoDate
-import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.ButtonSize
 import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.FitaiBadge
 import com.fitai.coach.ui.components.FitaiBottomSheet
 import com.fitai.coach.ui.components.FitaiButton
+import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.components.FitaiChip
 import com.fitai.coach.ui.components.FitaiDateField
 import com.fitai.coach.ui.components.FitaiDialog
@@ -44,11 +57,15 @@ import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.components.RpeSelector
 import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.format.shortWeekday
+import com.fitai.coach.ui.format.weekdayDate
 import com.fitai.coach.ui.fuelling.FuellingPlanPanel
 import com.fitai.coach.ui.fuelling.PlanFuelling
 import com.fitai.coach.ui.icons.generated.LucideIcons
+import com.fitai.coach.ui.planday.PriorityTier
 import com.fitai.coach.ui.theme.FitaiTheme
+import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.theme.Spacing
+import com.fitai.coach.ui.workout.StatTile
 
 @Composable
 private fun SheetBody(content: @Composable () -> Unit) {
@@ -58,124 +75,308 @@ private fun SheetBody(content: @Composable () -> Unit) {
     ) { content() }
 }
 
+/** A session's sheet, on the page colour so its cards stand off it as they do on the web. */
 @Composable
-private fun EntrySummary(entry: TimelineEntry, dayLabel: String) {
+private fun SessionSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    FitaiBottomSheet(onDismissRequest = onDismiss, containerColor = FitaiTheme.colors.background) { SheetBody(content) }
+}
+
+/** What a session's sheet shows of it, and the changes it can make in place. */
+data class SheetSession(
+    val entry: TimelineEntry,
+    /** Its exercises, as the card's chips. */
+    val chips: List<ExerciseChip>,
+    val fuelling: PlanFuelling,
+    val onRename: (String) -> Unit,
+    val onSetPriority: (PriorityTier) -> Unit,
+)
+
+/**
+ * The sheet's heading (the web's sheet title): the session's name with a
+ * pencil to rename it, the close button, and under them its date. A [badge]
+ * goes ahead of the name (a skipped session's).
+ */
+@Composable
+private fun SheetHeader(session: SheetSession, onDismiss: () -> Unit, badge: CardBadge? = null) {
+    val entry = session.entry
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
-    Text(dayLabel, style = type.label, color = colors.textMuted)
-    Text(entry.focus, style = type.h2, color = colors.text, modifier = Modifier.semantics { heading() })
-    if (entry.mainWorkout.isNotBlank()) Text(entry.mainWorkout, style = type.body, color = colors.text)
-    entry.accessory?.takeIf { it.isNotBlank() }?.let { Labelled("Accessory", it) }
-    coachNotesOf(entry)?.let { notes ->
-        notes.athleteText.takeIf { it.isNotBlank() }?.let { Labelled("Notes", it) }
-        if (notes.cues.isNotEmpty()) CoachCues(notes.cues)
+    var renaming by rememberSaveable(entry.id) { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+        if (renaming) {
+            RenameField(entry.focus, onSave = {
+                renaming = false
+                session.onRename(it)
+            }, onCancel = { renaming = false })
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // The name and its pencil keep together; the close button has the far corner.
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    badge?.let {
+                        FitaiBadge(it.label, tone = it.tone, icon = it.icon)
+                        Spacer(Modifier.width(Spacing.Sm))
+                    }
+                    Text(
+                        entry.focus,
+                        style = type.h3,
+                        color = colors.text,
+                        modifier = Modifier.weight(1f, fill = false).semantics { heading() },
+                    )
+                    IconButton(onClick = { renaming = true }) {
+                        Icon(
+                            LucideIcons.Pencil,
+                            contentDescription = "Rename workout",
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(LucideIcons.X, contentDescription = "Close", tint = colors.textMuted, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+        Text(weekdayDate(entry.date), style = type.bodySm, color = colors.textMuted)
     }
-    entry.aiRationale?.takeIf { it.isNotBlank() }?.let { CoachNote(entry, it) }
+}
+
+/** The title as a field, with save and cancel (EditableWorkoutTitle). A blank or unchanged title saves nothing. */
+@Composable
+private fun RenameField(title: String, onSave: (String) -> Unit, onCancel: () -> Unit) {
+    var text by rememberSaveable(title) { mutableStateOf(title) }
+    val colors = FitaiTheme.colors
+    val trimmed = text.trim()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        FitaiTextField(text, { text = it }, "Workout title", Modifier.weight(1f), showLabel = false)
+        IconButton(onClick = { if (trimmed == title) onCancel() else onSave(trimmed) }, enabled = trimmed.isNotEmpty()) {
+            Icon(LucideIcons.Check, contentDescription = "Save title", tint = colors.accentText)
+        }
+        IconButton(onClick = onCancel) {
+            Icon(LucideIcons.X, contentDescription = "Cancel renaming", tint = colors.textMuted)
+        }
+    }
 }
 
 /**
- * The coach's note on a session (CoachNote): why it looks as it does, what
- * an auto-progression moved, what it replaced, and what the coach went on.
+ * A titled card in a session's sheet (DetailSection): an icon and the title,
+ * then the body. [accent] is the coach's voice: an accent-tinted card under
+ * an accent title.
+ */
+@Composable
+private fun SheetSection(title: String, icon: ImageVector, accent: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+    val colors = FitaiTheme.colors
+    val tint = colors.accentText
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(if (accent) tint.copy(alpha = COACH_NOTE_TINT) else colors.card, Radius.Lg)
+            .border(1.dp, if (accent) tint.copy(alpha = ACCENT_BORDER) else colors.border, Radius.Lg)
+            .padding(Spacing.Lg),
+        verticalArrangement = Arrangement.spacedBy(Spacing.Md),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+            Icon(icon, contentDescription = null, tint = if (accent) tint else colors.textMuted, modifier = Modifier.size(16.dp))
+            Text(
+                title,
+                style = FitaiTheme.typography.bodySm.copy(fontWeight = FontWeight.SemiBold),
+                color = if (accent) tint else colors.text,
+                modifier = Modifier.semantics { heading() },
+            )
+        }
+        content()
+    }
+}
+
+private const val ACCENT_BORDER = 0.3f
+
+/** The session's targets as tiles, when it has any (WorkoutSummaryHeader's preview variant). */
+@Composable
+private fun TargetTiles(entry: TimelineEntry) {
+    val stats = targetStats(entry)
+    if (stats.isEmpty()) return
+    FitaiCard(Modifier.fillMaxWidth(), contentPadding = Spacing.Lg) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Lg)) {
+            stats.forEach { StatTile(it, Modifier.weight(1f)) }
+        }
+    }
+}
+
+/**
+ * "Workout" (WorkoutPrescriptionSummary): what was prescribed, as the card's
+ * chips with the coach's own text behind "Full prescription", or that text
+ * alone for a session with no sets; then the accessory work and the notes.
+ */
+@Composable
+private fun WorkoutSection(session: SheetSession) {
+    val entry = session.entry
+    val notes = coachNotesOf(entry)
+    val accessory = entry.accessory?.takeIf { it.isNotBlank() }
+    val prescribed = session.chips.isNotEmpty() || entry.mainWorkout.isNotBlank()
+    if (!prescribed && accessory == null && notes == null) return
+    SheetSection("Workout", LucideIcons.Dumbbell) {
+        if (session.chips.isNotEmpty()) {
+            Prescribed {
+                ExerciseChipRow(session.chips)
+                if (entry.mainWorkout.isNotBlank()) FullPrescription(entry.id, entry.mainWorkout)
+            }
+        } else if (entry.mainWorkout.isNotBlank()) {
+            Prescribed { SectionText(entry.mainWorkout) }
+        }
+        accessory?.let { Labelled("Accessory") { SectionText(it) } }
+        notes?.let { SessionNotes(it) }
+    }
+}
+
+@Composable
+private fun Prescribed(content: @Composable () -> Unit) = Labelled("Prescribed", content)
+
+/** The coach's text for a session shown as chips, behind a disclosure so the chips lead. */
+@Composable
+private fun FullPrescription(entryId: String, text: String) {
+    var open by rememberSaveable(entryId) { mutableStateOf(false) }
+    val colors = FitaiTheme.colors
+    Row(
+        Modifier
+            .clickable(role = Role.Button, onClick = { open = !open })
+            .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
+            .padding(vertical = Spacing.Xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.Xs),
+    ) {
+        val chevron = if (open) LucideIcons.ChevronDown else LucideIcons.ChevronRight
+        Icon(chevron, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(12.dp))
+        Text("Full prescription", style = FitaiTheme.typography.caption, color = colors.textMuted)
+    }
+    if (open) SectionText(text)
+}
+
+@Composable
+private fun SessionNotes(notes: TimelineCoachNotes) {
+    notes.athleteText.takeIf { it.isNotBlank() }?.let { Labelled("Notes") { SectionText(it) } }
+    if (notes.cues.isNotEmpty()) CoachCues(notes.cues)
+}
+
+@Composable
+private fun SectionText(text: String) {
+    Text(text, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+}
+
+/** A small capital label over its content, as the web labels the parts of a card. */
+@Composable
+private fun Labelled(label: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+        Text(label.uppercase(), style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
+        content()
+    }
+}
+
+/** "Why this workout" (CoachRationaleSection): the coach's reason for the session, open, in the coach's colours. */
+@Composable
+private fun WhyThisWorkout(entry: TimelineEntry) {
+    val rationale = entry.aiRationale?.takeIf { it.isNotBlank() } ?: return
+    SheetSection("Why this workout", LucideIcons.Sparkles, accent = true) {
+        Text(rationale, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.text)
+    }
+}
+
+/**
+ * "How much does this session matter?" (SessionPriorityControl): key,
+ * supporting or optional, with what the chosen one means. The tier decides
+ * what's offered if the session is missed, and what the coach protects.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CoachNote(entry: TimelineEntry, rationale: String) {
-    val colors = FitaiTheme.colors
+private fun PriorityControl(session: SheetSession) {
+    if (!PriorityTier.editable(session.entry)) return
+    val current = PriorityTier.of(session.entry.priority)
     val type = FitaiTheme.typography
-    val inputs = entry.aiInputsUsed
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalAlignment = Alignment.CenterVertically) {
-            Icon(LucideIcons.Sparkles, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
-            val updated = entry.aiNoteUpdatedAt?.take(ISO_DATE_LENGTH)?.let { " · updated ${shortDate(it)}" }.orEmpty()
-            Text("Coach's note$updated", style = type.label, color = colors.textMuted)
-        }
-        Text(rationale, style = type.body, color = colors.text)
-        progressionChanges(inputs).forEach { Text(it, style = type.bodySm, color = colors.text) }
-        inputs?.replacedPrescription?.let { original ->
-            val main = original.mainWorkout.takeIf { it.isNotBlank() }?.let { " — $it" }.orEmpty()
-            Text("Originally planned: ${original.focus}$main", style = type.bodySm, color = colors.textMuted)
-        }
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(Spacing.Xs),
-            verticalArrangement = Arrangement.spacedBy(Spacing.Xs),
-            itemVerticalAlignment = Alignment.CenterVertically,
-        ) {
-            FitaiBadge(coachSourceLabel(entry.aiSource) ?: "Coach", tone = BadgeTone.Accent)
-            val chips = basedOnChips(inputs)
-            if (chips.isNotEmpty()) {
-                Text("Based on:", style = type.bodySm, color = colors.textMuted)
-                chips.forEach { FitaiBadge(it) }
+        Text("How much does this session matter?", style = type.bodySm.copy(fontWeight = FontWeight.Medium), color = FitaiTheme.colors.text)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+            PriorityTier.entries.forEach { tier ->
+                FitaiChip(tier.label, selected = tier == current, onClick = { session.onSetPriority(tier) }, shape = CircleShape)
             }
         }
+        current?.let { Text(it.help, style = type.caption, color = FitaiTheme.colors.textMuted) }
     }
 }
 
-private const val ISO_DATE_LENGTH = 10
+/** What an upcoming session's sheet offers (PreviewActions). */
+data class PreviewActions(val onAskCoach: () -> Unit, val onMove: () -> Unit, val onSkip: () -> Unit, val onEdit: () -> Unit)
 
+/**
+ * A session still to come (PreviewSheet): what it is and why, how much it
+ * matters, how to fuel it, then asking the coach, moving, skipping or editing it.
+ */
 @Composable
-private fun Labelled(label: String, text: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-        Text(label, style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
-        Text(text, style = FitaiTheme.typography.body, color = FitaiTheme.colors.text)
+fun PreviewSheet(session: SheetSession, actions: PreviewActions, onDismiss: () -> Unit) {
+    SessionSheet(onDismiss) {
+        SheetHeader(session, onDismiss)
+        TargetTiles(session.entry)
+        WorkoutSection(session)
+        WhyThisWorkout(session.entry)
+        PriorityControl(session)
+        FuellingPlanPanel(session.entry, session.fuelling)
+        SheetAction(ASK_COACH, LucideIcons.MessageSquare, actions.onAskCoach, ButtonVariant.Primary)
+        SheetAction("Move to another day", LucideIcons.CalendarClock, actions.onMove, ButtonVariant.Secondary)
+        SheetAction("Skip", LucideIcons.SkipForward, actions.onSkip, ButtonVariant.Secondary)
+        SheetAction("Edit workout", LucideIcons.Pencil, actions.onEdit, ButtonVariant.Ghost)
     }
 }
 
-/** A session still to come: skip it, ask the coach, or edit it. */
+/** The action every session sheet has. */
+private const val ASK_COACH = "Ask coach"
+
+/** One of a sheet's stacked, full-width actions (ReadOnlyWorkoutActionGrid at phone width). */
 @Composable
-fun PreviewSheet(
-    entry: TimelineEntry,
-    dayLabel: String,
-    fuelling: PlanFuelling,
-    onSkip: () -> Unit,
-    onAskCoach: () -> Unit,
-    onEdit: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    FitaiBottomSheet(onDismissRequest = onDismiss) {
-        SheetBody {
-            EntrySummary(entry, dayLabel)
-            FuellingPlanPanel(entry, fuelling)
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                FitaiButton("Ask coach", onClick = onAskCoach, variant = ButtonVariant.Secondary)
-                FitaiButton("Edit session", onClick = onEdit, variant = ButtonVariant.Secondary)
-                FitaiButton("Skip", onClick = onSkip, variant = ButtonVariant.Ghost)
-            }
-        }
-    }
+private fun SheetAction(label: String, icon: ImageVector, onClick: () -> Unit, variant: ButtonVariant) {
+    FitaiButton(label, onClick = onClick, variant = variant, leadingIcon = icon, modifier = Modifier.fillMaxWidth())
 }
 
-/** A session to log: effort and a note, then complete it. */
+/** What the sheet for a session to log can do. */
+data class LogActions(
+    val onComplete: (rpe: Int?, notes: String) -> Unit,
+    val onAskCoach: () -> Unit,
+    val onSkip: () -> Unit,
+    /** Fit a missed session back in or let it go; null when that isn't on offer. */
+    val onRecover: (() -> Unit)?,
+    val onEdit: () -> Unit,
+)
+
+/**
+ * A session to log (LogSheet): what's still to decide about a miss, why the
+ * session and how to fuel it (read before training, so above logging it), the
+ * workout, then effort and a note, and completing it.
+ */
 @Composable
-fun LogSheet(
-    entry: TimelineEntry,
-    dayLabel: String,
-    fuelling: PlanFuelling,
-    onComplete: (rpe: Int?, notes: String) -> Unit,
-    onSkip: () -> Unit,
-    onRecover: (() -> Unit)?,
-    onEdit: () -> Unit,
-    onDismiss: () -> Unit,
-) {
+fun LogSheet(session: SheetSession, actions: LogActions, onDismiss: () -> Unit) {
+    val entry = session.entry
     var rpe by rememberSaveable(entry.id) { mutableStateOf<Int?>(null) }
     var notes by rememberSaveable(entry.id) { mutableStateOf(entry.notes.orEmpty()) }
-    FitaiBottomSheet(onDismissRequest = onDismiss) {
-        SheetBody {
-            EntrySummary(entry, dayLabel)
-            if (onRecover != null) {
-                Text(recoveryPrompt(entry), style = FitaiTheme.typography.body, color = FitaiTheme.colors.text)
-                FitaiButton("Fit it back in or let it go", onClick = onRecover, variant = ButtonVariant.Secondary)
-            }
-            // Read before training, so above logging it.
-            FuellingPlanPanel(entry, fuelling)
-            Text("Effort & notes", style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text)
+    SessionSheet(onDismiss) {
+        SheetHeader(session, onDismiss)
+        actions.onRecover?.let { recover ->
+            Text(recoveryPrompt(entry), style = FitaiTheme.typography.body, color = FitaiTheme.colors.text)
+            FitaiButton("Fit it back in or let it go", onClick = recover, variant = ButtonVariant.Secondary)
+        }
+        TargetTiles(entry)
+        PriorityControl(session)
+        WhyThisWorkout(entry)
+        FuellingPlanPanel(entry, session.fuelling)
+        WorkoutSection(session)
+        SheetSection("Effort & notes", LucideIcons.Gauge) {
             RpeSelector(rpe, { rpe = it })
             FitaiTextField(value = notes, onValueChange = { notes = it }, label = "Notes", singleLine = false)
-            FitaiButton("Complete workout", onClick = { onComplete(rpe, notes) }, modifier = Modifier.fillMaxWidth())
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                FitaiButton("Edit session", onClick = onEdit, variant = ButtonVariant.Secondary, modifier = Modifier.weight(1f))
-                FitaiButton("Skip", onClick = onSkip, variant = ButtonVariant.Ghost, modifier = Modifier.weight(1f))
-            }
         }
+        FitaiButton(
+            "Complete workout",
+            onClick = { actions.onComplete(rpe, notes) },
+            size = ButtonSize.Lg,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        SheetAction(ASK_COACH, LucideIcons.MessageSquare, actions.onAskCoach, ButtonVariant.Secondary)
+        SheetAction("Edit workout", LucideIcons.Pencil, actions.onEdit, ButtonVariant.Ghost)
+        SheetAction("Skip", LucideIcons.SkipForward, actions.onSkip, ButtonVariant.Ghost)
     }
 }
 
@@ -186,32 +387,22 @@ private fun recoveryPrompt(entry: TimelineEntry): String = when {
     else -> "Fit it back in, or let it go?"
 }
 
-/** A skipped session: put it back on the plan, or take it off the plan altogether. */
+/** What a skipped session's sheet offers (SkippedActions). */
+data class SkippedActions(val onUndo: () -> Unit, val onAskCoach: () -> Unit, val onDelete: () -> Unit)
+
+/** A skipped session (SkippedSheet): put it back on the plan, ask the coach, or take it off the plan altogether. */
 @Composable
-fun SkippedSheet(
-    entry: TimelineEntry,
-    dayLabel: String,
-    onUndo: () -> Unit,
-    onAskCoach: () -> Unit,
-    onDelete: () -> Unit,
-    onDismiss: () -> Unit,
-) {
+fun SkippedSheet(session: SheetSession, actions: SkippedActions, onDismiss: () -> Unit) {
+    val entry = session.entry
     var confirmDelete by remember(entry.id) { mutableStateOf(false) }
-    FitaiBottomSheet(onDismissRequest = onDismiss) {
-        SheetBody {
-            EntrySummary(entry, dayLabel)
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                FitaiButton("Undo skip", onClick = onUndo)
-                FitaiButton("Ask coach", onClick = onAskCoach, variant = ButtonVariant.Secondary)
-            }
-            FitaiButton(
-                "Delete from plan",
-                onClick = { confirmDelete = true },
-                variant = ButtonVariant.Ghost,
-                leadingIcon = LucideIcons.Trash,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+    SessionSheet(onDismiss) {
+        SheetHeader(session, onDismiss, badge = statusBadge(entry))
+        TargetTiles(entry)
+        WorkoutSection(session)
+        WhyThisWorkout(entry)
+        SheetAction("Undo skip", LucideIcons.RotateCcw, actions.onUndo, ButtonVariant.Primary)
+        SheetAction(ASK_COACH, LucideIcons.MessageSquare, actions.onAskCoach, ButtonVariant.Secondary)
+        SheetAction("Delete from plan", LucideIcons.Trash, { confirmDelete = true }, ButtonVariant.Ghost)
     }
     if (confirmDelete) {
         FitaiDialog(
@@ -220,7 +411,7 @@ fun SkippedSheet(
             confirmLabel = "Delete",
             onConfirm = {
                 confirmDelete = false
-                onDelete()
+                actions.onDelete()
             },
             onDismiss = { confirmDelete = false },
             destructive = true,

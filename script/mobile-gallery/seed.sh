@@ -2,8 +2,9 @@
 # Seeds a LOCAL web server's dev user with a few days that exercise the app's
 # main screens, for mobile's LayoutGalleryTest (see mobile/README.md, "Comparing
 # with the web app"): a plan in its fifth week, yesterday's session missed, two
-# Strava recordings that could be it, a short coach conversation, four weeks
-# of logged sessions for Analytics, and most of a day's food for Nutrition.
+# Strava recordings that could be it, tomorrow's session annotated by the
+# coach, a short coach conversation, four weeks of logged sessions for
+# Analytics, and most of a day's food for Nutrition.
 #
 #   script/mobile-gallery/seed.sh [server URL] [database URL]
 #
@@ -30,6 +31,7 @@ call() {
 
 TODAY=$(date -u +%F)
 YESTERDAY=$(date -u -d "yesterday" +%F)
+TOMORROW=$(date -u -d "tomorrow" +%F)
 # The Monday four weeks before this week's: today falls in the plan's week 5.
 PLAN_START=$(date -u -d "$TODAY -$(($(date -u +%u) - 1)) days -28 days" +%F)
 
@@ -47,8 +49,9 @@ call PATCH /api/v1/preferences '{"weightUnit":"lbs","distanceUnit":"km","onboard
 PLAN=$(call POST /api/v1/plans/sample '{}' | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
 call POST "/api/v1/plans/$PLAN/schedule" "{\"startDate\":\"$PLAN_START\"}" >/dev/null
 DAY=$(psql -qtA "$DB" -c "SELECT id FROM plan_days WHERE plan_id = '$PLAN' AND scheduled_date = '$YESTERDAY' LIMIT 1")
-if [[ -z "$DAY" ]]; then
-  echo "The sample plan has no day on $YESTERDAY." >&2
+TOMORROW_DAY=$(psql -qtA "$DB" -c "SELECT id FROM plan_days WHERE plan_id = '$PLAN' AND scheduled_date = '$TOMORROW' LIMIT 1")
+if [[ -z "$DAY" || -z "$TOMORROW_DAY" ]]; then
+  echo "The sample plan has no day on $YESTERDAY or $TOMORROW." >&2
   exit 1
 fi
 
@@ -78,6 +81,23 @@ VALUES ('gallery-run', '$USER_ID', '$YESTERDAY', 'Run', '3.83 km, 23m', 'Morning
         '{"raw":{"name":"Morning Weight Training","sport_type":"WeightTraining","type":"WeightTraining","moving_time":760,"elapsed_time":780}}'::jsonb);
 INSERT INTO exercise_sets (workout_log_id, exercise_name, category, set_number, distance, time, distance_unit, sort_order)
 VALUES ('gallery-run', 'easy_run', 'running', 1, 3830, 23.13, 'm', 1);
+
+-- Tomorrow: a key session the coach has annotated, under a plan with a long
+-- name, so the planned card and its sheet show their fullest state.
+UPDATE training_plans SET name = 'AI Plan: I have a solo hyrox open race on Feb 15th 2027. I want to run it in under 75 minutes.' WHERE id = '$PLAN';
+UPDATE plan_days
+   SET focus = 'Threshold Run',
+       main_workout = E'Warm-up: 15 min easy\n3 x 10 min @ 5:23/km with 2 min jog\nCool-down: 10 min easy',
+       notes = 'BUILD phase increases threshold volume. Hold pace. If heart rate spikes, add 30 s jog.',
+       priority = 'key',
+       ai_source = 'review',
+       ai_rationale = 'This threshold run progresses your recent tempo work from last week and addresses the falling RPE trend in the performance training state.',
+       ai_note_updated_at = now() - interval '4 days',
+       ai_inputs_used = '{"planGoalPresent":true,"planPhase":"early","rpeTrend":"falling","weeklyVolumeTrend":"decreasing","stationGaps":["skierg","sled_push","sled_pull"],"progressionFlags":["a","b","c","d","e","f","g","h","i","j","k","l"],"recentWorkoutCount":10}'::jsonb
+ WHERE id = '$TOMORROW_DAY';
+DELETE FROM exercise_sets WHERE plan_day_id = '$TOMORROW_DAY';
+INSERT INTO exercise_sets (plan_day_id, exercise_name, category, set_number, time, sort_order)
+SELECT '$TOMORROW_DAY', 'tempo_run', 'running', s, 10, s FROM generate_series(1, 3) s;
 
 UPDATE users SET ai_coach_enabled = true WHERE id = '$USER_ID';
 DELETE FROM chat_messages WHERE user_id = '$USER_ID';

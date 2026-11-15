@@ -83,6 +83,17 @@ export const ICONS: Readonly<Record<string, string>> = {
   Database: "database",
   BookOpen: "book-open",
   PieChart: "chart-pie",
+  Clock: "clock",
+  XCircle: "circle-x",
+  Moon: "moon",
+  SkipForward: "skip-forward",
+  Feather: "feather",
+  Flag: "flag",
+  CalendarOff: "calendar-off",
+  Circle: "circle",
+  CalendarClock: "calendar-clock",
+  CornerDownRight: "corner-down-right",
+  Scissors: "scissors",
 };
 
 /**

@@ -14,6 +14,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
@@ -74,12 +75,21 @@ class LayoutGalleryTest {
             scrollTo(hasText(RUN_NOTES, substring = true))
             shot("timeline-recording")
 
+            scrollTo(hasText(PLANNED_SESSION))
+            shot("timeline-planned")
+            tap(hasText(PLANNED_SESSION))
+            ui.awaitNode(hasText("Fuel for this session"))
+            shot("sheet-1")
+            runCatching { ui.onAllNodes(hasText("Edit workout")).onFirst().performScrollTo() }
+            shot("sheet-2")
+            tap(hasContentDescription("Close"))
+
             tap(hasText(RUN_NOTES, substring = true))
             ui.awaitNode(hasText("Ask coach"))
             shot("workout-detail")
             tap(hasContentDescription("back"))
 
-            tap(hasContentDescription("open coach"))
+            tap(hasContentDescription("open AI Coach"))
             ui.awaitNode(hasContentDescription("close coach panel"))
             shot("coach")
             tap(hasContentDescription("close coach panel"))
@@ -152,5 +162,6 @@ class LayoutGalleryTest {
         // What script/mobile-gallery/seed.sh puts there; without them the first screen is still drawn.
         const val MISSED_DAY = "Yesterday"
         const val RUN_NOTES = "Morning Run"
+        const val PLANNED_SESSION = "Threshold Run"
     }
 }

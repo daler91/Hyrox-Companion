@@ -202,7 +202,7 @@ private fun DeltaBadge(change: Delta?) {
             "${if (change.percent > 0) "+" else ""}${formatNumber(change.percent)}%",
             tone = if (change.better) BadgeTone.Success else BadgeTone.Warning,
         )
-        Delta.New -> FitaiBadge("new", tone = BadgeTone.Accent)
+        Delta.New -> FitaiBadge("New", tone = BadgeTone.Accent)
         Delta.Same -> FitaiBadge("=")
         null -> Unit
     }
