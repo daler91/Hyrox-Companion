@@ -288,7 +288,7 @@ fun summaryStats(workout: WorkoutLogDetail, distanceUnit: String?): List<Summary
     }
     workout.distanceMeters?.takeIf { it > 0 }?.let { meters ->
         val value = roundTo1(metersToUserDistance(meters, distanceUnit))
-        add(SummaryStat("Distance", formatNumber(value), if (distanceUnit == "miles") "mi" else "km"))
+        add(SummaryStat("Distance", formatNumber(value), if (distanceUnit == MILES) "mi" else "km"))
     }
     workout.avgHeartrate?.takeIf { it > 0 }?.let { add(SummaryStat("Avg HR", "$it", "bpm", mafStatus(workout.mafCompliance))) }
     workout.maxHeartrate?.takeIf { it > 0 }?.let { add(SummaryStat("Max HR", "$it", "bpm")) }
@@ -317,7 +317,7 @@ fun reportsMovingTime(deviceActivity: JsonElement): Boolean = (stoppedSeconds(de
 fun formatPace(metersPerSecond: Double, distanceUnit: String?): String {
     if (metersPerSecond <= 0) return "-"
     val perKm = METERS_PER_KM / metersPerSecond
-    val miles = distanceUnit == "miles"
+    val miles = distanceUnit == MILES
     val perUnit = if (miles) perKm / KM_TO_MILES else perKm
     var minutes = (perUnit / SECONDS_PER_MINUTE).toInt()
     var seconds = (perUnit % SECONDS_PER_MINUTE).roundToInt()
@@ -331,9 +331,7 @@ fun formatPace(metersPerSecond: Double, distanceUnit: String?): String {
 /** "28.4 km/h" from metres per second (formatSpeed). */
 fun formatSpeed(metersPerSecond: Double, distanceUnit: String?): String {
     val kmPerHour = metersPerSecond * SECONDS_PER_HOUR / METERS_PER_KM
-    return if (distanceUnit ==
-        "miles"
-    ) {
+    return if (distanceUnit == MILES) {
         "${formatNumber(roundTo1(kmPerHour * KM_TO_MILES))} mph"
     } else {
         "${formatNumber(roundTo1(kmPerHour))} km/h"
@@ -366,6 +364,9 @@ fun mafStatus(compliance: SessionMafCompliance?): MafStatus? {
 }
 
 private const val MIN_REPORTABLE_STOPPED_SECONDS = 60
+
+/** The distance preference of an athlete on miles; anything else is kilometres. */
+private const val MILES = "miles"
 private const val METERS_PER_KM = 1000.0
 private const val SECONDS_PER_MINUTE = 60
 private const val SECONDS_PER_HOUR = 3600.0

@@ -23,7 +23,8 @@ JAR=$(mktemp)
 trap 'rm -f "$JAR"' EXIT
 TOKEN=$(curl -fsS -c "$JAR" "$SERVER/api/v1/csrf-token" | python3 -c "import json,sys;print(json.load(sys.stdin)['csrfToken'])")
 call() {
-  curl -fsS -b "$JAR" -c "$JAR" -H "x-csrf-token: $TOKEN" -H "content-type: application/json" -X "$1" "$SERVER$2" ${3:+-d "$3"}
+  local method=$1 path=$2 body=${3:-}
+  curl -fsS -b "$JAR" -c "$JAR" -H "x-csrf-token: $TOKEN" -H "content-type: application/json" -X "$method" "$SERVER$path" ${body:+-d "$body"}
 }
 
 TODAY=$(date -u +%F)
@@ -45,7 +46,7 @@ call PATCH /api/v1/preferences '{"weightUnit":"lbs","distanceUnit":"km","onboard
 PLAN=$(call POST /api/v1/plans/sample '{}' | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
 call POST "/api/v1/plans/$PLAN/schedule" "{\"startDate\":\"$PLAN_START\"}" >/dev/null
 DAY=$(psql -qtA "$DB" -c "SELECT id FROM plan_days WHERE plan_id = '$PLAN' AND scheduled_date = '$YESTERDAY' LIMIT 1")
-if [ -z "$DAY" ]; then
+if [[ -z "$DAY" ]]; then
   echo "The sample plan has no day on $YESTERDAY." >&2
   exit 1
 fi

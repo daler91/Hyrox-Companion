@@ -173,7 +173,7 @@ private fun PlanLine(text: String) {
 }
 
 /** One figure from a recording, under the icon the web gives it. */
-class DeviceStat(val icon: ImageVector, val text: String)
+data class DeviceStat(val icon: ImageVector, val text: String)
 
 /**
  * What a linked recording measured (WorkoutStravaStats): calories, power,

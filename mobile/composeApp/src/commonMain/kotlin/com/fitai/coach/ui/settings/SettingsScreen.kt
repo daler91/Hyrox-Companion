@@ -142,8 +142,8 @@ fun SettingsScreen(
                     state.preferences?.let { prefs -> Units(prefs, vm::update) }
                     onRunSetup?.let { GettingStarted(it) }
                     Account(
-                        onSignOut = { dialog = if (state.pendingWrites > 0) "sign-out-unsynced" else "sign-out" },
-                        onDelete = { dialog = "delete" },
+                        onSignOut = { dialog = if (state.pendingWrites > 0) SIGN_OUT_UNSYNCED else SIGN_OUT },
+                        onDelete = { dialog = DELETE_ACCOUNT },
                     )
                 }
                 SettingsTab.Training -> {
@@ -528,7 +528,7 @@ private fun Account(onSignOut: () -> Unit, onDelete: () -> Unit) {
 @Composable
 private fun Dialogs(dialog: String?, state: SettingsUiState, vm: SettingsViewModel, onClose: () -> Unit) {
     when (dialog) {
-        "sign-out" -> FitaiDialog(
+        SIGN_OUT -> FitaiDialog(
             title = "Sign out?",
             text = "Your data stays in your account; it is removed from this device.",
             confirmLabel = "Sign out",
@@ -538,7 +538,7 @@ private fun Dialogs(dialog: String?, state: SettingsUiState, vm: SettingsViewMod
             },
             onDismiss = onClose,
         )
-        "sign-out-unsynced" -> FitaiDialog(
+        SIGN_OUT_UNSYNCED -> FitaiDialog(
             title = "Sign out with unsynced changes?",
             text = unsyncedWarning(state.pendingWrites),
             confirmLabel = "Sign out anyway",
@@ -561,12 +561,16 @@ private fun Dialogs(dialog: String?, state: SettingsUiState, vm: SettingsViewMod
             destructive = true,
         )
         GARMIN_FORM -> GarminConnectSheet(state.busy == "garmin-connect", vm, onClose)
-        "delete" -> DeleteAccountDialog(state.busy == "delete", onConfirm = vm::deleteAccount, onDismiss = onClose)
+        DELETE_ACCOUNT -> DeleteAccountDialog(state.busy == "delete", onConfirm = vm::deleteAccount, onDismiss = onClose)
         else -> Unit
     }
 }
 
+// Which dialog is open, by name.
 private const val GARMIN_FORM = "garmin-connect"
+private const val SIGN_OUT = "sign-out"
+private const val SIGN_OUT_UNSYNCED = "sign-out-unsynced"
+private const val DELETE_ACCOUNT = "delete-account"
 
 @Composable
 private fun GarminConnectSheet(busy: Boolean, vm: SettingsViewModel, onClose: () -> Unit) {
