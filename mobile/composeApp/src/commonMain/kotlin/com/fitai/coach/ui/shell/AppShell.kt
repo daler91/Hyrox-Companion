@@ -48,6 +48,7 @@ import com.fitai.coach.ui.planday.PlanDayScreen
 import com.fitai.coach.ui.review.WeeklyReviewScreen
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.settings.SettingsScreen
+import com.fitai.coach.ui.settings.SettingsTab
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.timeline.TimelineNavigation
@@ -91,6 +92,12 @@ fun AppShell() {
         backStack.select(TopLevel.Nutrition)
     }
     var stravaReturn by remember { mutableStateOf<DeepLink.StravaReturn?>(null) }
+    // Settings is six pages; a link that came for one opens on it.
+    var settingsTab by remember { mutableStateOf<SettingsTab?>(null) }
+    val showSettings: (SettingsTab) -> Unit = {
+        settingsTab = it
+        backStack.select(TopLevel.Settings)
+    }
 
     LaunchedEffect(link) {
         val current = link ?: return@LaunchedEffect
@@ -110,7 +117,7 @@ fun AppShell() {
             DeepLink.Settings -> backStack.select(TopLevel.Settings)
             is DeepLink.StravaReturn -> {
                 stravaReturn = current
-                backStack.select(TopLevel.Settings)
+                showSettings(SettingsTab.Integrations)
             }
         }
         deepLinks.consumed(current)
@@ -133,8 +140,8 @@ fun AppShell() {
                 actionLabel = CONNECT_DEVICE.takeIf { result.offerConnect },
                 duration = SnackbarDuration.Long,
             )
-            // Strava and Garmin connect in Settings.
-            if (outcome == SnackbarResult.ActionPerformed) backStack.select(TopLevel.Settings)
+            // Strava and Garmin connect on Settings' Integrations page.
+            if (outcome == SnackbarResult.ActionPerformed) showSettings(SettingsTab.Integrations)
             shellMessage = null
         }
     }
@@ -210,7 +217,7 @@ fun AppShell() {
                         NutritionScreen(
                             open = openNutrition,
                             onOpened = { openNutrition = null },
-                            openSettings = { backStack.select(TopLevel.Settings) },
+                            openSettings = { showSettings(SettingsTab.Training) },
                         )
                     }
                     entry<Route.Analytics> {
@@ -219,7 +226,7 @@ fun AppShell() {
                                 logWorkout = { backStack.select(TopLevel.LogWorkout) },
                                 openReview = { backStack.push(Route.WeeklyReview()) },
                                 openWorkout = { backStack.push(Route.WorkoutDetail(it)) },
-                                openSettings = { backStack.select(TopLevel.Settings) },
+                                openSettings = { showSettings(SettingsTab.Training) },
                             ),
                         )
                     }
@@ -231,6 +238,8 @@ fun AppShell() {
                             },
                             stravaReturn = stravaReturn,
                             onStravaReturnHandled = { stravaReturn = null },
+                            openTab = settingsTab,
+                            onTabOpened = { settingsTab = null },
                         )
                     }
                 },

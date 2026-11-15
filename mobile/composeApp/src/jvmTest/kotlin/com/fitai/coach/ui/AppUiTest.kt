@@ -226,6 +226,28 @@ class AppUiTest {
     }
 
     @Test
+    fun settingsOpensOnAccountAndEachTabShowsItsOwnPage() {
+        val api = FakeApi().apply { establishedAccount() }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
+            awaitNode(hasContentDescription("Settings"))
+            onNodeWithContentDescription("Settings").performClick()
+            // Account first: the units, with the name of what each one sets beside it.
+            awaitNode(hasText("Weight unit"))
+            awaitNode(hasText("Danger zone"))
+            assertTrue(onAllNodesWithText("Connect Strava").fetchSemanticsNodes().isEmpty())
+
+            openSettingsTab("Integrations")
+            awaitNode(hasText("Connect Strava"))
+            // One page at a time: Account's cards left with its tab.
+            assertTrue(onAllNodesWithText("Weight unit").fetchSemanticsNodes().isEmpty())
+
+            openSettingsTab("Data & Privacy")
+            awaitNode(hasText("Send error diagnostics"))
+            assertTrue(onAllNodesWithText("Connect Strava").fetchSemanticsNodes().isEmpty())
+        }
+    }
+
+    @Test
     fun aLinkFromANotificationOpensItsScreen() {
         val api = FakeApi().apply { establishedAccount() }
         appTest(FakeAuth(AuthState.SignedIn("u1")), api) { app ->

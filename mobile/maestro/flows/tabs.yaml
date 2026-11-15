@@ -12,10 +12,11 @@ tags:
 - assertVisible: "Continue to exercises"
 - tapOn: "Nutrition"
 - assertVisible: "nutrition"
-- tapOn: "Analytics"
-- assertVisible: "analytics"
+# Settings before Analytics: its own "Training" tab would answer the tap that leaves for the Training screen.
 - tapOn: "Settings"
 - assertVisible: "settings"
+- tapOn: "Analytics"
+- assertVisible: "analytics"
 - tapOn: "Training"
 - assertVisible: "training"
 - tapOn: "open coach"

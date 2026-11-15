@@ -16,6 +16,7 @@ import com.fitai.coach.core.exercises.isRunningExerciseName
 import com.fitai.coach.core.exercises.suggestNextTarget
 import com.fitai.coach.core.units.KM_TO_MILES
 import com.fitai.coach.core.units.convertWeight
+import com.fitai.coach.core.units.metersToUserDistance
 import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.format.formatClock
 import com.fitai.coach.ui.format.formatNumber
@@ -237,19 +238,62 @@ private const val HOURS_PER_DAY = 24
  * otherwise, cadence, power and relative effort. Only for a workout with a
  * recording linked.
  */
-fun deviceDetails(workout: WorkoutLogDetail, distanceUnit: String?): List<String> {
+fun deviceDetails(workout: WorkoutLogDetail, distanceUnit: String?): List<DeviceDetail> {
     if (workout.stravaActivityId == null && workout.source != "strava") return emptyList()
     val running = workout.exerciseSets.any { isRunningExerciseName(it.exerciseName) }
     return buildList {
-        workout.avgSpeed?.takeIf {
-            it > 0
-        }?.let { add(if (running) "${formatPace(it, distanceUnit)} pace" else "${formatSpeed(it, distanceUnit)} avg speed") }
-        workout.avgCadence?.takeIf {
-            it > 0
-        }?.let { cadence -> add(listOfNotNull("${cadence.roundToInt()}", workout.avgCadenceUnit?.label, "cadence").joinToString(" ")) }
-        workout.avgWatts?.takeIf { it > 0 }?.let { add("$it W power") }
-        workout.sufferScore?.takeIf { it > 0 }?.let { add("$it relative effort") }
+        workout.avgSpeed?.takeIf { it > 0 }?.let { speed ->
+            add(
+                if (running) {
+                    DeviceDetail(
+                        formatPace(speed, distanceUnit),
+                        "pace",
+                    )
+                } else {
+                    DeviceDetail(formatSpeed(speed, distanceUnit), "avg speed")
+                },
+            )
+        }
+        workout.avgCadence?.takeIf { it > 0 }?.let { cadence ->
+            add(DeviceDetail(listOfNotNull("${cadence.roundToInt()}", workout.avgCadenceUnit?.label).joinToString(" "), "cadence"))
+        }
+        workout.avgWatts?.takeIf { it > 0 }?.let { add(DeviceDetail("$it W", "power")) }
+        workout.sufferScore?.takeIf { it > 0 }?.let { add(DeviceDetail("$it", "relative effort")) }
     }
+}
+
+/** One of the recording's figures and what it measures: "6:02/km" "pace". */
+data class DeviceDetail(val value: String, val label: String) {
+    val text: String get() = "$value $label"
+}
+
+/**
+ * One tile of the summary card (SummaryStat): what it measures, the figure and
+ * its unit. The Avg HR tile also carries how it sat against the MAF ceiling.
+ */
+data class SummaryStat(val label: String, val value: String, val unit: String? = null, val status: MafStatus? = null) {
+    /** "Duration 23 min, 19 over MAF", as a screen reader says the tile. */
+    val spoken: String get() = listOfNotNull("$label $value", unit).joinToString(" ") + (status?.let { ", ${it.label}" } ?: "")
+}
+
+/**
+ * The summary card's tiles for a logged workout, in the web's order
+ * (buildCompletedStats): duration, named moving time when the recording stood
+ * still a while, then distance, heart rate, calories and effort. Maximum heart
+ * rate is the app's own addition, after the average it qualifies.
+ */
+fun summaryStats(workout: WorkoutLogDetail, distanceUnit: String?): List<SummaryStat> = buildList {
+    workout.duration?.takeIf { it > 0 }?.let {
+        add(SummaryStat(if (reportsMovingTime(workout.deviceActivity)) "Moving time" else "Duration", "$it", "min"))
+    }
+    workout.distanceMeters?.takeIf { it > 0 }?.let { meters ->
+        val value = roundTo1(metersToUserDistance(meters, distanceUnit))
+        add(SummaryStat("Distance", formatNumber(value), if (distanceUnit == MILES) "mi" else "km"))
+    }
+    workout.avgHeartrate?.takeIf { it > 0 }?.let { add(SummaryStat("Avg HR", "$it", "bpm", mafStatus(workout.mafCompliance))) }
+    workout.maxHeartrate?.takeIf { it > 0 }?.let { add(SummaryStat("Max HR", "$it", "bpm")) }
+    workout.calories?.takeIf { it > 0 }?.let { add(SummaryStat("Calories", "$it", "kcal")) }
+    workout.rpe?.let { add(SummaryStat("RPE", "$it/10")) }
 }
 
 /**
@@ -273,7 +317,7 @@ fun reportsMovingTime(deviceActivity: JsonElement): Boolean = (stoppedSeconds(de
 fun formatPace(metersPerSecond: Double, distanceUnit: String?): String {
     if (metersPerSecond <= 0) return "-"
     val perKm = METERS_PER_KM / metersPerSecond
-    val miles = distanceUnit == "miles"
+    val miles = distanceUnit == MILES
     val perUnit = if (miles) perKm / KM_TO_MILES else perKm
     var minutes = (perUnit / SECONDS_PER_MINUTE).toInt()
     var seconds = (perUnit % SECONDS_PER_MINUTE).roundToInt()
@@ -287,9 +331,7 @@ fun formatPace(metersPerSecond: Double, distanceUnit: String?): String {
 /** "28.4 km/h" from metres per second (formatSpeed). */
 fun formatSpeed(metersPerSecond: Double, distanceUnit: String?): String {
     val kmPerHour = metersPerSecond * SECONDS_PER_HOUR / METERS_PER_KM
-    return if (distanceUnit ==
-        "miles"
-    ) {
+    return if (distanceUnit == MILES) {
         "${formatNumber(roundTo1(kmPerHour * KM_TO_MILES))} mph"
     } else {
         "${formatNumber(roundTo1(kmPerHour))} km/h"
@@ -322,6 +364,9 @@ fun mafStatus(compliance: SessionMafCompliance?): MafStatus? {
 }
 
 private const val MIN_REPORTABLE_STOPPED_SECONDS = 60
+
+/** The distance preference of an athlete on miles; anything else is kilometres. */
+private const val MILES = "miles"
 private const val METERS_PER_KM = 1000.0
 private const val SECONDS_PER_MINUTE = 60
 private const val SECONDS_PER_HOUR = 3600.0

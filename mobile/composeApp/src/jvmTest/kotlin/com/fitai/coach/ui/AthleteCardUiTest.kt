@@ -114,8 +114,7 @@ private fun fact(id: String, text: String, reviewOn: String = "2099-01-01", acti
 
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.openSettings() {
-    awaitNode(hasContentDescription("Settings"))
-    onNode(hasContentDescription("Settings")).performSemanticsAction(SemanticsActions.OnClick)
+    openSettingsTab("Training")
     awaitNode(hasText("Athlete card"))
 }
 

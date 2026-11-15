@@ -1,5 +1,6 @@
 package com.fitai.coach.ui.coach
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.dates.addDaysToIsoDate
@@ -23,6 +25,7 @@ import com.fitai.coach.core.dates.weekdayIndex
 import com.fitai.coach.core.js.jsRound
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.theme.FitaiTheme
+import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.theme.Spacing
 
 /**
@@ -118,7 +121,7 @@ fun CoachStatsBar(stats: TrainingStats, streak: Int) {
         StatBadgeSpec(LucideIcons.Flame, "$streak", "Streak", colors.danger, "$streak day streak"),
     )
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = Spacing.Sm, vertical = Spacing.Xs)
+        Modifier.fillMaxWidth().padding(horizontal = Spacing.Sm, vertical = Spacing.Sm)
             .semantics { contentDescription = "Training stats" },
         horizontalArrangement = Arrangement.spacedBy(Spacing.Xs),
     ) {
@@ -126,16 +129,24 @@ fun CoachStatsBar(stats: TrainingStats, streak: Int) {
     }
 }
 
+/** One count as a tile (the web's stat tile): its icon over the figure over what it counts. */
 @Composable
 private fun StatBadge(badge: StatBadgeSpec, modifier: Modifier) {
     Column(
-        modifier.clearAndSetSemantics { contentDescription = badge.description },
+        modifier
+            .background(FitaiTheme.colors.muted, Radius.Md)
+            .padding(vertical = Spacing.Sm, horizontal = Spacing.Xxs)
+            .clearAndSetSemantics { contentDescription = badge.description },
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Spacing.Xxs),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-            Icon(badge.icon, contentDescription = null, tint = badge.tint, modifier = Modifier.size(14.dp))
-            Text(badge.value, style = FitaiTheme.typography.label, color = FitaiTheme.colors.text)
-        }
-        Text(badge.label, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted, maxLines = 1)
+        Icon(badge.icon, contentDescription = null, tint = badge.tint, modifier = Modifier.size(14.dp))
+        Text(
+            badge.value,
+            style = FitaiTheme.typography.mono.copy(fontWeight = FontWeight.Bold),
+            color = FitaiTheme.colors.text,
+            maxLines = 1,
+        )
+        Text(badge.label, style = FitaiTheme.typography.caption, color = FitaiTheme.colors.textMuted, maxLines = 1)
     }
 }

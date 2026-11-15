@@ -28,10 +28,14 @@ data class FitaiTypography(
     val h3: TextStyle,
     val body: TextStyle,
     val bodySm: TextStyle,
+    /** The web's text-xs: chips, a card's secondary lines, a tile's unit. Nothing an athlete must read is set smaller. */
+    val caption: TextStyle,
     val label: TextStyle,
     val button: TextStyle,
     val metricXl: TextStyle,
     val metric: TextStyle,
+    /** A figure in a grid of several, where [metric] would leave no room for its neighbours. */
+    val metricSm: TextStyle,
     val mono: TextStyle,
 )
 
@@ -87,6 +91,7 @@ internal fun fitaiTypography(): FitaiTypography {
         ),
         body = TextStyle(fontFamily = sans, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp),
         bodySm = TextStyle(fontFamily = sans, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp),
+        caption = TextStyle(fontFamily = sans, fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp),
         label = TextStyle(fontFamily = sans, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.08.em),
         button = TextStyle(fontFamily = sans, fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp),
         metricXl = TextStyle(
@@ -103,6 +108,14 @@ internal fun fitaiTypography(): FitaiTypography {
             fontSize = 32.sp,
             lineHeight = 36.sp,
             letterSpacing = (-0.01).em,
+            fontFeatureSettings = tabular,
+        ),
+        metricSm = TextStyle(
+            fontFamily = mono,
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            lineHeight = 28.sp,
+            letterSpacing = (-0.02).em,
             fontFeatureSettings = tabular,
         ),
         mono = TextStyle(

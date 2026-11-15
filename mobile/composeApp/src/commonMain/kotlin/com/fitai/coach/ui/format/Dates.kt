@@ -21,8 +21,11 @@ fun dayLabel(date: String, today: String): String = when (date) {
     today -> "Today"
     addDaysToIsoDate(today, 1) -> "Tomorrow"
     addDaysToIsoDate(today, -1) -> "Yesterday"
-    else -> "${weekdayName(date)}, ${shortDate(date)}"
+    else -> weekdayDate(date)
 }
+
+/** "Monday, Nov 3": a day by its weekday, whether or not it is near today. */
+fun weekdayDate(date: String): String = "${weekdayName(date)}, ${shortDate(date)}"
 
 /** Short weekday, "Mon". */
 fun shortWeekday(date: String): String = weekdayName(date).take(WEEKDAY_ABBREVIATION)

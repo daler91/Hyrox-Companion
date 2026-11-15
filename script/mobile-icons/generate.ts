@@ -76,6 +76,12 @@ export const ICONS: Readonly<Record<string, string>> = {
   StarFilled: "star",
   TrendingUp: "trending-up",
   Calendar: "calendar",
+  Zap: "zap",
+  User: "user",
+  Bell: "bell",
+  Link2: "link-2",
+  Database: "database",
+  BookOpen: "book-open",
 };
 
 /**

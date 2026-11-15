@@ -1,6 +1,7 @@
 package com.fitai.coach.ui.timeline
 
 import com.fitai.coach.core.api.generated.CoachNoteInputs
+import com.fitai.coach.core.api.generated.ExerciseSetRow
 import com.fitai.coach.core.api.generated.PersonalRecord
 import com.fitai.coach.core.api.generated.TimelineAnnotation
 import com.fitai.coach.core.api.generated.TimelineEntry
@@ -14,10 +15,14 @@ import com.fitai.coach.core.plans.PlanPhase
 import com.fitai.coach.core.plans.TrainingPhase
 import com.fitai.coach.core.plans.computeCurrentWeek
 import com.fitai.coach.core.plans.computePlanPhase
+import com.fitai.coach.core.units.StoredUnitStamp
+import com.fitai.coach.core.units.UnitPreferences
+import com.fitai.coach.core.units.getWorkoutDistanceDisplay
+import com.fitai.coach.core.units.storedDistanceToDisplay
+import com.fitai.coach.core.units.storedWeightToDisplay
 import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.format.formatClock
 import com.fitai.coach.ui.format.formatNumber
-import com.fitai.coach.ui.format.formatSetDistance
 import com.fitai.coach.ui.format.longDate
 import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.workout.ExerciseGroup
@@ -222,13 +227,20 @@ fun TimelineRows.withAnnotations(annotations: List<TimelineAnnotation>, today: S
 
 // --- Exercise chips with PR trophies ---
 
-/** One exercise on a card: "Back Squat 3x5 100kg", and whether it set a record in this workout. */
-data class ExerciseChip(val text: String, val personalRecord: Boolean)
+/**
+ * One exercise on a card: "Back Squat 3x5 100kg", whether it set a record in
+ * this workout, and its category, which colours the chip.
+ */
+data class ExerciseChip(val text: String, val personalRecord: Boolean, val category: String? = null)
 
-/** The chips for a logged session's exercises (ExerciseChips), records from [records]. */
-fun exerciseChips(entry: TimelineEntry, records: Map<String, PersonalRecord>): List<ExerciseChip> =
+/** The chips for a session's exercises (ExerciseChips), in the athlete's [units], records from [records]. */
+fun exerciseChips(
+    entry: TimelineEntry,
+    records: Map<String, PersonalRecord>,
+    units: UnitPreferences = UnitPreferences(),
+): List<ExerciseChip> =
     exerciseGroups(entry.exerciseSets.orEmpty()).map { group ->
-        ExerciseChip(chipText(group), setRecordIn(group, entry.workoutLogId, records))
+        ExerciseChip(chipText(group, units), setRecordIn(group, entry.workoutLogId, records), group.sets.firstOrNull()?.category)
     }
 
 /**
@@ -241,8 +253,13 @@ fun setRecordIn(group: ExerciseGroup, workoutLogId: String?, records: Map<String
     return listOfNotNull(record.maxWeight, record.maxDistance, record.bestTime).any { it.workoutLogId == workoutLogId }
 }
 
-/** "Back Squat 3x5 100kg" (formatExerciseSummary). */
-fun chipText(group: ExerciseGroup): String {
+/**
+ * "Back Squat 3x5 100kg" (formatExerciseSummary). The numbers and their labels
+ * are the athlete's current [units]: a set stamped in the other unit is
+ * converted, and one with no stamp (an older or planned row) already means
+ * the athlete's unit, so it is labelled with it rather than assumed to be kg.
+ */
+fun chipText(group: ExerciseGroup, units: UnitPreferences = UnitPreferences()): String {
     val sets = group.sets
     val first = sets.firstOrNull() ?: return group.label
     val parts = buildList {
@@ -252,14 +269,18 @@ fun chipText(group: ExerciseGroup): String {
             first.reps != null && sets.size == 1 -> add("${first.reps}r")
             sets.size > 1 -> add("${sets.size} sets")
         }
-        val weights = sets.mapNotNull { it.weight }.distinct()
-        val unit = if (first.weightUnit == "lbs") "lbs" else "kg"
-        if (weights.isNotEmpty()) add(weights.joinToString("/") { formatNumber(it) } + unit)
-        first.distance?.let { add(formatSetDistance(it, first.distanceUnit)) }
+        val weights = sets.mapNotNull { set -> set.weight?.let { storedWeightToDisplay(it, set.stamp(), units) } }.distinct()
+        if (weights.isNotEmpty()) add(weights.joinToString("/") { formatNumber(it) } + weightLabel(units))
+        first.distance?.let { add(getWorkoutDistanceDisplay(storedDistanceToDisplay(it, first.stamp(), units), units.distanceUnit).text) }
         first.time?.let { add(formatClock(it)) }
     }
     return if (parts.isEmpty()) group.label else "${group.label} ${parts.joinToString(" ")}"
 }
+
+private fun ExerciseSetRow.stamp() = StoredUnitStamp(weightUnit = weightUnit, distanceUnit = distanceUnit)
+
+/** "lbs" for an athlete on pounds, else "kg" (the web's weightLabel). */
+private fun weightLabel(units: UnitPreferences): String = if (units.weightUnit == "lbs") "lbs" else "kg"
 
 // --- Coach note ---
 

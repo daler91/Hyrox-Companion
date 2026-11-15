@@ -36,6 +36,8 @@ import com.fitai.coach.ui.theme.Spacing
  * [error] replaces [supportingText] and is announced by screen readers.
  * [description] is what a screen reader calls the field, when the visible
  * label alone wouldn't say which one it is (a row of ingredients' grams).
+ * With [showLabel] off the label is only spoken: a chat composer, where the
+ * [placeholder] already says what to type and a label above would crowd it.
  */
 @Composable
 fun FitaiTextField(
@@ -53,6 +55,7 @@ fun FitaiTextField(
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     description: String = label,
+    showLabel: Boolean = true,
 ) {
     val colors = FitaiTheme.colors
     val typography = FitaiTheme.typography
@@ -66,12 +69,14 @@ fun FitaiTextField(
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
         // The label is read as the field's own description (below), so a screen
         // reader announces "email, edit box" rather than an unlabelled field.
-        Text(
-            label,
-            style = typography.bodySm.copy(fontWeight = typography.button.fontWeight),
-            color = colors.text,
-            modifier = Modifier.clearAndSetSemantics {},
-        )
+        if (showLabel) {
+            Text(
+                label,
+                style = typography.bodySm.copy(fontWeight = typography.button.fontWeight),
+                color = colors.text,
+                modifier = Modifier.clearAndSetSemantics {},
+            )
+        }
         BasicTextField(
             value = value,
             onValueChange = onValueChange,

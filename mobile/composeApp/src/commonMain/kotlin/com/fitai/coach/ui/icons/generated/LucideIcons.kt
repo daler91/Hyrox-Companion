@@ -81,6 +81,22 @@ object LucideIcons {
         )
     }
 
+    val Bell: ImageVector by lazy {
+        lucide(
+            "Bell",
+            "M10.268 21a2 2 0 0 0 3.464 0",
+            "M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326",
+        )
+    }
+
+    val BookOpen: ImageVector by lazy {
+        lucide(
+            "BookOpen",
+            "M12 5v16",
+            "M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z",
+        )
+    }
+
     val Calculator: ImageVector by lazy {
         lucide(
             "Calculator",
@@ -233,6 +249,15 @@ object LucideIcons {
         )
     }
 
+    val Database: ImageVector by lazy {
+        lucide(
+            "Database",
+            "M3 5A9 3 0 1 0 21 5A9 3 0 1 0 3 5Z",
+            "M3 5V19A9 3 0 0 0 21 19V5",
+            "M3 12A9 3 0 0 0 21 12",
+        )
+    }
+
     val Dumbbell: ImageVector by lazy {
         lucide(
             "Dumbbell",
@@ -310,6 +335,15 @@ object LucideIcons {
             "M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5",
             "M9 18h6",
             "M10 22h4",
+        )
+    }
+
+    val Link2: ImageVector by lazy {
+        lucide(
+            "Link2",
+            "M9 17H7A5 5 0 0 1 7 7h2",
+            "M15 7h2a5 5 0 1 1 0 10h-2",
+            "M8 12L16 12",
         )
     }
 
@@ -566,6 +600,14 @@ object LucideIcons {
         )
     }
 
+    val User: ImageVector by lazy {
+        lucide(
+            "User",
+            "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2",
+            "M8 7A4 4 0 1 0 16 7A4 4 0 1 0 8 7Z",
+        )
+    }
+
     val UtensilsCrossed: ImageVector by lazy {
         lucide(
             "UtensilsCrossed",
@@ -594,6 +636,13 @@ object LucideIcons {
             "X",
             "M18 6 6 18",
             "m6 6 12 12",
+        )
+    }
+
+    val Zap: ImageVector by lazy {
+        lucide(
+            "Zap",
+            "M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z",
         )
     }
 }

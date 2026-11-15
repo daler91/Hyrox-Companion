@@ -3,16 +3,21 @@ package com.fitai.coach.ui.workout
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHostState
@@ -26,9 +31,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitai.coach.core.api.generated.ExerciseSetRow
@@ -36,8 +43,8 @@ import com.fitai.coach.core.api.generated.SessionGrade
 import com.fitai.coach.core.api.generated.WorkoutLogDetail
 import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.exercises.NextTarget
-import com.fitai.coach.core.units.metersToUserDistance
 import com.fitai.coach.ui.coach.CoachThread
+import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.ButtonSize
 import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.ErrorState
@@ -52,10 +59,9 @@ import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.components.RpeSelector
 import com.fitai.coach.ui.format.formatClock
-import com.fitai.coach.ui.format.formatNumber
 import com.fitai.coach.ui.format.formatSetDistance
 import com.fitai.coach.ui.format.formatWeight
-import com.fitai.coach.ui.format.shortDate
+import com.fitai.coach.ui.format.weekdayDate
 import com.fitai.coach.ui.fuelling.FuellingAroundSessionPanel
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.media.rememberPhotoPicker
@@ -63,7 +69,6 @@ import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 /**
  * A logged workout. [onAskCoach] opens its own coach thread; [onDeleted]
@@ -376,41 +381,35 @@ private fun WorkoutContent(
     val groups = exerciseGroups(workout.exerciseSets)
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(Spacing.Lg),
+        // Room under the last button for the coach button that floats over the page.
+        contentPadding = PaddingValues(start = Spacing.Lg, top = Spacing.Lg, end = Spacing.Lg, bottom = END_CLEARANCE.dp),
         verticalArrangement = Arrangement.spacedBy(Spacing.Md),
     ) {
+        item { DetailHeader(workout, onBack = actions::back, onEdit = { actions.open(DetailSheet.Details) }) }
+        item { SummaryCard(workout, distanceUnit) }
         item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = actions::back) { Icon(LucideIcons.ArrowLeft, contentDescription = "back", tint = colors.text) }
-                Text(shortDate(workout.date), style = type.label, color = colors.textMuted)
-            }
-            Text(workout.focus, style = type.h1, color = colors.text, modifier = Modifier.semantics { heading() })
-        }
-        item { Stats(workout, distanceUnit) }
-        workout.suggestedRpe?.takeIf { workout.rpe == null }?.let { suggested ->
-            item { SuggestedRpeRow(suggested) { onSaveRpe(suggested) } }
-        }
-        item { PlanDayRow(state.linkedPlanDay, linked = workout.planDayId != null, onChange = { actions.open(DetailSheet.PlanDay) }) }
-        state.maf?.let { tag ->
-            item {
-                MafTagRow(tag, state.mafSaving, onOpenForm = {
-                    actions.open(DetailSheet.Maf)
-                }, onRemove = { actions.confirm(Confirm.RemoveMaf) })
-            }
+            FitaiButton(
+                "Ask coach",
+                onClick = actions::askCoach,
+                leadingIcon = LucideIcons.MessageSquare,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                FitaiButton(
-                    "Ask coach",
-                    onClick = actions::askCoach,
-                    variant = ButtonVariant.Secondary,
-                    size = ButtonSize.Sm,
-                    leadingIcon = LucideIcons.MessageSquare,
-                )
-                FitaiButton("Edit details", onClick = {
-                    actions.open(DetailSheet.Details)
-                }, variant = ButtonVariant.Ghost, size = ButtonSize.Sm)
-            }
+            SessionCard(
+                suggestedRpe = workout.suggestedRpe?.takeIf { workout.rpe == null },
+                onSaveRpe = onSaveRpe,
+                planDay = {
+                    PlanDayRow(state.linkedPlanDay, linked = workout.planDayId != null, onChange = { actions.open(DetailSheet.PlanDay) })
+                },
+                maf = state.maf?.let { tag ->
+                    {
+                        MafTagRow(tag, state.mafSaving, onOpenForm = {
+                            actions.open(DetailSheet.Maf)
+                        }, onRemove = { actions.confirm(Confirm.RemoveMaf) })
+                    }
+                },
+            )
         }
         state.grade?.let { grade -> item { GradeCard(grade) } }
         if (state.showsFuelling) {
@@ -418,9 +417,10 @@ private fun WorkoutContent(
                 FuellingAroundSessionPanel(state.fuelling) { state.fuelling?.let { actions.logRecoveryMeal(it.date) } }
             }
         }
-        if (workout.mainWorkout.isNotBlank()) item { Text(workout.mainWorkout, style = type.body, color = colors.text) }
-        workout.notes?.takeIf { it.isNotBlank() }?.let { notes -> item { Text(notes, style = type.body, color = colors.textMuted) } }
+        item(key = "results-heading") { ResultsHeading(fromStrava = workout.source == "strava") }
+        // With no sets the description is the workout, so it leads; with sets it follows them, as on the web.
         if (groups.isEmpty()) {
+            item { DescriptionCard(workout) }
             item { Text("No structured sets for this workout.", style = type.body, color = colors.textMuted) }
         }
         item { ReadIntoSets(hasText = hasReadableText(workout), hasSets = groups.isNotEmpty(), state = state, actions = actions) }
@@ -447,6 +447,7 @@ private fun WorkoutContent(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        if (groups.isNotEmpty()) item { DescriptionCard(workout) }
         val blocks = orderedBlocks(workout.structureBlocks)
         if (blocks.isNotEmpty()) {
             item(key = "structure-heading") {
@@ -464,6 +465,7 @@ private fun WorkoutContent(
                     variant = ButtonVariant.Secondary,
                     enabled = !state.busy,
                     leadingIcon = LucideIcons.CopyPlus,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -569,6 +571,165 @@ private fun ExerciseCard(
     }
 }
 
+/** The back arrow and the status over the title and its date (the web's detail header); the pencil's job is "Edit details". */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DetailHeader(workout: WorkoutLogDetail, onBack: () -> Unit, onEdit: () -> Unit) {
+    val colors = FitaiTheme.colors
+    val type = FitaiTheme.typography
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // The button's own padding is taken back, so the arrow sits on the content's left edge.
+            IconButton(onClick = onBack, modifier = Modifier.offset(x = -Spacing.Md)) {
+                Icon(LucideIcons.ArrowLeft, contentDescription = "back", tint = colors.text)
+            }
+            FlowRow(
+                Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.Xs),
+                verticalArrangement = Arrangement.spacedBy(Spacing.Xs),
+            ) {
+                FitaiBadge("Completed", tone = BadgeTone.Success)
+                if (!workout.countsAsTraining) FitaiBadge("Not counted as training")
+            }
+            FitaiButton(
+                "Edit details",
+                onClick = onEdit,
+                variant = ButtonVariant.Ghost,
+                size = ButtonSize.Sm,
+                leadingIcon = LucideIcons.Pencil,
+            )
+        }
+        Text(workout.focus, style = type.h2, color = colors.text, modifier = Modifier.semantics { heading() })
+        Text(
+            listOfNotNull(weekdayDate(workout.date), workout.timeOfDayMin?.let(::formatTimeOfDay)).joinToString(" · "),
+            style = type.bodySm,
+            color = colors.textMuted,
+        )
+    }
+}
+
+/**
+ * The session's figures as a grid of tiles over what the recording measured
+ * (WorkoutSummaryHeader). Each tile is a label, its figure and its unit, so no
+ * number has to be picked out of a sentence.
+ */
+@Composable
+private fun SummaryCard(workout: WorkoutLogDetail, distanceUnit: String?) {
+    val stats = summaryStats(workout, distanceUnit)
+    val details = deviceDetails(workout, distanceUnit)
+    if (stats.isEmpty() && details.isEmpty()) return
+    val colors = FitaiTheme.colors
+    FitaiCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.Lg)) {
+            stats.chunked(STAT_COLUMNS).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Lg)) {
+                    row.forEach { StatTile(it, Modifier.weight(1f)) }
+                    repeat(STAT_COLUMNS - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            stats.firstNotNullOfOrNull { it.status }?.let {
+                Text(it.cue, style = FitaiTheme.typography.bodySm, color = colors.textMuted)
+            }
+            if (details.isNotEmpty()) {
+                if (stats.isNotEmpty()) HorizontalDivider(color = colors.border)
+                RecordingDetails(details)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatTile(stat: SummaryStat, modifier: Modifier) {
+    val colors = FitaiTheme.colors
+    val type = FitaiTheme.typography
+    Column(
+        modifier.semantics(mergeDescendants = true) { contentDescription = stat.spoken },
+        verticalArrangement = Arrangement.spacedBy(Spacing.Xs),
+    ) {
+        Text(stat.label.uppercase(), style = type.label, color = colors.textMuted)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+            Text(stat.value, style = type.metricSm, color = colors.text, modifier = Modifier.alignByBaseline())
+            stat.unit?.let { Text(it, style = type.bodySm, color = colors.textMuted, modifier = Modifier.alignByBaseline()) }
+        }
+        stat.status?.let { FitaiBadge(it.label, tone = it.tone) }
+    }
+}
+
+/** "STRAVA 6:02/km pace · 74 spm cadence": each figure in the text colour, what it measures beside it in the muted one. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RecordingDetails(details: List<DeviceDetail>) {
+    val colors = FitaiTheme.colors
+    val type = FitaiTheme.typography
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Md), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+        Text("RECORDED", style = type.label, color = colors.textMuted, modifier = Modifier.alignByBaseline())
+        details.forEach { detail ->
+            Row(
+                Modifier.alignByBaseline().semantics(mergeDescendants = true) {},
+                horizontalArrangement = Arrangement.spacedBy(Spacing.Xs),
+            ) {
+                Text(detail.value, style = type.bodySm, color = colors.text, modifier = Modifier.alignByBaseline())
+                Text(detail.label, style = type.bodySm, color = colors.textMuted, modifier = Modifier.alignByBaseline())
+            }
+        }
+    }
+}
+
+/**
+ * What the session counts as, one row each under a rule: the effort its heart
+ * rate suggests, the plan day it counts towards, and its MAF test.
+ */
+@Composable
+private fun SessionCard(suggestedRpe: Int?, onSaveRpe: (Int) -> Unit, planDay: @Composable () -> Unit, maf: (@Composable () -> Unit)?) {
+    val colors = FitaiTheme.colors
+    FitaiCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+            suggestedRpe?.let { suggested ->
+                SuggestedRpeRow(suggested) { onSaveRpe(suggested) }
+                HorizontalDivider(color = colors.border)
+            }
+            planDay()
+            maf?.let { row ->
+                HorizontalDivider(color = colors.border)
+                row()
+            }
+        }
+    }
+}
+
+/** "Results", and where they came from when a recording brought them. */
+@Composable
+private fun ResultsHeading(fromStrava: Boolean) {
+    val colors = FitaiTheme.colors
+    val type = FitaiTheme.typography
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+        Icon(LucideIcons.Dumbbell, contentDescription = null, tint = colors.textMuted)
+        Text("Results", style = type.h3, color = colors.text, modifier = Modifier.weight(1f).semantics { heading() })
+        if (fromStrava) Text("from Strava", style = type.bodySm, color = colors.textMuted)
+    }
+}
+
+/** What was written for the session and the athlete's notes on it, each under its name. */
+@Composable
+private fun DescriptionCard(workout: WorkoutLogDetail) {
+    val notes = workout.notes?.takeIf { it.isNotBlank() }
+    if (workout.mainWorkout.isBlank() && notes == null) return
+    val colors = FitaiTheme.colors
+    val type = FitaiTheme.typography
+    FitaiCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+            if (workout.mainWorkout.isNotBlank()) {
+                Text("DESCRIPTION", style = type.label, color = colors.textMuted)
+                Text(workout.mainWorkout, style = type.body, color = colors.text)
+            }
+            notes?.let {
+                Text("NOTES", style = type.label, color = colors.textMuted)
+                Text(it, style = type.body, color = colors.text)
+            }
+        }
+    }
+}
+
 /** The RPE the recording's heart rate suggests (RpePrompt): saved only when the athlete takes it. */
 @Composable
 private fun SuggestedRpeRow(suggested: Int, onSave: () -> Unit) {
@@ -579,7 +740,7 @@ private fun SuggestedRpeRow(suggested: Int, onSave: () -> Unit) {
             color = FitaiTheme.colors.textMuted,
             modifier = Modifier.weight(1f),
         )
-        FitaiButton("Save RPE $suggested", onClick = onSave, variant = ButtonVariant.Ghost, size = ButtonSize.Sm)
+        FitaiButton("Save RPE $suggested", onClick = onSave, variant = ButtonVariant.Secondary, size = ButtonSize.Sm)
     }
 }
 
@@ -597,34 +758,6 @@ private fun GradeCard(grade: SessionGrade) {
     }
 }
 
-@Composable
-private fun Stats(workout: WorkoutLogDetail, distanceUnit: String?) {
-    val parts = buildList {
-        workout.timeOfDayMin?.let { add(formatTimeOfDay(it)) }
-        workout.duration?.let { add(if (reportsMovingTime(workout.deviceActivity)) "$it min moving" else "$it min") }
-        workout.rpe?.let { add("RPE $it") }
-        workout.distanceMeters?.takeIf { it > 0 }?.let { add(formatDistance(it, distanceUnit)) }
-        workout.avgHeartrate?.let { add("avg $it bpm") }
-        workout.maxHeartrate?.let { add("max $it bpm") }
-        workout.calories?.takeIf { it > 0 }?.let { add("$it kcal") }
-        if (!workout.countsAsTraining) add("not counted as training")
-    }
-    if (parts.isNotEmpty()) Text(parts.joinToString(" · "), style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
-    mafStatus(workout.mafCompliance)?.let { MafStatusRow(it) }
-    deviceDetails(workout, distanceUnit).takeIf { it.isNotEmpty() }?.let { details ->
-        Text("Recorded: ${details.joinToString(" · ")}", style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
-    }
-}
-
-/** The average heart rate against the MAF ceiling, and what to do about it (the web's Avg HR tile status). */
-@Composable
-private fun MafStatusRow(status: MafStatus) {
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-        FitaiBadge(status.label, tone = status.tone)
-        Text(status.cue, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
-    }
-}
-
 /** Which plan day the workout counts towards, and changing it (link or unlink). */
 @Composable
 private fun PlanDayRow(linkedDay: PlanDayOption?, linked: Boolean, onChange: () -> Unit) {
@@ -639,16 +772,8 @@ private fun PlanDayRow(linkedDay: PlanDayOption?, linked: Boolean, onChange: () 
             color = FitaiTheme.colors.textMuted,
             modifier = Modifier.weight(1f),
         )
-        FitaiButton(if (linked) "Change" else "Link to plan", onClick = onChange, variant = ButtonVariant.Ghost, size = ButtonSize.Sm)
+        FitaiButton(if (linked) "Change" else "Link to plan", onClick = onChange, variant = ButtonVariant.Secondary, size = ButtonSize.Sm)
     }
-}
-
-private const val TENTHS = 10.0
-
-/** "10.2 km" or "6.3 mi" from metres. */
-private fun formatDistance(meters: Double, distanceUnit: String?): String {
-    val value = (metersToUserDistance(meters, distanceUnit) * TENTHS).roundToInt() / TENTHS
-    return "${formatNumber(value)} ${if (distanceUnit == "miles") "mi" else "km"}"
 }
 
 /** "10 reps · 80 kg · 400 m · 1:30", from the values a set has. */
@@ -693,3 +818,9 @@ private fun DetailsEditor(workout: WorkoutLogDetail, onSave: (DetailsEdit) -> Un
         }
     }
 }
+
+/** Tiles to a row of the summary card. */
+private const val STAT_COLUMNS = 2
+
+/** dp under the page's last button: the coach button (56) and its margin sit there. */
+private const val END_CLEARANCE = 96
