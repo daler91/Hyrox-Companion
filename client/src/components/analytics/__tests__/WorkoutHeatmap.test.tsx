@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WorkoutHeatmap } from "../WorkoutHeatmap";
@@ -71,5 +71,19 @@ describe("WorkoutHeatmap", () => {
     expect(cellFor("2026-02-02")).toHaveAttribute("title", "2026-02-02");
     expect(cellFor("2026-02-02")).toHaveClass("bg-muted/60");
     expect(screen.queryByTestId("workout-heatmap-out-of-range-legend")).not.toBeInTheDocument();
+  });
+
+  it("shows cell info on tap for mobile users", () => {
+    render(<WorkoutHeatmap workoutDates={["2026-05-18"]} />);
+
+    expect(screen.queryByTestId("workout-heatmap-selected-info")).not.toBeInTheDocument();
+
+    fireEvent.click(cellFor("2026-05-18"));
+    const info = screen.getByTestId("workout-heatmap-selected-info");
+    expect(info).toHaveTextContent("2026-05-18");
+    expect(info).toHaveTextContent("Workout logged");
+
+    fireEvent.click(cellFor("2026-05-19"));
+    expect(screen.getByTestId("workout-heatmap-selected-info")).toHaveTextContent("Rest day");
   });
 });

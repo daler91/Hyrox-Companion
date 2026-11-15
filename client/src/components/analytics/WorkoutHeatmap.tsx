@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { toISODateString } from "@/lib/dateUtils";
 
@@ -65,6 +65,7 @@ interface WorkoutHeatmapProps {
 }
 
 export function WorkoutHeatmap({ workoutDates, rangeStart, explanation }: WorkoutHeatmapProps) {
+  const [selectedCell, setSelectedCell] = useState<HeatmapCell | null>(null);
   const { grid, monthLabels, hasOutOfRange } = useMemo(() => {
     const dateSet = new Set(workoutDates);
     const today = new Date();
@@ -168,8 +169,9 @@ export function WorkoutHeatmap({ workoutDates, rangeStart, explanation }: Workou
                   {week.map((cell) => (
                     <div
                       key={cell.date}
-                      className={`aspect-square w-full max-w-7 rounded-sm ${getHeatmapCellColor(cell)}`}
+                      className={`aspect-square w-full max-w-7 cursor-pointer rounded-sm ${getHeatmapCellColor(cell)}${selectedCell?.date === cell.date ? " ring-2 ring-ring ring-offset-1 ring-offset-background" : ""}`}
                       title={getHeatmapCellTitle(cell)}
+                      onClick={() => setSelectedCell(cell)}
                       data-testid="workout-heatmap-cell"
                     />
                   ))}
@@ -194,6 +196,18 @@ export function WorkoutHeatmap({ workoutDates, rangeStart, explanation }: Workou
               </span>
             )}
           </div>
+          {selectedCell && (
+            <p className="mt-1 text-xs text-muted-foreground" aria-live="polite" data-testid="workout-heatmap-selected-info">
+              <span className="font-medium text-foreground">{selectedCell.date}</span>
+              {selectedCell.isOutOfRange
+                ? " — Outside selected range"
+                : selectedCell.isFuture
+                  ? " — Upcoming"
+                  : selectedCell.hasWorkout
+                    ? " — Workout logged"
+                    : " — Rest day"}
+            </p>
+          )}
         </div>
       </div>
       <ChartExplanation explanation={explanation} />
