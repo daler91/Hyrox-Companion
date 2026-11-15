@@ -16,7 +16,9 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.fitai.coach.core.auth.AuthState
@@ -85,6 +87,31 @@ class LayoutGalleryTest {
             tap(hasContentDescription("Settings"))
             ui.awaitNode(hasText("Weight unit"))
             shot("settings")
+
+            tap(hasContentDescription("Log Workout"))
+            ui.awaitNode(hasText("Continue to exercises"))
+            pages("log", count = 2)
+
+            tap(hasContentDescription("Nutrition"))
+            ui.awaitNode(hasText("nutrition"))
+            pages("nutrition", count = 3)
+
+            tap(hasContentDescription("Analytics"))
+            ui.awaitNode(hasText("analytics"))
+            pages("analytics", count = 3)
+        }
+
+        /** A long screen as [count] pictures, each most of a screen further down than the last. */
+        private fun pages(name: String, count: Int) {
+            shot("$name-1")
+            for (page in 2..count) {
+                runCatching {
+                    ui.onAllNodes(hasScrollAction()).onFirst().performTouchInput {
+                        swipeUp(startY = bottom * SWIPE_FROM, endY = bottom * SWIPE_TO, durationMillis = SWIPE_MS)
+                    }
+                }
+                shot("$name-$page")
+            }
         }
 
         /** Lets the first fetches land and the list lay out before a picture is taken. */
@@ -115,6 +142,11 @@ class LayoutGalleryTest {
         const val HEIGHT_DP = 868
         const val SCALE = 2
         const val SETTLE_MS = 1_500L
+
+        // One page down: a slow drag over most of the screen, so nothing is flung past.
+        const val SWIPE_FROM = 0.85f
+        const val SWIPE_TO = 0.1f
+        const val SWIPE_MS = 800L
         const val WAIT_MS = 30_000L
 
         // What script/mobile-gallery/seed.sh puts there; without them the first screen is still drawn.

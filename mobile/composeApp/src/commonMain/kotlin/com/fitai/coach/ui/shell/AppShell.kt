@@ -160,13 +160,16 @@ fun AppShell() {
         snackbarHost = { FitaiToastHost(toasts) },
         bottomBar = { BottomBar(current = backStack.currentTab, onSelect = backStack::select) },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { openCoach(null) },
-                shape = Radius.Lg,
-                containerColor = colors.primary,
-                contentColor = colors.onPrimary,
-                modifier = Modifier.semantics { contentDescription = "open coach" },
-            ) { Icon(LucideIcons.MessageSquare, contentDescription = null) }
+            // Not over the log form: the web offers the coach from the timeline, and here it sat on the form's own Continue button.
+            if (backStack.currentTab != TopLevel.LogWorkout) {
+                FloatingActionButton(
+                    onClick = { openCoach(null) },
+                    shape = Radius.Lg,
+                    containerColor = colors.primary,
+                    contentColor = colors.onPrimary,
+                    modifier = Modifier.semantics { contentDescription = "open coach" },
+                ) { Icon(LucideIcons.MessageSquare, contentDescription = null) }
+            }
         },
     ) { padding ->
         Column(Modifier.padding(padding)) {

@@ -2,12 +2,13 @@
 # Seeds a LOCAL web server's dev user with a few days that exercise the app's
 # main screens, for mobile's LayoutGalleryTest (see mobile/README.md, "Comparing
 # with the web app"): a plan in its fifth week, yesterday's session missed, two
-# Strava recordings that could be it, and a short coach conversation.
+# Strava recordings that could be it, a short coach conversation, four weeks
+# of logged sessions for Analytics, and most of a day's food for Nutrition.
 #
 #   script/mobile-gallery/seed.sh [server URL] [database URL]
 #
-# It deletes the dev user's plans and workouts first, so it refuses any
-# database that isn't on this machine.
+# It deletes the dev user's plans, workouts, food log and custom foods first,
+# so it refuses any database that isn't on this machine.
 set -euo pipefail
 
 SERVER=${1:-http://localhost:5000}
@@ -87,4 +88,50 @@ INSERT INTO chat_messages (user_id, role, content, timestamp) VALUES
   now() - interval '2 hours' + interval '1 minute');
 SQL
 
-echo "Seeded $USER_ID on $SERVER: plan $PLAN from $PLAN_START, yesterday ($YESTERDAY) missed with two recordings."
+# Four weeks of logged sessions, each a little heavier or faster than the last:
+# Analytics has a trend to draw and records to list. Weights are the athlete's
+# pounds, as the composer would send them.
+for WEEK in 4 3 2 1; do
+  STRENGTH_DAY=$(date -u -d "$TODAY -$((WEEK * 7 + 1)) days" +%F)
+  RUN_DAY=$(date -u -d "$TODAY -$((WEEK * 7 - 2)) days" +%F)
+  SQUAT=$((225 - WEEK * 10))
+  ROW_SECONDS=$((110 + WEEK * 2))
+  call POST /api/v1/workouts "{\"date\":\"$STRENGTH_DAY\",\"focus\":\"Strength + Stations\",\"duration\":55,\"rpe\":7,\"exercises\":[
+    {\"exerciseName\":\"back_squat\",\"category\":\"strength\",\"sets\":[{\"reps\":5,\"weight\":$SQUAT},{\"reps\":5,\"weight\":$SQUAT},{\"reps\":5,\"weight\":$SQUAT}]},
+    {\"exerciseName\":\"wall_balls\",\"category\":\"functional\",\"sets\":[{\"reps\":25,\"weight\":14},{\"reps\":25,\"weight\":14}]},
+    {\"exerciseName\":\"rowing\",\"category\":\"conditioning\",\"sets\":[{\"distance\":500,\"time\":$(python3 -c "print(round($ROW_SECONDS / 60, 2))")}]}]}" >/dev/null
+  call POST /api/v1/workouts "{\"date\":\"$RUN_DAY\",\"focus\":\"Easy Run\",\"duration\":$((40 - WEEK)),\"rpe\":4,\"distanceMeters\":$((6600 - WEEK * 150)),\"avgHeartrate\":$((140 + WEEK)),\"exercises\":[
+    {\"exerciseName\":\"easy_run\",\"category\":\"running\",\"sets\":[{\"distance\":$((6600 - WEEK * 150)),\"time\":$((40 - WEEK))}]}]}" >/dev/null
+done
+
+# Targets and most of a day's food, so Nutrition shows rings part-filled and meals with rows in them.
+psql -q -v ON_ERROR_STOP=1 "$DB" >/dev/null <<SQL
+DELETE FROM food_log_entries WHERE user_id = '$USER_ID';
+DELETE FROM nutrition_targets WHERE user_id = '$USER_ID';
+DELETE FROM food_favorites WHERE user_id = '$USER_ID';
+DELETE FROM food_servings WHERE created_by_user_id = '$USER_ID';
+DELETE FROM foods WHERE created_by_user_id = '$USER_ID';
+SQL
+call POST /api/v1/nutrition/targets '{"calories":2600,"proteinG":150,"carbG":320,"fatG":80}' >/dev/null
+food() {
+  local name=$1 kcal=$2 protein=$3 carb=$4 fat=$5
+  call POST /api/v1/nutrition/foods "{\"name\":\"$name\",\"caloriesPer100g\":$kcal,\"proteinPer100g\":$protein,\"carbPer100g\":$carb,\"fatPer100g\":$fat}" |
+    python3 -c "import json,sys;print(json.load(sys.stdin)['id'])"
+}
+log() {
+  local food_id=$1 grams=$2 meal=$3 hour=$4
+  call POST /api/v1/nutrition/logs "{\"foodId\":\"$food_id\",\"quantityG\":$grams,\"mealType\":\"$meal\",\"loggedAt\":\"${TODAY}T$hour:00:00Z\"}" >/dev/null
+}
+OATS=$(food "Rolled oats" 379 13 68 6.5)
+BANANA=$(food "Banana" 89 1.1 23 0.3)
+CHICKEN=$(food "Chicken breast, grilled" 165 31 0 3.6)
+RICE=$(food "White rice, cooked" 130 2.7 28 0.3)
+YOGURT=$(food "Greek yogurt" 97 9 3.9 5)
+log "$OATS" 80 breakfast 07
+log "$BANANA" 120 breakfast 07
+log "$CHICKEN" 180 lunch 12
+log "$RICE" 250 lunch 12
+log "$YOGURT" 200 snack 15
+
+echo "Seeded $USER_ID on $SERVER: plan $PLAN from $PLAN_START, yesterday ($YESTERDAY) missed with two recordings,"
+echo "eight logged sessions over four weeks, and today's breakfast, lunch and snack."

@@ -1,20 +1,26 @@
 package com.fitai.coach.ui.nutrition
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,8 +34,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitai.coach.core.api.generated.GetNutritionRecipesResponseItem
@@ -42,12 +51,14 @@ import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.dates.currentHourIn
 import com.fitai.coach.core.dates.loggedAtFor
 import com.fitai.coach.core.dates.todayIn
+import com.fitai.coach.ui.components.ButtonSize
 import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.EmptyState
 import com.fitai.coach.ui.components.ErrorState
 import com.fitai.coach.ui.components.FitaiButton
 import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.components.FitaiDialog
+import com.fitai.coach.ui.components.FitaiProgressBar
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.components.offerUndo
@@ -60,6 +71,7 @@ import com.fitai.coach.ui.media.rememberCamera
 import com.fitai.coach.ui.media.rememberPhotoPicker
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
+import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.theme.Spacing
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -380,43 +392,54 @@ private fun Header(state: NutritionUiState, vm: NutritionViewModel) {
     }
 }
 
+/**
+ * The day against its targets as a grid of tiles (MacroProgressGrid): each
+ * macro's number over its name, a bar, and the number against the target.
+ * One row each had a label squeezed to a letter's width beside the figures.
+ */
 @Composable
 private fun Totals(summary: GetNutritionSummaryResponse, onSetTargets: () -> Unit) {
     val target = summary.effectiveTarget
-    FitaiCard {
-        Macro("Calories", summary.totals.calories, target?.calories, "kcal")
-        Macro("Protein", summary.totals.protein, target?.proteinG, "g")
-        Macro("Carbs", summary.totals.carb, target?.carbG, "g")
-        Macro("Fat", summary.totals.fat, target?.fatG, "g")
-        Macro("Fiber", summary.totals.fiber, null, "g")
-        target?.takeIf { it.scaled && it.carbDeltaG != 0.0 }?.let {
-            Text(it.explanation, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+    val tiles = dayMacros(summary)
+    FitaiCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+            tiles.chunked(MACRO_COLUMNS).forEach { row ->
+                Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                    row.forEach { MacroTile(it, Modifier.weight(1f).fillMaxHeight()) }
+                    repeat(MACRO_COLUMNS - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            target?.takeIf { it.scaled && it.carbDeltaG != 0.0 }?.let {
+                Text(it.explanation, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+            }
+            FitaiButton(
+                if (target == null) "Set targets" else "Edit targets",
+                onClick = onSetTargets,
+                variant = ButtonVariant.Ghost,
+                size = ButtonSize.Sm,
+                leadingIcon = LucideIcons.SlidersHorizontal,
+            )
         }
-        TextButton(onClick = onSetTargets) { Text(if (target == null) "Set targets" else "Edit targets", color = FitaiTheme.colors.accent) }
     }
 }
 
 @Composable
-private fun Macro(label: String, value: Double, target: Double?, unit: String) {
-    val progress = MacroProgress(value, target)
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-        Row {
-            Text(label, style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted, modifier = Modifier.weight(1f))
-            Text(
-                formatNumber(value.roundToWhole()) + (target?.takeIf { it > 0 }?.let { " / ${formatNumber(it.roundToWhole())}" } ?: "") +
-                    " $unit",
-                style = FitaiTheme.typography.metric,
-                color = FitaiTheme.colors.text,
-            )
-        }
-        progress.fraction?.let { fraction ->
-            LinearProgressIndicator(
-                progress = { fraction },
-                modifier = Modifier.fillMaxWidth(),
-                color = if (progress.over) FitaiTheme.colors.warning else FitaiTheme.colors.primary,
-                trackColor = FitaiTheme.colors.muted,
-            )
-        }
+private fun MacroTile(macro: DayMacro, modifier: Modifier) {
+    val colors = FitaiTheme.colors
+    val type = FitaiTheme.typography
+    val progress = MacroProgress(macro.value, macro.target)
+    Column(
+        modifier
+            .background(colors.muted, Radius.Md)
+            .padding(Spacing.Md)
+            .semantics(mergeDescendants = true) { contentDescription = macro.spoken },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Spacing.Xs),
+    ) {
+        Text(macro.shown, style = type.metricSm, color = colors.text, maxLines = 1)
+        Text(macro.label, style = type.caption, color = colors.textMuted, maxLines = 1)
+        progress.fraction?.let { FitaiProgressBar(it, over = progress.over, track = colors.border) }
+        macro.against?.let { Text(it, style = type.caption, color = colors.textMuted, maxLines = 1) }
     }
 }
 
@@ -478,84 +501,135 @@ private class MealAsks(
 private fun MealSection(summary: GetNutritionSummaryResponse, meal: Meal, actions: MealActions) {
     val entries = summary.entries(meal)
     val target = summary.target(meal)
-    val logged = entries.sumOf { it.nutrition.calories }
-    FitaiCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // The caption sits under the name: beside it, a phone's width wraps it a letter at a time.
-            Column(Modifier.weight(1f)) {
-                Text(meal.label, style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text)
-                target?.caption()?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.accentText) }
+    val colors = FitaiTheme.colors
+    val type = FitaiTheme.typography
+    FitaiCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+            MealHeader(meal, entries, target, actions)
+            target?.let { MealMacroBars(mealMacros(entries, it)) }
+            target?.rationale?.takeIf { it.isNotBlank() }?.let { Text(it, style = type.caption, color = colors.textMuted) }
+            if (entries.isEmpty()) {
+                EmptyMeal(meal, actions)
+            } else {
+                // The meal's foods in one bordered list, a rule between them (the web's entry list).
+                Column(Modifier.fillMaxWidth().border(1.dp, colors.border, Radius.Md)) {
+                    entries.forEachIndexed { index, entry ->
+                        if (index > 0) HorizontalDivider(color = colors.border)
+                        EntryRow(entry, actions)
+                    }
+                }
             }
-            Text(
-                "${formatNumber(logged.roundToWhole())}${target?.let { " / ${formatNumber(it.calories.roundToWhole())}" } ?: ""} kcal",
-                style = FitaiTheme.typography.bodySm,
-                color = FitaiTheme.colors.textMuted,
+            FitaiButton(
+                "Add to ${meal.label.lowercase()}",
+                onClick = { actions.asks.add(meal) },
+                variant = ButtonVariant.Secondary,
+                size = ButtonSize.Sm,
+                leadingIcon = LucideIcons.Plus,
             )
-            // "My usual breakfast" in one action: the meal's entries seed a recipe.
-            if (entries.size >= MIN_RECIPE_ENTRIES) {
-                IconButton(onClick = { actions.myFoods.saveMealAsRecipe(meal, entries) }) {
-                    Icon(
-                        LucideIcons.ChefHat,
-                        contentDescription = "Save ${meal.label.lowercase()} as a recipe",
-                        tint = FitaiTheme.colors.textMuted,
-                    )
-                }
-            }
-            target?.let {
-                IconButton(onClick = { actions.asks.adjustTarget(meal, it) }) {
-                    Icon(
-                        LucideIcons.SlidersHorizontal,
-                        contentDescription = "Adjust ${meal.label.lowercase()} target",
-                        tint = FitaiTheme.colors.textMuted,
-                    )
-                }
-            }
         }
-        target?.rationale?.takeIf {
-            it.isNotBlank()
-        }?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted) }
-        if (entries.isEmpty()) {
-            Text("Nothing logged yet.", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
-            if (actions.canRepeat) {
-                FitaiButton(
-                    "Copy yesterday's ${meal.label.lowercase()}",
-                    onClick = { actions.vm.repeatPreviousDay(meal) },
-                    variant = ButtonVariant.Ghost,
-                    enabled = !actions.state.repeating,
-                    leadingIcon = LucideIcons.CopyPlus,
+    }
+}
+
+/** The meal's name and role, what is logged against its target, and its two tools. */
+@Composable
+private fun MealHeader(meal: Meal, entries: List<NutritionLogEntryWithNutrition>, target: NutritionMealFuelTarget?, actions: MealActions) {
+    val logged = entries.sumOf { it.nutrition.calories }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        // The caption sits under the name: beside it, a phone's width wraps it a letter at a time.
+        Column(Modifier.weight(1f)) {
+            Text(meal.label, style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text)
+            target?.caption()?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.accentText) }
+        }
+        Text(
+            "${formatNumber(logged.roundToWhole())}${target?.let { " / ${formatNumber(it.calories.roundToWhole())}" } ?: ""} kcal",
+            style = FitaiTheme.typography.bodySm,
+            color = FitaiTheme.colors.textMuted,
+        )
+        // "My usual breakfast" in one action: the meal's entries seed a recipe.
+        if (entries.size >= MIN_RECIPE_ENTRIES) {
+            IconButton(onClick = { actions.myFoods.saveMealAsRecipe(meal, entries) }) {
+                Icon(
+                    LucideIcons.ChefHat,
+                    contentDescription = "Save ${meal.label.lowercase()} as a recipe",
+                    tint = FitaiTheme.colors.textMuted,
                 )
             }
         }
-        entries.forEach { entry ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Tapping the entry edits it; its quick actions sit beside it.
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .clickable(onClickLabel = "Edit") { actions.vm.startEdit(entry) }
-                        .padding(vertical = Spacing.Xs),
-                ) {
-                    Text(entry.name, style = FitaiTheme.typography.body, color = FitaiTheme.colors.text)
-                    Text(
-                        "${formatNumber(entry.quantityG)} g · ${formatNumber(entry.nutrition.calories.roundToWhole())} kcal · " +
-                            "P ${formatNumber(
-                                entry.nutrition.protein.roundToWhole(),
-                            )} C ${formatNumber(entry.nutrition.carb.roundToWhole())} " +
-                            "F ${formatNumber(entry.nutrition.fat.roundToWhole())}",
-                        style = FitaiTheme.typography.bodySm,
-                        color = FitaiTheme.colors.textMuted,
-                    )
-                }
-                FavoriteStar(entry.foodId, entry.name, entry.foodId in actions.favoriteIds, actions.vm::toggleFavorite)
-                IconButton(onClick = { actions.vm.logAgain(entry) }, enabled = !actions.state.quickLogging) {
-                    Icon(LucideIcons.RotateCw, contentDescription = "log ${entry.name} again today", tint = FitaiTheme.colors.textMuted)
-                }
-                IconButton(onClick = { actions.asks.delete(entry) }) {
-                    Icon(LucideIcons.Trash, contentDescription = "delete ${entry.name}", tint = FitaiTheme.colors.textMuted)
-                }
+        target?.let {
+            IconButton(onClick = { actions.asks.adjustTarget(meal, it) }) {
+                Icon(
+                    LucideIcons.SlidersHorizontal,
+                    contentDescription = "Adjust ${meal.label.lowercase()} target",
+                    tint = FitaiTheme.colors.textMuted,
+                )
             }
         }
-        FitaiButton("Add to ${meal.label.lowercase()}", onClick = { actions.asks.add(meal) }, variant = ButtonVariant.Ghost)
+    }
+}
+
+/** Protein, carbs and fat logged in the meal against its targets, a bar each (MealMacroBars). Over target turns amber. */
+@Composable
+private fun MealMacroBars(macros: List<MealMacro>) {
+    val colors = FitaiTheme.colors
+    val type = FitaiTheme.typography
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+        macros.forEach { macro ->
+            val progress = MacroProgress(macro.logged, macro.target)
+            Column(
+                Modifier.weight(1f).semantics(mergeDescendants = true) { contentDescription = macro.spoken },
+                verticalArrangement = Arrangement.spacedBy(Spacing.Xs),
+            ) {
+                Row {
+                    Text(macro.label, style = type.caption, color = colors.textMuted, modifier = Modifier.weight(1f), maxLines = 1)
+                    Text(macro.against, style = type.caption, color = colors.textMuted, maxLines = 1)
+                }
+                FitaiProgressBar(progress.fraction ?: 0f, over = progress.over)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyMeal(meal: Meal, actions: MealActions) {
+    Text("Nothing logged yet.", style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+    if (actions.canRepeat) {
+        FitaiButton(
+            "Copy yesterday's ${meal.label.lowercase()}",
+            onClick = { actions.vm.repeatPreviousDay(meal) },
+            variant = ButtonVariant.Ghost,
+            size = ButtonSize.Sm,
+            enabled = !actions.state.repeating,
+            leadingIcon = LucideIcons.CopyPlus,
+        )
+    }
+}
+
+@Composable
+private fun EntryRow(entry: NutritionLogEntryWithNutrition, actions: MealActions) {
+    Row(Modifier.padding(start = Spacing.Md), verticalAlignment = Alignment.CenterVertically) {
+        // Tapping the entry edits it; its quick actions sit beside it.
+        Column(
+            Modifier
+                .weight(1f)
+                .clickable(onClickLabel = "Edit") { actions.vm.startEdit(entry) }
+                .padding(vertical = Spacing.Sm),
+        ) {
+            Text(
+                entry.name,
+                style = FitaiTheme.typography.button,
+                color = FitaiTheme.colors.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(entrySummary(entry), style = FitaiTheme.typography.caption, color = FitaiTheme.colors.textMuted)
+        }
+        FavoriteStar(entry.foodId, entry.name, entry.foodId in actions.favoriteIds, actions.vm::toggleFavorite)
+        IconButton(onClick = { actions.vm.logAgain(entry) }, enabled = !actions.state.quickLogging) {
+            Icon(LucideIcons.RotateCw, contentDescription = "log ${entry.name} again today", tint = FitaiTheme.colors.textMuted)
+        }
+        IconButton(onClick = { actions.asks.delete(entry) }) {
+            Icon(LucideIcons.Trash, contentDescription = "delete ${entry.name}", tint = FitaiTheme.colors.textMuted)
+        }
     }
 }
 
@@ -569,3 +643,5 @@ private fun OpenLink(open: DeepLink.Nutrition?, goTo: (String) -> Unit, onOpened
         onOpened()
     }
 }
+
+private const val MACRO_COLUMNS = 2

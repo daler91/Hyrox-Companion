@@ -82,6 +82,7 @@ export const ICONS: Readonly<Record<string, string>> = {
   Link2: "link-2",
   Database: "database",
   BookOpen: "book-open",
+  PieChart: "chart-pie",
 };
 
 /**

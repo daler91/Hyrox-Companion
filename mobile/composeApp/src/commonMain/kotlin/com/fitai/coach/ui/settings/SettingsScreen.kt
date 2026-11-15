@@ -1,6 +1,5 @@
 package com.fitai.coach.ui.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,16 +8,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,18 +25,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -65,8 +54,10 @@ import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.components.FitaiChip
 import com.fitai.coach.ui.components.FitaiDialog
 import com.fitai.coach.ui.components.FitaiSwitchRow
+import com.fitai.coach.ui.components.FitaiTabGrid
 import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.FitaiToastHost
+import com.fitai.coach.ui.components.TabItem
 import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.links.DeepLink
@@ -77,7 +68,6 @@ import com.fitai.coach.ui.platform.rememberHealthConnectAccess
 import com.fitai.coach.ui.privacy.PRIVACY_POLICY_URL
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
-import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.theme.Spacing
 import org.koin.compose.koinInject
 
@@ -135,7 +125,7 @@ fun SettingsScreen(
                 )
                 Text("Manage your account and preferences", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
             }
-            SettingsTabs(tab, onSelect = { tab = it })
+            FitaiTabGrid(SETTINGS_TAB_ITEMS, selected = tab, onSelect = { tab = it }, description = SETTINGS_TABS)
             when (tab) {
                 SettingsTab.Account -> {
                     Profile(state)
@@ -201,47 +191,7 @@ private val SettingsTab.icon: ImageVector
         SettingsTab.RecycleBin -> LucideIcons.Trash
     }
 
-/**
- * The pages as a two-column grid (the web's TabsList at phone width): six
- * names don't fit one row, and a scrolling row would hide half of them.
- */
-@Composable
-private fun SettingsTabs(selected: SettingsTab, onSelect: (SettingsTab) -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(FitaiTheme.colors.muted, Radius.Lg)
-            .padding(Spacing.Xs)
-            .selectableGroup()
-            .semantics { contentDescription = SETTINGS_TABS },
-        verticalArrangement = Arrangement.spacedBy(Spacing.Xs),
-    ) {
-        SettingsTab.entries.chunked(TAB_COLUMNS).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-                row.forEach { tab -> TabCell(tab, tab == selected, Modifier.weight(1f)) { onSelect(tab) } }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TabCell(tab: SettingsTab, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val colors = FitaiTheme.colors
-    val content = if (selected) colors.text else colors.textMuted
-    Row(
-        modifier
-            .heightIn(min = MIN_TOUCH.dp)
-            .clip(Radius.Md)
-            .background(if (selected) colors.background else Color.Transparent)
-            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
-            .padding(horizontal = Spacing.Sm),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.Sm, Alignment.CenterHorizontally),
-    ) {
-        Icon(tab.icon, contentDescription = null, tint = content, modifier = Modifier.size(16.dp))
-        Text(tab.label, style = FitaiTheme.typography.button, color = content, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
+private val SETTINGS_TAB_ITEMS = SettingsTab.entries.map { TabItem(it, it.label, it.icon) }
 
 /** A settings card: its name, a line on what it is for, then its rows, the card as wide as the page. */
 @Composable
@@ -637,9 +587,6 @@ private fun DeleteAccountDialog(busy: Boolean, onConfirm: () -> Unit, onDismiss:
 
 /** What a screen reader calls the grid of pages. */
 const val SETTINGS_TABS = "Settings sections"
-
-private const val TAB_COLUMNS = 2
-private const val MIN_TOUCH = 48
 
 /** dp under the page's last card: the coach button (56) and its margin sit there. */
 private const val END_CLEARANCE = 72

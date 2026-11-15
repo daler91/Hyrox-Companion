@@ -1,5 +1,7 @@
 package com.fitai.coach.ui.log
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,7 +11,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -27,23 +31,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitai.coach.core.api.generated.ParsedExercise
 import com.fitai.coach.core.data.MAX_PARSE_TEXT
 import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.core.dates.todayIn
-import com.fitai.coach.ui.components.BadgeTone
+import com.fitai.coach.ui.components.ButtonSize
 import com.fitai.coach.ui.components.ButtonVariant
-import com.fitai.coach.ui.components.FitaiBadge
 import com.fitai.coach.ui.components.FitaiButton
 import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.components.FitaiChip
+import com.fitai.coach.ui.components.FitaiDateField
 import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.components.LoadingState
@@ -58,6 +65,7 @@ import com.fitai.coach.ui.media.rememberPhotoPicker
 import com.fitai.coach.ui.media.rememberSpeechInput
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
+import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.theme.Spacing
 import com.fitai.coach.ui.workout.ExercisePickerSheet
 import com.fitai.coach.ui.workout.PlanDayOption
@@ -91,14 +99,17 @@ fun LogWorkoutScreen(onSaved: () -> Unit) {
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.Lg),
             verticalArrangement = Arrangement.spacedBy(Spacing.Md),
         ) {
-            Text(
-                "log workout",
-                style = FitaiTheme.typography.h1,
-                color = FitaiTheme.colors.text,
-                modifier = Modifier.semantics {
-                    heading()
-                },
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                Text(
+                    "log workout",
+                    style = FitaiTheme.typography.h1,
+                    color = FitaiTheme.colors.text,
+                    modifier = Modifier.semantics {
+                        heading()
+                    },
+                )
+                Text("Record your training session", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
+            }
             Steps(state.step)
             if (state.restored && state.step == LogStep.Capture) Restored(state, vm)
             when (state.step) {
@@ -112,11 +123,64 @@ fun LogWorkoutScreen(onSaved: () -> Unit) {
     }
 }
 
+/**
+ * Where the athlete is in the three steps (the web's stepper): each a numbered
+ * dot and its name, the current one lit. The number and the name say it; the
+ * colour only repeats it.
+ */
 @Composable
 private fun Steps(step: LogStep) {
-    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-        listOf("Capture", "Confirm", "Reflect").forEachIndexed { index, label ->
-            FitaiBadge("${index + 1}. $label", tone = if (index == step.ordinal) BadgeTone.Accent else BadgeTone.Neutral)
+    val colors = FitaiTheme.colors
+    Row(
+        Modifier.fillMaxWidth().semantics(mergeDescendants = true) {
+            contentDescription = "Step ${step.ordinal + 1} of $STEP_COUNT: ${STEP_NAMES[step.ordinal]}"
+        },
+        horizontalArrangement = Arrangement.spacedBy(Spacing.Xs),
+    ) {
+        STEP_NAMES.forEachIndexed { index, label ->
+            val current = index == step.ordinal
+            Row(
+                Modifier
+                    .weight(1f)
+                    .background(if (current) colors.accentSoft else Color.Transparent, Radius.Md)
+                    .padding(horizontal = Spacing.Sm, vertical = Spacing.Sm),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.Sm),
+            ) {
+                Box(
+                    Modifier
+                        .size(STEP_DOT.dp)
+                        .background(if (current) colors.primary else Color.Transparent, CircleShape)
+                        .border(1.dp, if (current) colors.primary else colors.borderStrong, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("${index + 1}", style = FitaiTheme.typography.caption, color = if (current) colors.onPrimary else colors.textMuted)
+                }
+                Text(
+                    label,
+                    style = FitaiTheme.typography.button,
+                    color = if (current) colors.onAccentSoft else colors.textMuted,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+private val STEP_NAMES = listOf("Capture", "Confirm", "Reflect")
+private const val STEP_COUNT = 3
+private const val STEP_DOT = 24
+
+/** A group of the form under its name, with a line on what goes in it (the web's cards). */
+@Composable
+private fun FormCard(title: String, hint: String? = null, content: @Composable () -> Unit) {
+    FitaiCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.Md)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                Text(title, style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text, modifier = Modifier.semantics { heading() })
+                hint?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted) }
+            }
+            content()
         }
     }
 }
@@ -161,31 +225,64 @@ private fun Capture(state: LogUiState, vm: LogWorkoutViewModel, photos: PhotoSou
     FitaiButton(
         "Duplicate last workout",
         onClick = vm::duplicateLast,
-        variant = ButtonVariant.Ghost,
+        variant = ButtonVariant.Secondary,
+        size = ButtonSize.Sm,
         loading = state.duplicating,
-        leadingIcon = LucideIcons.RefreshCw,
+        leadingIcon = LucideIcons.CopyPlus,
     )
-    FitaiTextField(draft.title, { title -> vm.edit { it.copy(title = title) } }, "Title (optional)", placeholder = "e.g., Morning Push")
-    Text("Date", style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
-    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalAlignment = Alignment.CenterVertically) {
-        FitaiChip("Today", selected = draft.date == state.today, onClick = { vm.edit { it.copy(date = state.today) } })
-        FitaiChip("Yesterday", selected = draft.date == yesterday, onClick = { vm.edit { it.copy(date = yesterday) } })
+    FormCard("Workout details") {
+        FitaiTextField(draft.title, { title -> vm.edit { it.copy(title = title) } }, "Title (optional)", placeholder = "e.g., Morning Push")
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+            // A calendar, as the web's date input is: a typed date could be one that doesn't exist.
+            FitaiDateField(draft.date, { date -> vm.edit { it.copy(date = date) } }, "Date")
+            // The two days nearly every log is for, a tap each.
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalAlignment = Alignment.CenterVertically) {
+                FitaiChip("Today", selected = draft.date == state.today, onClick = { vm.edit { it.copy(date = state.today) } })
+                FitaiChip("Yesterday", selected = draft.date == yesterday, onClick = { vm.edit { it.copy(date = yesterday) } })
+            }
+        }
     }
-    FitaiTextField(draft.date, { date -> vm.edit { it.copy(date = date.trim()) } }, "Or a date (YYYY-MM-DD)")
-    FitaiTextField(
-        draft.text,
-        { text -> vm.edit { it.copy(text = text.take(MAX_PARSE_TEXT)) } },
-        "Description",
-        placeholder = "e.g., 5 rounds: 400 m run, 20 wall balls, 15 burpees",
-        supportingText = "${draft.text.length}/$MAX_PARSE_TEXT",
-        singleLine = false,
-    )
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-        photos.take?.let { FitaiButton("Camera", onClick = it, variant = ButtonVariant.Secondary, leadingIcon = LucideIcons.Camera) }
-        photos.pick?.let { FitaiButton("Photo", onClick = it, variant = ButtonVariant.Secondary, leadingIcon = LucideIcons.Image) }
-        dictate?.let { DictateButton(it, "Dictate", ButtonVariant.Secondary) }
+    FormCard("Describe your workout", captureHint(photos, dictate)) {
+        FitaiTextField(
+            draft.text,
+            { text -> vm.edit { it.copy(text = text.take(MAX_PARSE_TEXT)) } },
+            "Description",
+            placeholder = "e.g., 5 rounds: 400 m run, 20 wall balls, 15 burpees",
+            supportingText = "${draft.text.length}/$MAX_PARSE_TEXT",
+            singleLine = false,
+        )
+        if (photos.take != null || photos.pick != null || dictate != null) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                photos.take?.let {
+                    FitaiButton("Camera", onClick = it, variant = ButtonVariant.Secondary, leadingIcon = LucideIcons.Camera)
+                }
+                photos.pick?.let { FitaiButton("Photo", onClick = it, variant = ButtonVariant.Secondary, leadingIcon = LucideIcons.Image) }
+                dictate?.let { DictateButton(it, "Dictate", ButtonVariant.Secondary) }
+            }
+        }
     }
     FitaiButton("Continue to exercises", onClick = vm::continueToConfirm, modifier = Modifier.fillMaxWidth())
+}
+
+/**
+ * What the description card invites, naming only the ways in this phone has:
+ * typing always, a photo and dictation where the device offers them.
+ */
+private fun captureHint(photos: PhotoSources, dictate: SpeechInput?): String {
+    val ways = listOfNotNull(
+        "Type",
+        "dictate".takeIf { dictate != null },
+        "snap a photo".takeIf {
+            photos.take != null ||
+                photos.pick != null
+        },
+    )
+    val lead = when (ways.size) {
+        1 -> "Type it out."
+        2 -> "${ways[0]} or ${ways[1]}."
+        else -> "${ways[0]}, ${ways[1]}, or ${ways[2]}."
+    }
+    return "$lead We'll structure it into exercises on the next step."
 }
 
 @Composable
