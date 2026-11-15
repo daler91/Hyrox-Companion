@@ -35,6 +35,8 @@ data class ChatItem(
     val safety: ChatSafetyNotice? = null,
     /** The reply drew on the athlete's coaching notes. */
     val fromNotes: Boolean = false,
+    /** When it was sent, an ISO-8601 instant; none for the greeting, which isn't a message anyone sent. */
+    val sentAt: String? = null,
 )
 
 const val WELCOME_ID = "welcome"
@@ -71,6 +73,7 @@ fun ChatHistoryMessage.toItem(): ChatItem {
         rateable = assistant && kind != ChatKind.Summary,
         safety = safetyNotice,
         fromNotes = ragInfo.fromNotes(),
+        sentAt = timestamp,
     )
 }
 

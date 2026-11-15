@@ -7,6 +7,7 @@ import com.fitai.coach.core.api.AppIdentity
 import com.fitai.coach.core.api.createHttpClient
 import com.fitai.coach.core.data.ChatFocus
 import com.fitai.coach.core.data.CoachRepository
+import com.fitai.coach.core.dates.localDateOf
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.respond
@@ -95,6 +96,21 @@ class CoachViewModelTest {
         """{"planDayId":"$day","updatedFields":{"focus":"Easy run"},"rationale":"recover","kind":"workout_update",""" +
             """"dayLabel":"Tue","baseline":{"focus":"Tempo","mainWorkout":"8 km","status":"planned"},""" +
             """"structured":false,"hasStructureBlocks":false}"""
+
+    @Test
+    fun aMessageAndItsReplyCarryWhenTheyWereSentAndHistoryKeepsItsOwnTimes() = runTest(dispatcher) {
+        routes["GET /api/v1/chat/history"] =
+            200 to """[{"id":"h1","userId":"u1","role":"user","content":"Earlier","timestamp":"2026-11-13T12:00:00Z","kind":"text"}]"""
+        routes["POST /api/v1/chat/stream"] = 200 to stream("""{"text":"Hello!"}""", """{"done":true}""")
+        val vm = viewModel()
+        vm.send("hi")
+        advanceUntilIdle()
+
+        // The greeting isn't a message anyone sent: it has no time. Saved ones keep the server's; new ones get the phone's.
+        val times = vm.state.value.items.map { it.sentAt }
+        assertEquals(listOf(null, "2026-11-13T12:00:00Z"), times.take(2))
+        assertEquals(2, times.drop(2).count { it != null && localDateOf(it, "UTC") != null })
+    }
 
     @Test
     fun aStreamedReplyBuildsUpAndEndsRateable() = runTest(dispatcher) {

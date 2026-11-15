@@ -43,3 +43,13 @@ public actual fun localDateOf(iso: String, timeZone: String?): String? = try {
 } catch (_: DateTimeParseException) {
     null
 }
+
+private val TIME_LABEL = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+
+public actual fun timeOfDay(iso: String, timeZone: String?): String? = try {
+    TIME_LABEL.format(ZonedDateTime.parse(iso).withZoneSameInstant(zoneOf(timeZone)))
+} catch (_: DateTimeParseException) {
+    null
+}
+
+public actual fun nowInstant(): String = Instant.now().toString()

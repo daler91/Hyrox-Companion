@@ -13,6 +13,7 @@ import com.fitai.coach.core.data.CoachRepository
 import com.fitai.coach.core.data.EncodedImage
 import com.fitai.coach.core.data.MAX_CHAT_MESSAGE
 import com.fitai.coach.core.data.MAX_CHAT_PHOTO_CHARS
+import com.fitai.coach.core.dates.nowInstant
 import com.fitai.coach.ui.format.userMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -196,7 +197,7 @@ class CoachViewModel(
             s.copy(
                 suggesting = true,
                 progress = "Looking at your upcoming workouts...",
-                items = s.items + ChatItem(newId(), ChatRole.User, label),
+                items = s.items + ChatItem(newId(), ChatRole.User, label, sentAt = nowInstant()),
             )
         }
         viewModelScope.launch {
@@ -284,8 +285,9 @@ class CoachViewModel(
             s.copy(
                 sending = true,
                 progress = "Reading your training log...",
-                items = s.items + ChatItem(userId, ChatRole.User, message, photoNote = photo?.let { "Photo attached" }) +
-                    ChatItem(assistantId, ChatRole.Assistant, "", streaming = true),
+                items =
+                s.items + ChatItem(userId, ChatRole.User, message, photoNote = photo?.let { "Photo attached" }, sentAt = nowInstant()) +
+                    ChatItem(assistantId, ChatRole.Assistant, "", streaming = true, sentAt = nowInstant()),
             )
         }
         sendJob = viewModelScope.launch {
@@ -437,7 +439,7 @@ class CoachViewModel(
     }
 
     private suspend fun say(text: String, save: Boolean) {
-        local.update { s -> s.copy(items = s.items + ChatItem(newId(), ChatRole.Assistant, text)) }
+        local.update { s -> s.copy(items = s.items + ChatItem(newId(), ChatRole.Assistant, text, sentAt = nowInstant())) }
         // The saved-turn endpoint writes to the main conversation only, so a
         // workout's thread shows the note without saving it (as on the web).
         if (save && focus == null) runCatching { coach.saveAssistantMessage(text) }

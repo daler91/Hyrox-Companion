@@ -126,10 +126,18 @@ class OnboardingModelTest {
 
     @Test
     fun theTemplatesDateAndTheAiFormCountAsThePlanStep() {
-        assertEquals(1, stepNumber(SetupStep.Welcome))
-        assertEquals(5, stepNumber(SetupStep.Plan))
-        assertEquals(5, stepNumber(SetupStep.Schedule))
-        assertEquals(5, stepNumber(SetupStep.Generating))
+        assertEquals(1, stepNumber(SetupStep.Welcome, fuelling = true))
+        assertEquals(6, stepNumber(SetupStep.Plan, fuelling = true))
+        assertEquals(6, stepNumber(SetupStep.Schedule, fuelling = true))
+        assertEquals(6, stepNumber(SetupStep.Generating, fuelling = true))
+    }
+
+    @Test
+    fun theFuellingStepIsNumberedOnlyWithNutritionOn() {
+        assertEquals(4, stepNumber(SetupStep.Fuelling, fuelling = true))
+        assertEquals(5, stepNumber(SetupStep.Coach, fuelling = true))
+        assertEquals(4, stepNumber(SetupStep.Coach, fuelling = false))
+        assertEquals(5, stepNumber(SetupStep.Plan, fuelling = false))
     }
 
     @Test

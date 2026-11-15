@@ -9,7 +9,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +43,7 @@ import com.fitai.coach.ui.links.DeepLinks
 import com.fitai.coach.ui.log.LogWorkoutScreen
 import com.fitai.coach.ui.nutrition.NutritionScreen
 import com.fitai.coach.ui.onboarding.OnboardingScreen
+import com.fitai.coach.ui.onboarding.SetupResult
 import com.fitai.coach.ui.planday.PlanDayScreen
 import com.fitai.coach.ui.review.WeeklyReviewScreen
 import com.fitai.coach.ui.session.LocalUserSession
@@ -73,7 +76,8 @@ fun AppShell() {
     var setupOpen by rememberSaveable { mutableStateOf(false) }
     var setupRun by rememberSaveable { mutableIntStateOf(0) }
     var setupChecked by rememberSaveable { mutableStateOf(false) }
-    var shellMessage by remember { mutableStateOf<String?>(null) }
+    // How setup closed: its message, and "Connect a device" where it offers one.
+    var shellMessage by remember { mutableStateOf<SetupResult?>(null) }
     val toasts = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val colors = FitaiTheme.colors
@@ -123,8 +127,14 @@ fun AppShell() {
         setupChecked = true
     }
     LaunchedEffect(shellMessage) {
-        shellMessage?.let {
-            toasts.showSnackbar(it)
+        shellMessage?.let { result ->
+            val outcome = toasts.showSnackbar(
+                result.message,
+                actionLabel = CONNECT_DEVICE.takeIf { result.offerConnect },
+                duration = SnackbarDuration.Long,
+            )
+            // Strava and Garmin connect in Settings.
+            if (outcome == SnackbarResult.ActionPerformed) backStack.select(TopLevel.Settings)
             shellMessage = null
         }
     }
@@ -133,7 +143,7 @@ fun AppShell() {
         OnboardingScreen(run = setupRun) { result ->
             setupOpen = false
             if (result.madePlan) backStack.select(TopLevel.Training)
-            shellMessage = result.message
+            shellMessage = result
         }
         return
     }
@@ -261,3 +271,6 @@ private fun BottomBar(current: TopLevel, onSelect: (TopLevel) -> Unit) {
         }
     }
 }
+
+/** On the toasts that end setup (connectDeviceToastAction.tsx): connecting a device is what brings athletes back in week one. */
+private const val CONNECT_DEVICE = "Connect a device"

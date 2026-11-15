@@ -170,10 +170,13 @@ reuse endpoints the app already calls, or need none.
 - [x] A first-meal prompt on an empty log.
 
 ### Onboarding and coach
-- [ ] A fuelling step in onboarding (height, age, activity, weight goal, daily targets).
-- [ ] A "Connect a device" button when onboarding finishes.
-- [ ] Message times and day separators in coach chat.
-- [ ] The 4-week completion rate and the count of upcoming sessions.
+- [x] A fuelling step in onboarding (height, age, activity, weight goal, daily targets). It shows only
+  with nutrition on, and saves the targets with the current version's periodisation carried forward.
+- [x] A "Connect a device" button when onboarding finishes (the template plan, or no plan).
+- [x] Message times and day separators in coach chat.
+- [x] The 4-week completion rate and the count of upcoming sessions, in the coach panel's stats bar
+  with this week's sessions, those done and the streak. Counted on the device from the timeline, as
+  the web's Coach panel counts them.
 
 ## Staying on the web (decided in docs/mobile-app-plan.md)
 

@@ -30,3 +30,9 @@ public expect fun formatInstant(iso: String, timeZone: String?): String?
  * (the device's when null or unknown); null when it doesn't parse.
  */
 public expect fun localDateOf(iso: String, timeZone: String?): String?
+
+/** "9:30 AM" for an ISO-8601 instant, in [timeZone] (the device's when null or unknown); null when it doesn't parse. */
+public expect fun timeOfDay(iso: String, timeZone: String?): String?
+
+/** Now, as an ISO-8601 instant ("2026-11-14T23:30:00Z"). */
+public expect fun nowInstant(): String
