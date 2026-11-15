@@ -288,7 +288,10 @@ private fun TimelineList(
     val daysShown = readyPlan == null && (cachedAtOpen || !state.refreshing)
     LaunchedEffect(state.rows.todayIndex, daysShown) {
         if (!scrolledToToday && daysShown && state.rows.todayIndex >= 0) {
-            listState.scrollToItem(state.rows.todayIndex + header)
+            // Taken at the next layout pass. scrollToItem measures there and then, and from an
+            // effect that runs while the items' own changes are still being applied, building
+            // an item then fails (Compose's "pending composition has not been applied").
+            listState.requestScrollToItem(state.rows.todayIndex + header)
             scrolledToToday = true
         }
     }
