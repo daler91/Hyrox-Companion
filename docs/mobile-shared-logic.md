@@ -865,7 +865,7 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
 - **`nutritionRange`.** 13 lines. The server uses it through `nutritionRangeSchema`.
   - **Client use:** narrows the Timeline's summary-range request.
   - **Importing files:** `pages/timeline/fuellingWindow.ts`.
-  - **Exports used:** `NUTRITION_RANGE_MAX_DAYS`.
+  - **Exports used:** `clampNutritionRange`.
 
 ### render
 
