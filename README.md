@@ -28,7 +28,7 @@
 
 ---
 
-fitai.coach helps athletes plan structured training, log complex workouts, fuel correctly, understand progress, and adjust upcoming sessions with coach-grade AI context. It combines a timeline-first training log, plan import and generation, structured exercise tables, training-style controls, Strava and Garmin sync, nutrition and fuelling tracking, RAG-backed coaching materials, and privacy controls that keep AI features opt-in.
+fitai.coach helps athletes plan structured training, log complex workouts, fuel correctly, understand progress, and adjust upcoming sessions with coach-grade AI context. It combines a timeline-first training log, plan import and generation, structured exercise tables, training-style controls, Strava and Garmin sync, nutrition and fuelling tracking, RAG-backed coaching materials, and privacy controls that keep AI features opt-in. It runs as an installable web app and as a native Android app, both on the same API.
 
 ## Features
 
@@ -64,7 +64,7 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 
 - **Strava** - OAuth sync imports activities automatically: Strava's webhook push lands a new activity within about a minute of upload, a polling fallback covers anything the push misses, and the Sync button remains for an on-demand refresh. Activities are deduplicated per user and tokens are stored encrypted. Each synced activity is matched to that day's training first: it enriches the workout you already logged (filling only the metrics you left blank) or completes the planned session, and only lands as a separate workout when nothing plausible matches. A Perceived Exertion you gave on Strava arrives as the workout's RPE; without one, the review sheet suggests an RPE from the session's heart rate, which is saved only when you tap it.
 - **Garmin Connect** - Email/password Garmin SSO sync imports recent activities with encrypted credentials and a strict safety stack: per-user locks, rate limits, minimum sync interval, global 429 circuit breaker, and audit logging.
-- **Health Connect** - The Android app reads exercise sessions from Health Connect and posts them to the server, which imports each as a workout. Strava and Garmin take priority: a session either of those apps wrote to Health Connect is skipped while that provider is connected here, a session matching a recording already stored is skipped, and a later Strava or Garmin sync replaces a Health Connect import of the same session. A session deleted in Health Connect moves its import to the recycle bin, unless the athlete has since linked it to a plan day or given it an RPE.
+- **Health Connect** - The Android app reads exercise sessions from Health Connect and posts them to the server, which imports each as a workout. Strava and Garmin take priority: a session either of those apps wrote to Health Connect is skipped while that provider is connected here, a session matching a recording already stored is skipped, and a later Strava or Garmin sync replaces a Health Connect import of the same session. An import that is replaced, or whose session is deleted in Health Connect, moves to the recycle bin, unless the athlete has since linked it to a plan day or given it an RPE.
 
 ### Nutrition & Fuelling
 
@@ -102,6 +102,14 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 - **Browser push** - Web Push subscriptions can deliver training reminders to opted-in devices when VAPID credentials are configured, capped at 10 devices per athlete.
 - **Offline feedback** - The client surfaces offline/drop notifications so failed interactions are visible.
 
+### Native Android App
+
+- **Same product, native shell** - The app in [`mobile/`](mobile/README.md) is written in Kotlin with Compose Multiplatform and covers the timeline, workout logging and detail, the coach, nutrition, analytics, the weekly review, onboarding, and settings. It calls the same `/api/v1` routes with a Clerk bearer token; iOS is planned from the same code and not started.
+- **Offline first** - A per-user Room database is the source of truth. Writes made offline wait in an ordered outbox and replay with idempotency keys, and the database file is deleted on sign-out.
+- **Generated from the API contract** - The app's Kotlin API models are generated from `docs/openapi.json`, and its ports of the shared domain logic are tested against golden fixtures produced by the TypeScript originals, so the two clients cannot quietly disagree.
+- **Native integrations** - Push through Firebase Cloud Messaging, Health Connect import, Strava connect, and App Links that open fitai.coach links in the app.
+- **What stays on the web** - Coaching-material uploads, CSV plan and workout import, and the data tools for restructuring old workouts.
+
 ---
 
 ## Architecture & Tech Stack
@@ -133,6 +141,14 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 - **Logging**: Pino and pino-http
 - **API docs**: Swagger UI generated from Zod/OpenAPI schemas
 - **Validation**: Zod and drizzle-zod
+
+### Mobile
+
+- **Language and UI**: Kotlin 2.4, Compose Multiplatform 1.12 (Android first; minimum Android 8.0, API 26)
+- **Networking**: Ktor client, with models generated from the OpenAPI snapshot
+- **Storage and sync**: Room, with an outbox for offline writes
+- **Authentication**: Clerk Android SDK
+- **Build and quality**: Gradle with dependency verification, ktlint, detekt, Android lint, Roborazzi screenshot tests, Maestro end-to-end flows
 
 ### Security and Reliability
 
@@ -167,6 +183,12 @@ flowchart TB
         SW["Service Worker / PWA"]
     end
 
+    subgraph Mobile["Android App (Compose Multiplatform)"]
+        AppUI["Compose UI"]
+        Room[("Room + Outbox")]
+        HC["Health Connect"]
+    end
+
     subgraph Server["Express API"]
         API["Route Handlers"]
         Services["Service Layer"]
@@ -184,6 +206,7 @@ flowchart TB
         Strava["Strava OAuth"]
         Garmin["Garmin Connect SSO"]
         Resend["Resend Email"]
+        FCM["Firebase Cloud Messaging"]
         Gemini["Gemini Embeddings + Vision"]
         Anthropic["Anthropic"]
         OpenAICompatible["OpenAI-compatible Providers"]
@@ -191,6 +214,8 @@ flowchart TB
 
     UI --> TQ --> API
     SW -. "offline cache" .-> UI
+    AppUI --> Room --> API
+    HC -. "sessions" .-> AppUI
     API --> Services
     Services --> PG
     Services --> PGV
@@ -204,6 +229,8 @@ flowchart TB
     Services --> Garmin
     Queue --> Resend
     Queue --> PG
+    Services --> FCM
+    FCM -. "push" .-> AppUI
 ```
 
 ### AI Pipeline
@@ -341,6 +368,7 @@ Three checks keep it honest:
 - Optional: [Clerk](https://clerk.com/) keys for real authentication
 - Optional: Gemini, Anthropic, or OpenAI-compatible provider keys for AI text features
 - Optional: Strava, Resend, Sentry, and Web Push credentials for their integrations
+- Optional, for the mobile app only: JDK 21 and an Android SDK (see [`mobile/README.md`](mobile/README.md))
 
 ### 1. Environment Variables
 

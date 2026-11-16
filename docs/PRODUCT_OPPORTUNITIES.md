@@ -606,6 +606,18 @@ estimatedSeconds / basis / confidence / sampleSize`, and there is still no route
 `raceDate`. **The register's own sequencing still holds** — the items below do not displace
 Wave 1 (Station Report Card) or Wave 1b (injury-aware coaching).
 
+**Re-checked 2026-11-16.** Shipped since that delta was written: recommendation **#8**
+(coach memory) and **#10** (the weekly review), most of **#5** (see each one's status note),
+quick win **#11** (edit mode in `LogFoodDialog.tsx` matches an entry's grams back onto a
+named serving) and quick win **#18** (`workout-detail/exercise-table/nextTarget.ts` over
+`shared/progression.ts`). Quick win **#14** is half done: the added and removed set counts
+show on the Weekly Review's session rows, not beside the adherence badge on the workout
+itself. Still absent from the tree: a session timer (#1), `activeConstraints` (#2), a
+station report card (#3), any route that edits `raceDate` (#4), a readiness check-in (#7),
+quick wins **#7, #8, #9, #13, #16, #17, #19, #20**, and bigger bets **A, B, D, E, F**.
+Recommendations #6 and #9, quick win #15 and bigger bet C were not re-checked. The product
+also gained a native Android app (`mobile/`), which this register predates.
+
 ---
 
 ### 7. The daily readiness check-in — feed the engine you already built · **H + D** · S–M
@@ -743,6 +755,11 @@ swapped sessions completed.
 ---
 
 ### 10. The in-app weekly review · **H** · M
+
+**Status (2026-11).** Shipped: the `/review` page (`client/src/pages/Review.tsx` over
+`client/src/components/review/`), `GET /api/v1/weekly-review` and
+`POST /api/v1/weekly-review/intent`, the `weekly_reviews` table that stores the intent, and
+session-grade chips on the week's sessions. The Android app has the same screen.
 
 **Pitch.** A Sunday-night page: what you planned, what you did, what changed, and one thing
 to carry into next week.

@@ -465,7 +465,7 @@ Structured-format primitives (EMOM, AMRAP, intervals, etc.) attached to a workou
 
 ### workout_structure_steps
 
-Individual steps inside a `workout_structure_block` (e.g. each minute of an EMOM). Added in migration `0041`, with EMOM minute support in `0043`/`0044`.
+Individual steps inside a `workout_structure_blocks` row (e.g. each minute of an EMOM). Added in migration `0041`, with EMOM minute support in `0043`/`0044`.
 
 | Column | Type | Constraints |
 |---|---|---|
@@ -1523,7 +1523,7 @@ Migrations `0008` through `0014` relating to `document_chunks` are no-ops on the
 Notable recent migrations:
 - `0016`: Renames exercise category from "hyrox" to "functional"
 - `0017`: Adds unique constraint on `strava_activity_id` in `workout_logs`
-- `0018`: Backfills `plan_dates` and `workout-to-plan` links
+- `0018`: Backfills `training_plans.start_date`/`end_date` and the workout-to-plan links
 - `0019`: Creates the `idempotency_keys` table for server-side idempotency
 - `0027`: Adds coach-note columns to `plan_days` (`ai_rationale`, `ai_note_updated_at`, `ai_inputs_used`) so the auto-coach can persist prescriptive rationale per day.
 - `0028`: Adds `plan_day_id` FK on `exercise_sets`, allowing coach-prescribed exercises to be attached to a plan day before any workout is logged.
@@ -1615,14 +1615,18 @@ of this — leave them inline in the normal generated migration.
 
 ## Transaction Patterns
 
-Drizzle transactions are used for atomic multi-table operations. Example from `replaceExerciseSetsByOwner()` in `server/services/workoutService/persistence.ts` (`server/services/workoutService.ts` is only a barrel re-exporting the `workoutService/` modules):
+Drizzle transactions are used for atomic multi-table operations. Example from `replaceExerciseSetsAndStructureByOwner()` in `server/services/workoutService/persistence.ts` (`server/services/workoutService.ts` is only a barrel re-exporting the `workoutService/` modules):
 
 ```typescript
-// Replace exercise sets atomically — delete old, insert new
+// Replace an owner's exercise sets and structure atomically — delete old, insert new
 await db.transaction(async (tx) => {
   await tx.delete(exerciseSets).where(exerciseSetOwnerCondition(owner));
+  await tx.delete(workoutStructureBlocks).where(structureBlockOwnerCondition(owner));
   if (setRows.length > 0) {
     await tx.insert(exerciseSets).values(setRows);
+  }
+  if (structureBlocks !== undefined) {
+    structureSetCount = await replaceStructureForOwner(tx, owner, structureBlocks, structureReplacementOptions(setRows.length));
   }
 });
 ```
