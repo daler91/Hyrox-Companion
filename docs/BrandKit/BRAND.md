@@ -1,8 +1,11 @@
 # fitai.coach — Brand Kit (Nexus)
 
-> The source of truth for the visual system. Everything here is tokenized, so it maps directly onto
-> the CSS variables in `client/src/index.css` and the `theme.extend` block in `tailwind.config.ts` —
-> change a token here and there, not in component styles. The logo files and the designed PDF sit
+> The source of truth for the visual system. The app implements it through shadcn-style semantic
+> variables in `client/src/index.css` (`--background`, `--foreground`, `--primary`, `--accent`,
+> `--sidebar-*`, …, each an HSL triple) that the `theme.extend` block in `tailwind.config.ts` reads.
+> The `--color-*` names and the Tailwind `ink` / `lime` / `data` colours in §3 are this kit's own
+> vocabulary and are not defined in the app, so a token changed here has to be carried over to the
+> matching semantic variable there — change tokens in those two places, not in component styles. The logo files and the designed PDF sit
 > beside this file in [`docs/BrandKit/`](.); the higher-level UI approach (layout patterns,
 > screen composition) is in [`design_guidelines.md`](../../design_guidelines.md).
 
@@ -86,6 +89,11 @@ Stacked: mark above wordmark, gap = 0.5 × mark height.
 | `--color-lime` | `#C4F37E` | `96 85% 74%` | Brand primary — logo bg, key CTAs, hero accents |
 | `--color-lime-ink` | `#365F1A` | `96 56% 24%` | Lime-tinted text on light surface |
 | `--color-lime-soft` | `#F0F9E4` | `96 60% 94%` | Lime wash — badges, subtle highlights |
+
+The app's stylesheet and the logo files use the **HSL** column for the lime tokens (`--accent` and
+the dark theme's `--primary` are `96 85% 74%`; `NexusMark` and the SVGs fill with `hsl(96 85% 74%)`).
+The two columns are not the same colour for two of them: `#C4F37E` converts to `84 83% 72%` and
+`#F0F9E4` to `86 64% 94%`, while `96 85% 74%` is `#B1F584` and `96 60% 94%` is `#EEF9E7`.
 
 ### Neutrals (ink ramp)
 | Token | Hex | Use |

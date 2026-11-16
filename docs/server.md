@@ -59,13 +59,11 @@ Middleware is applied in the following order in `server/index.ts`:
 | 5 | `cspNonceMiddleware` | Per-request CSP nonce generation (production only) |
 | 6 | `helmet()` | Security headers, including the full **Content-Security-Policy** (per-request nonce) built by `buildCspDirectives()` in `server/middleware/csp.ts`, plus HSTS with preload and referrer policy. |
 | 7 | `permissionsPolicy` | Sets `Permissions-Policy: camera=(self), microphone=(self), geolocation=()` (`server/middleware/permissionsPolicy.ts`): the camera and microphone for the app's own origin only (the nutrition barcode scanner and voice dictation), geolocation off |
-| 8 | `express.json({ limit: "2mb" })` | Body parsing for `/api/v1/coaching-materials` only |
-| 9 | `express.json({ limit: "10mb" })` | Body parsing for image-parse routes only (base64 image payloads; matched via `isImageParsePath`) |
-| 10 | `express.json({ limit: "100kb" })` | Default JSON body parsing with raw body capture |
-| 11 | `express.urlencoded()` | URL-encoded body parsing (100 kb limit) |
-| 12 | `cookieParser()` | Cookie parsing -- required by the CSRF double-submit middleware mounted in `registerRoutes` |
-| 13 | `pino-http` | Structured request logging with request ID. Runs before Clerk auth, so user identity is limited (see [pino-http Middleware](#pino-http-middleware)) |
-| 14 | request-context wiring | Runs the remainder of the request inside an async context carrying `requestId` only -- Clerk auth has not run yet at this point |
+| 8 | `express.json({ limit: "100kb" })` | Default JSON body parsing with raw body capture, wrapped in `skipLargeJsonBodyPaths()`. The few routes that take a larger body (plan import, coaching materials, chat sends, image parses) are skipped here and parsed inside their protected route stack, after auth and the rate limiter -- see [Body Size Limits](#body-size-limits) |
+| 9 | `express.urlencoded()` | URL-encoded body parsing (100 kb limit) |
+| 10 | `cookieParser()` | Cookie parsing -- required by the CSRF double-submit middleware mounted in `registerRoutes` |
+| 11 | `pino-http` | Structured request logging with request ID. Runs before Clerk auth, so user identity is limited (see [pino-http Middleware](#pino-http-middleware)) |
+| 12 | request-context wiring | Runs the remainder of the request inside an async context carrying `requestId` only -- Clerk auth has not run yet at this point |
 
 Clerk auth, CSRF protection and idempotency are **not** part of this global chain. `clerkMiddleware()` is installed by `setupAuth()` (when Clerk keys are configured) at the start of `registerRoutes()`, and `csrfProtection` is mounted on `/api/v1` after it; idempotency is applied per protected mutating route through the `protectedRouteBuilder` guards (`protectedMutationGuards = [isAuthenticated, idempotencyMiddleware]`).
 
