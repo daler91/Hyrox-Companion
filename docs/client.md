@@ -60,7 +60,7 @@ When auth is bypassed (dev mode or Cypress tests), ClerkProvider is omitted and 
 
 ## Routing
 
-Routing uses **wouter** (`Switch` and `Route` components). `AuthenticatedRouter` mounts six authenticated routes, the signed-out-accessible privacy page, and a catch-all 404:
+Routing uses **wouter** (`Switch` and `Route` components). `AuthenticatedRouter` mounts six authenticated routes, the two pages that are also reachable signed out (privacy and account deletion), and a catch-all 404:
 
 | Path         | Component    | Feature Name  | Loading                                                                 |
 | ------------ | ------------ | ------------- | ----------------------------------------------------------------------- |
@@ -71,15 +71,16 @@ Routing uses **wouter** (`Switch` and `Route` components). `AuthenticatedRouter`
 | `/nutrition` | `Nutrition`  | Nutrition     | Lazy (`React.lazy`) — only mounted when `featureFlags.nutritionEnabled` |
 | `/settings`  | `Settings`   | Settings      | Lazy (`React.lazy`)                                                     |
 | `/privacy`   | `Privacy`    | --            | Lazy (`React.lazy`) — accessible signed-out                             |
+| `/delete-account` | `DeleteAccount` | --       | Lazy (`React.lazy`) — accessible signed-out                             |
 | `*`          | `NotFound`   | --            | Eagerly loaded                                                          |
 
 `/nutrition` is gated at build time: `featureFlags.nutritionEnabled` (`client/src/lib/featureFlags.ts`) defaults to `true` and is turned off with `VITE_NUTRITION_ENABLED=false`. When it is off the `Route` is never mounted, so the path falls through to the 404.
 
-Every route except `/privacy` and the 404 is wrapped in `FeatureErrorBoundaryWrapper` with a descriptive `featureName` prop. The whole `Switch` sits inside one shared `Suspense` boundary whose fallback is a centred `LoadingSpinner`.
+Every route except `/privacy`, `/delete-account` and the 404 is wrapped in `FeatureErrorBoundaryWrapper` with a descriptive `featureName` prop. The whole `Switch` sits inside one shared `Suspense` boundary whose fallback is a centred `LoadingSpinner`.
 
 Each page is lazy-loaded through `lazyWithReload` (`client/src/lib/lazyWithReload.ts`), a `React.lazy` wrapper for chunks a deploy has removed. A tab still on the previous build asks for an old `/assets/*.js`, the server answers 404 (`Cache-Control: no-store`), the import rejects with "Failed to fetch dynamically imported module", and React keeps the rejected import, so re-rendering cannot recover. On such a failure the wrapper reloads the page once onto the current build, keeping the spinner up meanwhile. A `sessionStorage` timestamp limits this to one reload a minute, and it never reloads offline or when storage is blocked. Any rejected page import is handled the same way, since React cannot retry a module that threw while loading either. A chunk that still fails reaches the error boundary as a `ChunkLoadError`, and both boundaries' "Try again" reloads the page for it (`isChunkLoadError`) rather than resetting.
 
-The `Landing` page is also lazy-loaded and rendered outside the authenticated layout when the user is not signed in.
+The `Landing` page is also lazy-loaded and rendered outside the authenticated layout when the user is not signed in. The signed-out router mounts `/privacy` and `/delete-account` ahead of it, so both pages work without an account; every other path shows `Landing`.
 
 ---
 
@@ -155,6 +156,10 @@ Most tab sections are their own lazy chunks, loaded through `lazyWithReload` lik
 ### Privacy (`client/src/pages/Privacy.tsx`)
 
 First-party privacy policy page. Lists each third-party processor the app sends data to (Clerk for auth, the configured AI provider for AI features when `aiCoachEnabled`, Strava for activity sync when connected, Garmin for activity sync when connected, Resend for email when `emailNotifications`, Sentry for error telemetry) with a plain-language description of what data each receives. The Landing page footer and the Settings page both link here. The route is accessible while signed out so prospective users can read it before sign-up.
+
+### Delete Account (`client/src/pages/DeleteAccount.tsx`)
+
+How to delete an account, at the public address `/delete-account` that Google Play's account-deletion requirement links to. It works signed in or out and needs no app install: the steps on the website and in the Android app, what is deleted, and what is kept. What it says has to match `DELETE /api/v1/account` (`server/services/accountErasureService.ts`) and the privacy page.
 
 ### Landing (`client/src/pages/Landing.tsx`)
 
@@ -297,6 +302,23 @@ Workout detail surfaces live in their own top-level directory so Timeline, Log W
 ### `icons/` -- Integration Icons
 
 - `StravaIcon`, `GarminIcon` -- Brand-color SVG icons used in Settings and on timeline cards.
+
+### `brand/` -- Logo Components
+
+- `Logo` -- The Nexus mark with the wordmark beside it, or the mark alone with `showWordmark={false}`; the wordmark's size follows the mark's. Used in the sidebar, the mobile header and the landing page.
+- `NexusMark`, `Wordmark` -- The two halves. The mark takes a `variant` (`primary`, `ink`, `mono` or `currentColor`), matching the logo files in [`docs/BrandKit/`](BrandKit/BRAND.md).
+
+### `chat/` -- Chat Markdown
+
+- `ChatMarkdown` -- A coach reply rendered with `react-markdown`, `remark-gfm` (tables, strikethrough, task lists; a wide table scrolls inside its bubble) and `rehype-sanitize` (AI output is untrusted). It is its own module so `ChatMessage` can load it lazily, falling back to plain text if the chunk fails to load, which keeps those three libraries out of the Timeline chunk.
+
+### `session-grades/` -- Session Grade Chip
+
+- `GradeVerdictBadge` -- A session grade's verdict as a chip: tone, icon and words together, so colour is never the only signal, with the headline as its tooltip. Shared by the workout sheet's grade card, the Weekly Review and the Analytics session-quality tab.
+
+### `nutrition/` -- Shared Nutrition Rows
+
+- `MicroRow` -- One micronutrient row (label, % of RDI, progress bar, amount), shared by the daily `MicronutrientPanel` and the per-serving `MicronutrientPreviewPanel`. The rest of the nutrition UI lives under `client/src/pages/nutrition/`.
 
 ### `workout/` -- Workout Composer Components
 

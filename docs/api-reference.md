@@ -1645,6 +1645,7 @@ Inspect the AI suggestion trace and metadata for a plan day. Debugging aid.
 List all coaching materials for the current user, with their full text.
 
 - **Auth:** Required
+- **Rate limit:** `coaching` category, 60/min
 - **Response:** `CoachingMaterial[]`
 
 ### GET /api/v1/coaching-materials/summaries
@@ -1664,7 +1665,7 @@ Create a new coaching material. Triggers background embedding via pg-boss queue.
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Body limit:** 2MB (elevated from default 100kb)
 - **Body:** `{ title: string (1-255 chars), content: string (1-1,500,000 chars), type: "principles" | "document" }`
-- **Validation:** `createMaterialSchema` (`insertCoachingMaterialSchema` without `userId`)
+- **Validation:** `createCoachingMaterialSchema` (`insertCoachingMaterialSchema` without `userId`)
 - **Side effects:** Queues `embed-coaching-material` job for RAG chunking/embedding.
 - **Response:** `201` Created `CoachingMaterial`
 
@@ -1692,6 +1693,7 @@ Delete a coaching material, then purge its RAG chunks (`deleteChunksByMaterialId
 Check the RAG pipeline status (embedding counts, dimension info).
 
 - **Auth:** Required
+- **Rate limit:** `coaching` category, 60/min
 - **Response:** RAG status object
 
 ### POST /api/v1/coaching-materials/re-embed
