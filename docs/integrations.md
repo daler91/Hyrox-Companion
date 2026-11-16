@@ -9,21 +9,23 @@ This document covers the external service integrations used by the fitai.coach a
 1. [Overview](#overview)
 2. [Strava Integration](#strava-integration)
 3. [Garmin Connect Integration](#garmin-connect-integration)
-4. [Email System (Resend)](#email-system-resend)
-5. [Web Push Notifications](#web-push-notifications)
-6. [Job Queue (pg-boss)](#job-queue-pg-boss)
-7. [Cron Scheduling (node-cron)](#cron-scheduling-node-cron)
-8. [Error Tracking (Sentry)](#error-tracking-sentry)
-9. [Startup Maintenance](#startup-maintenance)
+4. [Health Connect Integration](#health-connect-integration)
+5. [Email System (Resend)](#email-system-resend)
+6. [Web Push Notifications](#web-push-notifications)
+7. [Job Queue (pg-boss)](#job-queue-pg-boss)
+8. [Cron Scheduling (node-cron)](#cron-scheduling-node-cron)
+9. [Error Tracking (Sentry)](#error-tracking-sentry)
+10. [Startup Maintenance](#startup-maintenance)
 
 ---
 
 ## Overview
 
-The application relies on seven external integration layers:
+The application relies on eight external integration layers:
 
 - **Strava** -- OAuth 2.0 integration for importing workout activities from athletes' Strava accounts, kept current automatically by Strava's webhook push plus a polling fallback.
 - **Garmin Connect** -- Email/password sign-in against Garmin's reverse-engineered SSO (no public OAuth) to import activities. Wrapped in a strict safety stack because every request goes out through the same shared server IP.
+- **Health Connect** -- Android's on-device health store. The server never calls it: the Android app reads exercise sessions there and posts them to the API, which imports them below Strava and Garmin in priority.
 - **Resend** -- Transactional email delivery for the six athlete emails: weekly training summary, missed workout reminder, weekly review reminder, session brief, analysis digest, and MAF test reminder.
 - **Web Push** -- Browser push notifications (VAPID, via the `web-push` library) that ride along with those emails and carry the push-only nutrition reminders. Optional; disabled unless all three VAPID variables are set.
 - **pg-boss** -- PostgreSQL-backed persistent job queue for background processing (auto-coaching, embedding generation, the six per-user email sends, plan generation, analytics recompute, and Strava sync). Retries are scoped to idempotent handlers only.
@@ -390,6 +392,38 @@ behaviour, not a code change, and so left to the repo owner.
 A partial unique index on `workout_logs(user_id, garmin_activity_id) WHERE garmin_activity_id IS NOT NULL` guarantees dedupe at the DB layer even under concurrent imports. `createGarminWorkoutLogs()` uses `onConflictDoNothing`, and the route reports the true insert count (`imported`) plus anything swallowed by the partial index as `skipped`.
 
 **Garmin and Strava both connected.** A Garmin watch that auto-uploads to Strava hands the app every session twice, once per sync and under unrelated ids, so each sync now also drops a fresh activity the other provider already imported (`server/services/crossProviderDuplicates.ts`, D16 in [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)). Two recordings count as one only when they start within two minutes of each other, their moving times agree to within the larger of two minutes and 10%, and their sport types are not plainly different (a generic type such as Strava's "Workout" never rules a pair out); a false merge would drop a real session, so anything less certain is imported as before. Strava runs the check before the detail fetch, so a duplicate costs no API read. The dropped activity counts as `skipped`; nothing is written for it, which keeps one recording per row. It is re-checked while later syncs still fetch it (on the Strava side, the 7-day overlap), so removing the other copy within that window lets it import. When Garmin's copy arrived first, the day is not completed from the Strava copy, because Garmin imports are not yet matched to plan days.
+
+---
+
+## Health Connect Integration
+
+**Key files:**
+
+- `server/routes/healthConnect.ts` -- `POST /api/v1/health-connect/sync` ([API Reference](api-reference.md#health-connect-routes))
+- `server/services/healthConnectImport.ts` -- the import: what is skipped, what is inserted, what a deletion does
+- `server/services/healthConnectMapper.ts` -- a session as a `workout_logs` row and its synthesised set
+- `server/storage/healthConnectLogs.ts` -- the insert, the already-imported lookup, and the "untouched import" queries
+- `shared/schema/types/native.ts` -- `healthConnectSyncSchema`, the request the app sends
+
+Health Connect is not a service the server can reach: it is a store on the athlete's Android phone. The app reads exercise sessions there, with the heart-rate, distance and active-calorie totals for each session's span, and posts what changed since its last Changes API token. No credential is stored server-side and there is nothing to connect or disconnect in the API; the app side (permissions, the WorkManager schedule, the token handling) is described in the [mobile README](../mobile/README.md#health-connect).
+
+### Source Priority
+
+A Health Connect session carries less than a Strava or Garmin recording (no moving time, no laps) and is often a copy the watch's own app wrote there, so it ranks last: Strava, then Garmin, then Health Connect.
+
+- **Written by a connected provider's app.** A session whose `dataOrigin` is `com.strava` or `com.garmin.android.apps.connectmobile` is skipped while that provider is connected here; its own sync brings the session in with more detail.
+- **Already stored.** A session matching a stored Strava or Garmin recording, another Health Connect import, or another session in the same batch is skipped. The test is the cross-provider one described under [Garmin Connect](#garmin-connect-integration): starts within two minutes, durations within the larger of two minutes and 10%, and sports not plainly different. Health Connect records no moving time, so a session's span stands in for it.
+- **Arriving later from Strava or Garmin.** When a Strava or Garmin sync brings in a session Health Connect already supplied, the Health Connect import moves to the recycle bin (`supersedeHealthConnectRecordings` in `server/services/crossProviderDuplicates.ts`), so the session counts once.
+
+### What an Import Looks Like
+
+Each session becomes a standalone `workout_logs` row with `source = 'health_connect'` and its id in `health_connect_id`: the sport as `focus`, a distance-and-duration line as `mainWorkout` (the distance is left out at 100 m or less), pace as `accessory`, the session's title and heart rate in `notes`, and the numeric distance, calories and heart-rate columns filled from the request. Its calendar date is the start instant shifted by the session's own UTC offset, or by the athlete's time zone when the app sent none. The rows and their synthesised exercise sets are written in one transaction, and the partial unique index on `(user_id, health_connect_id)` drops a session a concurrent sync already wrote.
+
+### Deletions and Athlete Edits
+
+- A session id that is already on a live workout, or on one still in the recycle bin, is never imported again, so an import the athlete deleted stays deleted.
+- A session deleted in Health Connect moves its import to the recycle bin, where it can be restored for the bin's retention period.
+- Both kinds of automatic removal, a deletion in Health Connect and a Strava or Garmin recording superseding the import, leave alone any import the athlete has taken over: one linked to a plan day or given an RPE stays.
 
 ---
 

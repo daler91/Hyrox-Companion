@@ -31,6 +31,7 @@ Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`)
 - [Runtime & Dev](#runtime--dev)
 - [Feature Flags](#feature-flags)
 - [Client (Vite) Variables](#client-vite-variables)
+- [Script and Test Variables](#script-and-test-variables)
 
 ---
 
@@ -214,7 +215,7 @@ The `release` tag is set explicitly in both inits and resolves in this order: (1
 |---|---|---|
 | `NODE_ENV` | `development` | `development` \| `production` \| `test`. |
 | `PORT` | `5000` | HTTP listener port. |
-| `LOG_LEVEL` | `info` | Pino level: `trace` \| `debug` \| `info` \| `warn` \| `error` \| `fatal`. |
+| `LOG_LEVEL` | `info` | Pino level: `trace` \| `debug` \| `info` \| `warn` \| `error` \| `fatal` \| `silent`. Any other value fails startup validation. |
 | `APP_INSTANCE_COUNT` | `1` | Declared app replica count. Values above `1` require the shared runtime-state migration and use Postgres-backed rate limits/cache entries. |
 | `ALLOW_DEV_AUTH_BYPASS` | — | Dev-only. See [Authentication (Clerk)](#authentication-clerk). |
 
@@ -252,3 +253,18 @@ Variables exposed to browser code must start with `VITE_` — Vite statically in
 | `DEV` / `PROD` | Vite built-ins | Boolean guards used by `isDevPreview`, `RagDebugBadge`, etc. |
 
 Do not put any server-only secret (including `CLERK_SECRET_KEY`, `GEMINI_API_KEY`, `AI_TEXT_API_KEY`, provider API keys, `RESEND_API_KEY`, or the VAPID private key) behind a `VITE_` prefix — it would leak into the public JS bundle.
+
+---
+
+## Script and Test Variables
+
+Read by a script or a test, never by the running server, so `server/env.ts` does not validate them and `.env.example` does not list them.
+
+| Variable | Read by | Notes |
+|---|---|---|
+| `RESTORE_DRILL_DATABASE_URL` | `script/restore-drill.ts` (`pnpm ops:restore-drill`) | The restored database the drill checks. The script refuses to run when it equals `DATABASE_URL` unless `--allow-primary` is passed. See [Backup, Restore & DR](operations/backup-restore.md). |
+| `RUN_COACH_HARNESS` | `script/coach-influence/harness.ts` (`pnpm coach:influence`) | Must be `1`, or the harness refuses to run: it calls the live model and costs money. |
+| `COACH_HARNESS_RUNS` | `script/coach-influence/harness.ts` | Runs per condition. Default `3`. |
+| `RUN_AI_EVAL` | `test/evals/chatScenarios.eval.test.ts`, `server/services/aiEval.test.ts` | Must be `true` for the live-model evals to run; otherwise they are skipped. `pnpm eval:chat` sets it. |
+| `AI_EVAL_MODES` | `test/evals/chatScenarios.eval.test.ts` | Comma-separated chat modes to evaluate. Default `classic,tools`. |
+| `HEALTH_TIMEOUT_MS` | `script/wait-for-health.js` | How long CI waits for the started server to report healthy. Default `120000`. |

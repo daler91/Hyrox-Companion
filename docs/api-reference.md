@@ -41,6 +41,7 @@ fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints req
 - [Push Notification Routes](#push-notification-routes)
 - [Strava Routes](#strava-routes)
 - [Garmin Routes](#garmin-routes)
+- [Health Connect Routes](#health-connect-routes)
 - [Timeline and Export Routes](#timeline-and-export-routes)
 - [Nutrition Routes](#nutrition-routes)
 
@@ -2065,6 +2066,25 @@ Imports the most recent activities from Garmin into `workout_logs`.
 - **Behavior:** Calls `client.getActivities(start, 20)` a page at a time until a short page, a page reaching back past the last sync less 7 days (90 days back on a first sync), or 5 pages, whichever comes first; a failed page fails the whole sync. Dedupes against the partial unique index `(user_id, garmin_activity_id) WHERE garmin_activity_id IS NOT NULL`, and inserts the new rows via `onConflictDoNothing`, each with its one synthesised exercise set (a distance-and-time set for runs, rides, swims, rows and walks; none for strength or generic sessions) in the same transaction (C26).
 - **Success response:** `{ success: true, imported: number, skipped: number, total: number }` — `imported` is the true insert count; anything caught by the partial index is rolled into `skipped`.
 - **Error responses:** `401 GARMIN_AUTH_FAILED`, `502 GARMIN_API_ERROR` (with `lastError` persisted), `409 GARMIN_BUSY`.
+
+---
+
+## Health Connect Routes
+
+**File:** `server/routes/healthConnect.ts`
+
+The server never calls Health Connect. The Android app reads exercise sessions on the device and posts them here. See [Integrations → Health Connect](integrations.md#health-connect-integration) for source priority and the duplicate rules.
+
+### POST /api/v1/health-connect/sync
+
+Imports the sessions the app has read since its last Changes API token, and bins the imports of sessions deleted in Health Connect.
+
+- **Auth:** Required (bearer token from the app; no CSRF token needed)
+- **Rate limit:** `healthConnect` category, 30/min
+- **Body:** `{ sessions: Session[] (max 100), deletedIds?: string[] (max 500, each 1-255 characters; default []) }` (`healthConnectSyncSchema`). A session is `{ id: string (1-255), startTime: string, endTime: string, zoneOffsetMinutes?: integer (-1080 to 1080), sportType: string (1-64), title?: string (max 200), distanceMeters?: number (0 to 1,000,000), activeCalories?: number (0 to 20,000), avgHeartRate?: integer (20-250), maxHeartRate?: integer (20-250), dataOrigin?: string (max 255) }`. `startTime` and `endTime` are ISO 8601 datetimes with an offset, and `endTime` must be after `startTime` and at most 24 hours later. `sportType` is one of Strava's sport-type names, which the app maps Health Connect's exercise types onto. `dataOrigin` is the package of the app that wrote the session.
+- **Behavior:** Handles `deletedIds` first: each matching import the athlete has not taken over (no plan day, no RPE) moves to the recycle bin. Then drops every posted session that is already imported (on a live workout, or on one still in the recycle bin, so a deleted import stays deleted), that the Strava or Garmin Connect app wrote while that provider is connected here, that repeats another session in the same batch, or that matches a stored Strava, Garmin or Health Connect recording. What is left is inserted into `workout_logs` with `source: "health_connect"`, each row with its synthesised exercise set in the same transaction; the partial unique index `(user_id, health_connect_id) WHERE health_connect_id IS NOT NULL` backs the dedupe under concurrent syncs. A session's calendar date comes from its own `zoneOffsetMinutes`, else from the athlete's time zone. The analytics caches are invalidated when anything was imported or binned.
+- **Response:** `{ imported: number, skipped: number, deleted: number }` — `skipped` is every posted session that did not become a new workout; `deleted` is the number of imports moved to the recycle bin.
+- **Errors:** `400 { code: "VALIDATION_ERROR" }` (`validateBody`)
 
 ---
 
