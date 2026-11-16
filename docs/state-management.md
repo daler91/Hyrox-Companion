@@ -135,6 +135,8 @@ All hooks are in `client/src/hooks/`.
 | `useAuth` | `useAuth.ts` | Integrates Clerk auth with database user sync. Polls the `authUser` query every 2s while `isAutoCoaching` is true (max 5 min, pauses while the tab is hidden). Invalidates timeline queries when auto-coaching completes. Resets the cached CSRF token on sign-in state transitions. Also exports `useIsAutoCoaching`, `useIsAiCoachEnabled`, `useIsOnboardingCompleted`, and `useIsAuthUserLoaded` -- thin `select`-based subscribers to single auth-user fields. |
 | `useSignOut` | `useSignOut.ts` | Clerk sign-out. Calls `clearUserLocalData()` to purge the offline queue and workout drafts from local/session storage before signing out. `useConfirmedSignOut`, which the Log out button uses, asks first while offline writes are still queued. |
 | `useEmailCheck` | `useEmailCheck.ts` | Fire-and-forget email check once per authenticated session (gated on `isAuthenticated` and `isAppUserLoaded`). |
+| `useDetectTimezone` | `useDetectTimezone.ts` | Once authenticated, reads the browser's IANA timezone and PATCHes the stored `userTimezone` when it has changed (or is still the default `UTC`). The server schedules emails and anchors weeks from that value. Fire-and-forget; failures are swallowed. |
+| `useMafCeiling` | `useMafCeiling.ts` | The athlete's MAF aerobic ceiling in bpm, or `null` when they don't train to one. Reads the auth user query every surface already holds, so it adds no fetch. |
 
 ### Data Loading
 
@@ -143,6 +145,8 @@ All hooks are in `client/src/hooks/`.
 | `useTimelineData` | `useTimelineData.ts` | Fetches plans, timeline entries, and personal records. Manages scroll position and "go to today" navigation. Reports a failed load as `isError` (with `retry`), never as an empty account, so `isNewUser` stays false. A first fetch paused offline counts as loading, and `isError` stays set while a retry runs, with `isRetrying` true. |
 | `useTimelineState` | `useTimelineState.ts` | Orchestrates timeline page state (filters, data, UI state). |
 | `useUnitPreferences` | `useUnitPreferences.ts` | Reads and caches user's weight/distance unit preferences. |
+| `useExerciseHistory` | `useExerciseHistory.ts` | Past logged sets of one exercise, for the "Last time" line. Keyed on the canonical exercise name so aliases share a cache entry; held with a long `staleTime` and marked stale by every workout and set write. Skipped for custom exercises. |
+| `usePendingWorkoutEntries` | `usePendingWorkoutEntries.ts` | Queued-but-unsynced workout creates as synthetic timeline entries, derived from the offline queue through `useSyncExternalStore` and refreshed on queue-change and sync-complete events. |
 
 ### Mutations
 
@@ -154,6 +158,7 @@ All hooks are in `client/src/hooks/`.
 | `useStravaMutations` | `useStravaMutations.ts` | Strava sync and disconnect mutations. |
 | `useGarminMutations` | `useGarminMutations.ts` | Garmin connect (email/password), disconnect, and manual sync mutations. Surfaces the `GARMIN_BUSY`, `GARMIN_SYNC_TOO_SOON`, and `GARMIN_CIRCUIT_OPEN` error codes as user-friendly toasts. |
 | `useCoachingMaterials` | `useCoachingMaterials.ts` | Coaching material CRUD with re-embed triggers. |
+| `useDeviceLinkMutations` | `useDeviceLinkMutations.ts` | The athlete's override of the sync's matcher, from the timeline card: merge a standalone device import into the planned session or logged workout it belongs to, split a linked recording back out, or wave off a suggestion. Success refetches everything the recording moved between. |
 
 Timeline annotation queries and mutations are composed directly from the `client/src/lib/api/timelineAnnotations.ts` module inside `useTimelineData` (read) and the `AnnotationsDialog` component (write), rather than via a dedicated hook — the annotations list is small and refetches cheaply on mutation. Account deletion is invoked from `client/src/components/settings/AccountDangerZone.tsx`, which calls the `DELETE /api/v1/account` endpoint behind a hold-to-confirm gesture, clears the React Query cache on success, and hands off to Clerk's sign-out flow.
 
@@ -172,6 +177,7 @@ Timeline annotation queries and mutations are composed directly from the `client
 | `useChatHistory` | `chat/useChatHistory.ts` | Loads the saved conversation once into the chat buffer, keeping any message sent before it arrived (CL41), and clears it; the server saves the turns. |
 | `useChatAutoScroll` | `chat/useChatAutoScroll.ts` | Keeps the chat viewport pinned to the newest message while the athlete is at the bottom. |
 | `useBudgetWarning` | `chat/useBudgetWarning.ts` | One toast per session when a chat response carries `X-AI-Budget-Warning`. |
+| `usePlanProposal` | `usePlanProposal.ts` | The pending plan-adjustment proposal and its apply, dismiss and undo actions. Query-driven, so a pending proposal reappears after a reload. Also exports `useLiveProposal`, which keeps a proposal's card at its chat turn in step with its current status. |
 
 ### Analytics
 
@@ -194,9 +200,14 @@ Timeline annotation queries and mutations are composed directly from the `client
 | `useOnboarding` | `useOnboarding.ts` | Tracks durable onboarding completion with a local fallback that holds the signed-in athlete's id (`onboardingStorage.ts`), so another account on the device neither skips onboarding nor is marked complete by it. |
 | `useEnableAiCoach` | `useEnableAiCoach.ts` | Mutation that turns `aiCoachEnabled` on (the consent every AI route checks) and refreshes the auth user and preferences. Used by the AI plan generator's consent step. |
 | `useOnboardingWizard` | `useOnboardingWizard.ts` | Multi-step wizard state and navigation. The form is a draft over the athlete's saved preferences (`onboardingProfile.ts`), and each step writes only the fields that differ from what is saved, so "Run setup again" never resets an established athlete's settings. |
+| `useCompleteOnboarding` | `useCompleteOnboarding.ts` | Returns the callback that marks onboarding complete: the per-athlete local flag at once, then the server flag in the background. Also exports `useOnboardingUserId`. |
 | `useOnlineStatus` | `useOnlineStatus.ts` | Tracks `navigator.onLine` with event listeners. |
 | `useOfflineDropNotifier` | `useOfflineDropNotifier.ts` | Subscribes to the offline queue and shows a destructive toast whenever a queued mutation is permanently dropped (data loss). Mounted once near the app root. |
 | `useCombineWorkouts` | `useCombineWorkouts.ts` | State for merging multiple workout logs into one. |
+| `useOpenWorkoutId` | `useOpenWorkoutId.ts` | Which workout sheet is open, held in the `?workout=` query parameter so the browser's back button closes it. Opening pushes a history entry; clearing replaces. |
+| `useUnsavedChangesPrompt` | `useUnsavedChangesPrompt.ts` | Intercepts in-app link clicks and the back button while a form has unsaved changes, and holds the navigation until the athlete confirms or cancels. Settings uses it through `pages/settings/useSettingsUnsavedChangesGuard.ts`. |
+| `useDocumentTitle` | `useDocumentTitle.ts` | Sets `document.title` for the current page, so each route announces itself to assistive technology. |
+| `useFocusMainOnRouteChange` | `useFocusMainOnRouteChange.ts` | Moves focus to `#main-content` on client-side route changes (WCAG 2.4.3), which wouter does not do. The first render is skipped so page load leaves the skip link alone. |
 | `use-toast` | `use-toast.ts` | Toast notification state management. |
 | `use-mobile` | `use-mobile.tsx` | Responsive breakpoint detection. |
 

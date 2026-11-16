@@ -99,8 +99,9 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
   railway config apply                # only if the plan passes the check below
   ```
 
-  - **CLI version:** `railway config` needs a recent CLI, and `railway@3.13.1`
-    refuses to evaluate the file under a CLI older than 5.42.1.
+  - **CLI version:** `railway config` needs a recent CLI, and the `railway`
+    SDK the repo pins (3.13.1 then, 3.17.0 now) refuses to evaluate the file
+    under a CLI older than 5.42.1.
   - **Windows:** that version check runs `process.env._ || "railway"` through
     Node, which cannot start the npm `railway.cmd` / `railway.ps1` shims, so it
     reports the CLI as too old even when it is not. Point `_` at the real
@@ -279,10 +280,10 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
 | `0018_backfill_plan_dates_and_workout_links` | 4 backfills: null stale `plan_day_id`, `training_plans.start_date`/`end_date`, `workout_logs.plan_id` | Plans missing start/end dates; workout↔plan links unset on old rows.                                                                                                                                                                                                                                                                                                                                  |
 | `0029_workout_prescription_snapshot`         | Backfill `prescribed_main_workout`/`accessory`/`notes`                                                | Pre-0029 workouts have no prescription snapshot, so adherence reads against a mutable text field.                                                                                                                                                                                                                                                                                                     |
 | `0031_user_adherence_visibility_pref`        | `UPDATE users`                                                                                        | Preference default not applied to pre-existing users.                                                                                                                                                                                                                                                                                                                                                 |
-| `0032_unusual_rogue`                         | `UPDATE exercise_sets`                                                                                | See the migration body before ticking.                                                                                                                                                                                                                                                                                                                                                                |
+| `0032_unusual_rogue`                         | `UPDATE exercise_sets`: copy logged sets' actuals into the new `planned_*` columns                    | Pre-0032 logged sets keep empty `planned_*` columns and render as "no plan recorded" instead of "no diff".                                                                                                                                                                                                                                                                                            |
 | `0035_maf_artifacts`                         | `INSERT INTO user_training_style … 'migration_default'` per existing user                             | Users predating 0035 have no training-style row.                                                                                                                                                                                                                                                                                                                                                      |
 | `0036_maf_post_migration_validation`         | Creates `data_remediation_log` + `v_maf_post_migration_validation`, plus remediation DML              | **Neither object is in the Drizzle schema**, so `drizzle-kit push` would drop them. They exist wherever `migrate()` ran 0036, production included.                                                                                                                                                                                                                                                    |
-| `0044_cloudy_bloodaxe`                       | `UPDATE workout_structure_steps` clearing rest-step targets                                           | Runs _before_ a CHECK and UNIQUE INDEX in the same file. Both ARE in the Drizzle schema, so `push` would have refused them if violating rows existed — verify the constraint is actually present.                                                                                                                                                                                                     |
+| `0044_cloudy_bloodaxe`                       | `UPDATE workout_structure_steps` clearing rest-step targets                                           | Runs after the UNIQUE INDEX and _before_ the CHECK in the same file. Both ARE in the Drizzle schema, so `push` would have refused them if violating rows existed — verify the constraint is actually present.                                                                                                                                                                                         |
 | `0047_last_magik`                            | `UPDATE users SET onboarding_completed = true`                                                        | Low. `useOnboarding` also gates on `isNewUser` and a local flag, so existing users are not re-onboarded.                                                                                                                                                                                                                                                                                              |
 | `0049_exercise_load_tags`                    | **Seeds all 39 rows of `exercise_load_tags`**                                                         | **Highest impact.** `server/storage/analytics.ts` is the only code touching this table and it only ever SELECTs, so a migration is the sole way it is populated. `calculateTrainingLoad` defaults `loadTags` to `[]` and degrades **silently** — no error, no log — so AI coach context, nutrition daily load, race prediction and training overview would all be computing with neutral multipliers. |
 
@@ -294,7 +295,8 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
   -- expect 39. A 0 here confirms the seed never ran.
   ```
   If it returns 0, replay the `INSERT` from
-  `migrations/0049_exercise_load_tags.sql` with `ON CONFLICT DO NOTHING`.
+  `migrations/0049_exercise_load_tags.sql` as written: it already ends in
+  `ON CONFLICT ("exercise_name") DO UPDATE`.
 - **Verify 0036's objects exist at all:**
   ```sql
   SELECT to_regclass('public.data_remediation_log'),
@@ -345,7 +347,11 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
   an active exposure.
 - **Safe to re-run:** yes, idempotent. Matches nothing once it has run.
 - **If the check fails:** apply the file again (see "If a verification query
-  fails" above).
+  fails" above). The `DELETE` skips a food another athlete's log entry or
+  recipe still references (those foreign keys are `RESTRICT`), so a count that
+  stays above zero after that is such rows, which the file cannot remove.
+  Erasure now hands a referenced food to the athletes who use it instead of
+  leaving it ownerless (`server/storage/erasedAccountFoods.ts`).
 - **Verify afterwards:**
   ```sql
   SELECT count(*) FROM foods
@@ -467,6 +473,8 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
   pnpm tsx script/backfill-counts-as-training.ts --apply                  # write + record
   pnpm tsx script/backfill-counts-as-training.ts --revert <file> --apply  # undo a run
   ```
+  `--revert <file>` without `--apply` is a dry run of the undo. `--user-id <id>`
+  restricts to one athlete; `--quiet` prints the summary only.
 - **Verify afterwards:**
   ```sql
   SELECT counts_as_training, count(*) FROM workout_logs GROUP BY 1;

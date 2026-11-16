@@ -28,7 +28,7 @@
 
 ---
 
-fitai.coach helps athletes plan structured training, log complex workouts, fuel correctly, understand progress, and adjust upcoming sessions with coach-grade AI context. It combines a timeline-first training log, plan import and generation, structured exercise tables, training-style controls, Strava and Garmin sync, nutrition and fuelling tracking, RAG-backed coaching materials, and privacy controls that keep AI features opt-in.
+fitai.coach helps athletes plan structured training, log complex workouts, fuel correctly, understand progress, and adjust upcoming sessions with coach-grade AI context. It combines a timeline-first training log, plan import and generation, structured exercise tables, training-style controls, Strava and Garmin sync, nutrition and fuelling tracking, RAG-backed coaching materials, and privacy controls that keep AI features opt-in. It runs as an installable web app and as a native Android app, both on the same API.
 
 ## Features
 
@@ -40,7 +40,7 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 - **Priority tiers** - Every session is key, supporting, or optional. Generated plans set the tier, other plans infer it from the session's title, and the athlete can change it on any session. The coach protects key sessions and trims optional ones first.
 - **Missed-session recovery** - A missed session is a decision, not a red square: fold it into another day, shorten it, or let it go. Each option shows what it does to the plan before the athlete picks (the day's and week's minutes and load, the key sessions kept, and cautions such as stacking two key sessions or crowding race day), with a recommendation based on the session's tier. Any of the three can be undone — a shortened session comes back whole — and a session let go doesn't count against adherence.
 - **Training styles** - Choose balanced programming or MAF Method constraints, with MAF setup fields used to calculate and persist the athlete's heart-rate ceiling. MAF athletes can tag any logged workout, including synced Strava runs, as a MAF test to track pace at the same heart rate over time.
-- **Timeline annotations** - Mark injury, illness, travel, rest, or other date ranges so analytics and training gaps have context.
+- **Timeline annotations** - Mark injury, illness, travel, or rest date ranges so analytics and training gaps have context.
 - **Guided onboarding** - Set units, race profile and age, a goal and optional race date, an optional fuelling target, and the AI Coach consent, then start a plan (AI, template or CSV import) before landing in the main app. Re-running it from Settings starts from the saved answers.
 
 ### AI Coaching
@@ -56,7 +56,7 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 
 ### RAG-Powered Coaching
 
-- **Coaching material uploads** - Add CSV, DOCX, or PDF materials to enrich the coach with athlete-specific or coach-specific guidance.
+- **Coaching material uploads** - Add plain-text, Markdown, CSV, PDF, or DOCX materials to enrich the coach with athlete-specific or coach-specific guidance.
 - **Vector retrieval** - Documents are chunked, embedded with Gemini embeddings, and searched through pgvector for retrieval-augmented coaching.
 - **Fallback-aware retrieval** - The app can fall back to legacy full-text materials when embeddings are missing, mismatched, or unavailable.
 
@@ -64,6 +64,7 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 
 - **Strava** - OAuth sync imports activities automatically: Strava's webhook push lands a new activity within about a minute of upload, a polling fallback covers anything the push misses, and the Sync button remains for an on-demand refresh. Activities are deduplicated per user and tokens are stored encrypted. Each synced activity is matched to that day's training first: it enriches the workout you already logged (filling only the metrics you left blank) or completes the planned session, and only lands as a separate workout when nothing plausible matches. A Perceived Exertion you gave on Strava arrives as the workout's RPE; without one, the review sheet suggests an RPE from the session's heart rate, which is saved only when you tap it.
 - **Garmin Connect** - Email/password Garmin SSO sync imports recent activities with encrypted credentials and a strict safety stack: per-user locks, rate limits, minimum sync interval, global 429 circuit breaker, and audit logging.
+- **Health Connect** - The Android app reads exercise sessions from Health Connect and posts them to the server, which imports each as a workout. Strava and Garmin take priority: a session either of those apps wrote to Health Connect is skipped while that provider is connected here, a session matching a recording already stored is skipped, and a later Strava or Garmin sync replaces a Health Connect import of the same session. An import that is replaced, or whose session is deleted in Health Connect, moves to the recycle bin, unless the athlete has since linked it to a plan day or given it an RPE.
 
 ### Nutrition & Fuelling
 
@@ -85,7 +86,7 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 - **MAF Trend** - For MAF Method athletes, chart per-test compliance and pace-at-ceiling progression with classification badges across tagged MAF tests.
 - **Data export** - Download workout timeline and exercise sets as CSV or JSON.
 - **Recycle bin** - Deleted workouts, plan days and training plans can be restored for 90 days, either with Undo on the delete toast or from the Recycle bin tab in Settings.
-- **Email and push notifications** - Opt-in weekly summaries, missed-day reminders, Sunday weekly-review reminders, daily session briefs and analysis digests, sent at the athlete's chosen local hour through pg-boss, Resend, and Web Push when configured, with one-click unsubscribe on every email.
+- **Email and push notifications** - Opt-in weekly summaries, missed-day reminders, Sunday weekly-review reminders, daily session briefs and analysis digests, sent at the athlete's chosen local hour through pg-boss, Resend, and push when configured, with one-click unsubscribe on every email. Push reaches browsers over Web Push and the native app over Firebase Cloud Messaging, and carries two opt-in nutrition nudges of its own: a refuel reminder after a session while a carb or protein gap remains, and an evening reminder when nothing has been logged that day.
 
 ### Privacy & Data Control
 
@@ -100,6 +101,14 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 - **Installable app** - Vite PWA and Workbox provide installability and offline-aware behavior. Cached API responses are purged on sign-out, so a shared device does not leak one athlete's data to the next.
 - **Browser push** - Web Push subscriptions can deliver training reminders to opted-in devices when VAPID credentials are configured, capped at 10 devices per athlete.
 - **Offline feedback** - The client surfaces offline/drop notifications so failed interactions are visible.
+
+### Native Android App
+
+- **Same product, native shell** - The app in [`mobile/`](mobile/README.md) is written in Kotlin with Compose Multiplatform and covers the timeline, workout logging and detail, the coach, nutrition, analytics, the weekly review, onboarding, and settings. It calls the same `/api/v1` routes with a Clerk bearer token; iOS is planned from the same code and not started.
+- **Offline first** - A per-user Room database is the source of truth. Writes made offline wait in an ordered outbox and replay with idempotency keys, and the database file is deleted on sign-out.
+- **Generated from the API contract** - The app's Kotlin API models are generated from `docs/openapi.json`, and its ports of the shared domain logic are tested against golden fixtures produced by the TypeScript originals, so the two clients cannot quietly disagree.
+- **Native integrations** - Push through Firebase Cloud Messaging, Health Connect import, Strava connect, and App Links that open fitai.coach links in the app.
+- **What stays on the web** - Coaching-material uploads, CSV plan and workout import, and the data tools for restructuring old workouts.
 
 ---
 
@@ -133,17 +142,26 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 - **API docs**: Swagger UI generated from Zod/OpenAPI schemas
 - **Validation**: Zod and drizzle-zod
 
+### Mobile
+
+- **Language and UI**: Kotlin 2.4, Compose Multiplatform 1.12 (Android first; minimum Android 8.0, API 26)
+- **Networking**: Ktor client, with models generated from the OpenAPI snapshot
+- **Storage and sync**: Room, with an outbox for offline writes
+- **Authentication**: Clerk Android SDK
+- **Build and quality**: Gradle with dependency verification, ktlint, detekt, Android lint, Roborazzi screenshot tests, Maestro end-to-end flows
+
 ### Security and Reliability
 
 - Helmet security headers with a nonce-based production CSP
 - CORS allowlist with credentials
-- CSRF protection through a double-submit cookie flow
+- CSRF protection through a double-submit cookie flow for the web app; requests the native app authenticates with a Clerk bearer token need no CSRF token
 - Server-side idempotency for mutating API requests with `X-Idempotency-Key`
 - AES-256-GCM encryption for Strava and Garmin credentials/tokens, with a versioned keyring for zero-downtime key rotation
 - Rate limiting on every authenticated endpoint, backed by Postgres so limits hold across replicas
 - Per-user and application-wide AI spend caps, on top of the consent gate and kill switch
 - SSRF guards on every outbound URL the app does not hard-code, checked again at send time
 - HTML sanitization for AI-generated content, and prompt-injection escaping for user text in both user turns and system instructions
+- A minimum-version gate for native app builds: once `MIN_APP_VERSION_ANDROID` or `MIN_APP_VERSION_IOS` is set, an older build is answered `426` and prompts for an update
 - Startup env validation for production-only invariants such as `CSRF_SECRET`, `STRAVA_STATE_SECRET`, weak key rejection, and auth bypass lockout
 
 The most recent review is [`docs/SECURITY_AUDIT_2026-09-19.md`](docs/SECURITY_AUDIT_2026-09-19.md), which records what was found, what was fixed, and the handful of items deliberately left alone with reasons.
@@ -165,6 +183,12 @@ flowchart TB
         SW["Service Worker / PWA"]
     end
 
+    subgraph Mobile["Android App (Compose Multiplatform)"]
+        AppUI["Compose UI"]
+        Room[("Room + Outbox")]
+        HC["Health Connect"]
+    end
+
     subgraph Server["Express API"]
         API["Route Handlers"]
         Services["Service Layer"]
@@ -182,6 +206,7 @@ flowchart TB
         Strava["Strava OAuth"]
         Garmin["Garmin Connect SSO"]
         Resend["Resend Email"]
+        FCM["Firebase Cloud Messaging"]
         Gemini["Gemini Embeddings + Vision"]
         Anthropic["Anthropic"]
         OpenAICompatible["OpenAI-compatible Providers"]
@@ -189,6 +214,8 @@ flowchart TB
 
     UI --> TQ --> API
     SW -. "offline cache" .-> UI
+    AppUI --> Room --> API
+    HC -. "sessions" .-> AppUI
     API --> Services
     Services --> PG
     Services --> PGV
@@ -202,6 +229,8 @@ flowchart TB
     Services --> Garmin
     Queue --> Resend
     Queue --> PG
+    Services --> FCM
+    FCM -. "push" .-> AppUI
 ```
 
 ### AI Pipeline
@@ -248,7 +277,8 @@ Hyrox-Companion/
 |       |-- components/        # UI, timeline, coach, analytics, settings, workout surfaces
 |       |-- hooks/             # Custom React hooks
 |       |-- lib/               # API client, query client, utilities
-|       `-- pages/             # Landing, Timeline, LogWorkout, Analytics, Nutrition, Review, Settings, Privacy
+|       `-- pages/             # Landing, Timeline, LogWorkout, Analytics, Nutrition, Review, Settings,
+|                              # Privacy, DeleteAccount
 |-- server/                    # Express backend
 |   |-- ai/                    # Provider-agnostic AI core: retry/timeout, circuit breaker, Gemini SDK factory
 |   |   `-- providers/         # Gemini, Anthropic, and OpenAI-compatible text adapters
@@ -262,12 +292,22 @@ Hyrox-Companion/
 |   |-- usecases/              # Use-case orchestration layer
 |   `-- utils/                 # Server utilities
 |-- shared/                    # Drizzle schema, Zod types, OpenAPI registry, and the pure domain
-|                              # math both sides share (units, MAF, nutrition targets, race spec, plan phase)
+|   |                          # math both sides share (units, MAF, nutrition targets, race spec, plan phase)
+|   |-- openapiRoutes/         # One OpenAPI path module per route group
+|   `-- schema/                # Tables, enums, Zod schemas, and request/response types
+|-- mobile/                    # Native app (Kotlin, Compose Multiplatform): its own Gradle build
+|   |-- androidApp/            # Android entry point
+|   |-- composeApp/            # Shared Compose UI
+|   |-- core/                  # Generated API models and client, data layer, ported shared/ logic
+|   |-- baselineprofile/       # Baseline Profile generator, macrobenchmarks, and their budgets
+|   `-- maestro/               # End-to-end flows run against staging
 |-- migrations/                # Drizzle SQL migrations
 |-- cypress/                   # End-to-end specs and support
-|-- test/                      # Cross-cutting suites: docs-sync checks, calculation-audit guards, factories
+|-- test/                      # Cross-cutting suites: docs-sync and OpenAPI-coverage checks,
+|                              # calculation-audit guards, build-output checks, coach chat evals, factories
 |-- docs/                      # Living subsystem docs and OpenAPI snapshot
-|-- script/                    # Build, maintenance, benchmark, and docs scripts
+|-- script/                    # Build, maintenance, benchmark, and docs scripts, plus the generators
+|                              # for the mobile app's models, fixtures, exercise catalogue, and icons
 |-- .github/workflows/         # CI workflows
 `-- README.md
 ```
@@ -294,7 +334,7 @@ the brand kit, in-flight plans, and the dated review snapshots.
 | [Authentication](docs/authentication.md)               | Clerk setup, user sync, dev auth bypass, protected routes                                  |
 | [Integrations](docs/integrations.md)                   | Strava, Garmin, Resend, pg-boss, cron, Sentry                                              |
 | [Testing](docs/testing.md)                             | Vitest, integration tests, Cypress, accessibility checks, CI workflows                     |
-| [Native Mobile](docs/native-mobile.md)                 | Capacitor vs. React Native comparison and packaging phases                                 |
+| [Mobile App](mobile/README.md)                         | Building and testing `mobile/`, the generated API models, test builds and releases         |
 | [Mobile App Plan](docs/mobile-app-plan.md)             | The decided native app: Compose Multiplatform, Android first, then iOS                     |
 | [Product Opportunities](docs/PRODUCT_OPPORTUNITIES.md) | Prioritised register of new features and improvements, with code-level evidence            |
 
@@ -302,15 +342,19 @@ the brand kit, in-flight plans, and the dated review snapshots.
 
 ## API Documentation
 
-Interactive Swagger UI is available at `/api/docs` when the server is running in development. The OpenAPI document is generated from the shared Zod registry through `@asteasolutions/zod-to-openapi`.
+Interactive Swagger UI is available at `/api/docs` when the server is running in development. The OpenAPI document is generated from the shared Zod registry (`shared/openapi.ts` and the path modules in `shared/openapiRoutes/`) through `@asteasolutions/zod-to-openapi`.
 
-A committed OpenAPI 3.0 snapshot is kept at [`docs/openapi.json`](docs/openapi.json). Regenerate it with:
+A committed OpenAPI 3.0 snapshot is kept at [`docs/openapi.json`](docs/openapi.json). It describes every client route under `/api/v1`; webhooks, unsubscribe links, health probes, and operator endpoints are left out on purpose. Regenerate it with:
 
 ```bash
 pnpm docs:openapi
 ```
 
-The Build workflow fails if the committed snapshot drifts from the generated spec.
+Three checks keep it honest:
+
+- The Build workflow fails if the committed snapshot drifts from the generated spec.
+- `test/docs/openapiCoverage.test.ts` fails when the server registers a client route the document does not describe, or the document describes one the server does not register.
+- The mobile app's Kotlin API models are generated from the snapshot (`pnpm mobile:models`), so installed builds depend on it. The OpenAPI Breaking Changes workflow compares each pull request's snapshot with the base branch's and fails on a breaking change unless the pull request carries the `openapi-breaking-ok` label.
 
 ---
 
@@ -324,6 +368,7 @@ The Build workflow fails if the committed snapshot drifts from the generated spe
 - Optional: [Clerk](https://clerk.com/) keys for real authentication
 - Optional: Gemini, Anthropic, or OpenAI-compatible provider keys for AI text features
 - Optional: Strava, Resend, Sentry, and Web Push credentials for their integrations
+- Optional, for the mobile app only: JDK 21 and an Android SDK (see [`mobile/README.md`](mobile/README.md))
 
 ### 1. Environment Variables
 
@@ -397,7 +442,14 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | `pnpm db:check`                      | Validate migration/schema consistency                                             |
 | `pnpm db:decode-entities`            | Report stored HTML entities in workout text (dry run; `-- --apply` decodes, once) |
 | `pnpm coach:influence`               | Run the AI coach influence harness                                                |
+| `pnpm eval:chat`                     | Run the coach chat scenario evals against a live model (costs money; off in CI)   |
 | `pnpm docs:openapi`                  | Regenerate `docs/openapi.json`                                                    |
+| `pnpm openapi:breaking`              | Compare two OpenAPI documents and fail on a breaking change                       |
+| `pnpm mobile:models`                 | Regenerate the mobile app's Kotlin API models from `docs/openapi.json`            |
+| `pnpm mobile:fixtures`               | Rewrite the golden fixtures the Kotlin ports of `shared/` are tested against      |
+| `pnpm mobile:catalogue`              | Regenerate the mobile app's exercise catalogue from the TypeScript tables         |
+| `pnpm mobile:icons`                  | Regenerate the mobile app's Lucide icons and their licence file                   |
+| `pnpm mobile:perf-budgets`           | Check Macrobenchmark results against `mobile/baselineprofile/budgets.json`        |
 | `pnpm bench:timeline`                | Run the timeline benchmark                                                        |
 | `pnpm bench:timeline:check`          | Run the timeline benchmark guard                                                  |
 | `pnpm data:race-benchmarks`          | Rebuild the race-benchmark artifacts from the results CSV                         |
@@ -423,7 +475,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | Linting                | ESLint                 | `pnpm lint`                                                  |
 | Formatting             | Prettier               | `pnpm format:check`                                          |
 
-The suite is around 490 Vitest test files plus 12 Cypress E2E specs (2026-09-23). The count moves with every branch that lands, so [Testing](docs/testing.md) carries the commands to derive it, alongside setup, local database requirements, Cypress conventions, and CI details.
+The suite is around 835 Vitest test files, 51 of them integration tests that need PostgreSQL, plus 12 Cypress E2E specs (2026-11-16). The mobile app has its own Kotlin test suites, run through Gradle (see the [mobile README](mobile/README.md)). The count moves with every branch that lands, so [Testing](docs/testing.md) carries the commands to derive it, alongside setup, local database requirements, Cypress conventions, and CI details.
 
 ---
 
@@ -438,6 +490,12 @@ GitHub Actions workflows live in [`.github/workflows/`](.github/workflows/):
 | **Cypress Tests**               | Push, pull request                            | Build, bundle-invariant check, integration tests, smoke tests, Cypress with PostgreSQL/pgvector |
 | **Check Migrations**            | Push to `main`, pull request                  | Drizzle migration consistency and drift; applies the real chain to a fresh pgvector database twice |
 | **Post-Migration Verification** | Manual                                        | Apply migrations and verify a real Neon database                                                |
+| **OpenAPI Breaking Changes**    | Pull request that changes `docs/openapi.json` | Compare the snapshot with the base branch's and fail on a change that would break installed app builds |
+| **Mobile Core**                 | Push to `main`, pull request (mobile, `shared/`, and OpenAPI paths), manual | JVM tests for `core` and `composeApp`; debug APK and release bundle, screenshot checks, ktlint, detekt, Android lint; keeps an installable test APK |
+| **Mobile E2E**                  | Manual                                        | Maestro flows on an Android emulator against staging                                            |
+| **Mobile Performance**          | Manual                                        | Generate the Baseline Profile and check startup and frame timing against budgets                |
+| **Mobile Release**              | `mobile-v*` tag                               | Test, build the signed Android App Bundle, and upload it to Play's internal track               |
+| **Mobile Promote**              | Manual                                        | Move a Play release between tracks or change a staged production rollout                        |
 | **Dependency Review**           | Pull request                                  | Audit dependency changes                                                                        |
 | **DevSkim**                     | Push to `main`, pull request, weekly schedule | Static security scanning                                                                        |
 | **Bearer**                      | Push to `main`, pull request, weekly schedule | Security and privacy scanning                                                                   |

@@ -39,16 +39,18 @@ Every number below is stale the moment a test lands, so **derive it, don't trust
 it**. The commands are the source of truth; the figures are only a sanity check,
 measured at the date given.
 
-| Layer                      | Count (2026-09-23) | How to count it                                                     |
+| Layer                      | Count (2026-11-16) | How to count it                                                     |
 | -------------------------- | ------------------- | -------------------------------------------------------------------- |
-| All Vitest test files      | 490                 | `rg --files -g '*.test.ts' -g '*.test.tsx'`                          |
-| Unit/component/route tests | 481                 | add `-g '!*.integration.test.ts' -g '!smoke.test.ts'` to the above   |
-| Integration tests          | 8                   | `rg --files -g '*.integration.test.ts'`                              |
+| All Vitest test files      | 835                 | `rg --files -g '*.test.ts' -g '*.test.tsx'`                          |
+| Unit/component/route tests | 783                 | add `-g '!*.integration.test.ts' -g '!smoke.test.ts'` to the above   |
+| Integration tests          | 51                  | `rg --files -g '*.integration.test.ts'`                              |
 | Smoke test                 | 1                   | `rg --files -g 'smoke.test.ts'`                                      |
 | Cypress E2E specs          | 12                  | `ls cypress/e2e/*.cy.ts`                                             |
 
-Locations: integration tests live in `server/routes/tests/` (HTTP) and
-`server/storage/__tests__/` (storage SQL); the smoke test is
+Locations: most integration tests sit in `server/storage/__tests__/` (storage
+SQL), with the HTTP ones in `server/routes/tests/` and the rest beside the
+service or script they exercise (`server/services/`, `server/`, `script/`);
+the smoke test is
 `server/routes/tests/smoke.test.ts`, run as `pnpm test:smoke`. It spawns the
 built `dist/index.js`, so it needs `pnpm build` and a reachable database first —
 it is not a quick pre-push check (see [Production Smoke Tests](#production-smoke-tests)).

@@ -29,7 +29,7 @@ The startup sequence in `server/index.ts` proceeds as follows:
 3. **Sentry initialization** -- If `SENTRY_DSN` is set, `@sentry/node` is initialized with the current `NODE_ENV`. PII sending is disabled.
 4. **Express + HTTP server creation** -- `express()` is created, `x-powered-by` is disabled, and a raw `http.Server` is created via `createServer(app)`.
 5. **Core middleware wiring** -- Compression, the health endpoint, CORS, CSP/Helmet, body parsers, the cookie parser, request logging, and request-context wiring are registered in `server/index.ts` in deterministic order (see Middleware Stack below). App-level concerns (`trust proxy`, `x-powered-by`), the health endpoint, observability, and shutdown handlers are factored into `server/bootstrap/` (`appConfig.ts`, `health.ts`, `observability.ts`, `lifecycle.ts`). CSRF protection is mounted later inside `registerRoutes`; idempotency is applied per protected route.
-6. **Health endpoint registration** -- `GET /api/v1/health` (readiness) and `GET /api/v1/health/live` (liveness) are registered before async startup tasks and before CORS so platform probes are always reachable.
+6. **Health endpoint registration** -- `GET /api/v1/health` (readiness) and `GET /api/v1/health/live` (liveness) are registered before async startup tasks and before CORS so platform probes are always reachable. `GET /.well-known/assetlinks.json` is registered in the same place (see Middleware Stack below).
 7. **Early server bind** -- `httpServer.listen()` happens before startup tasks. This keeps `/api/v1/health` reachable while dependencies warm up.
 
 After listening, startup advances from the initial `initializing` phase through explicit phases exposed by the health endpoint's `phase` field:
@@ -54,17 +54,16 @@ Middleware is applied in the following order in `server/index.ts`:
 |-------|-----------|-------------|
 | 1 | `compression({ filter })` | Gzip/Brotli response compression. **Skipped for `text/event-stream` responses** so streaming chat is not held in the compression buffer. |
 | 2 | Health check route | `GET /api/v1/health` -- registered **before CORS** so platform healthchecks (requests with no `Origin` header) always reach it. |
-| 3 | `cors()` | CORS with origin allowlist (see below) |
-| 4 | `cspNonceMiddleware` | Per-request CSP nonce generation (production only) |
-| 5 | `helmet()` | Security headers, including the full **Content-Security-Policy** (per-request nonce) built by `buildCspDirectives()` in `server/middleware/csp.ts`, plus HSTS with preload and referrer policy. |
-| 6 | `permissionsPolicy` | Sets `Permissions-Policy: camera=(self), microphone=(self), geolocation=()` (`server/middleware/permissionsPolicy.ts`): the camera and microphone for the app's own origin only (the nutrition barcode scanner and voice dictation), geolocation off |
-| 7 | `express.json({ limit: "2mb" })` | Body parsing for `/api/v1/coaching-materials` only |
-| 8 | `express.json({ limit: "10mb" })` | Body parsing for image-parse routes only (base64 image payloads; matched via `isImageParsePath`) |
-| 9 | `express.json({ limit: "100kb" })` | Default JSON body parsing with raw body capture |
-| 10 | `express.urlencoded()` | URL-encoded body parsing (100 kb limit) |
-| 11 | `cookieParser()` | Cookie parsing -- required by the CSRF double-submit middleware mounted in `registerRoutes` |
-| 12 | `pino-http` | Structured request logging with request ID. Runs before Clerk auth, so user identity is limited (see [pino-http Middleware](#pino-http-middleware)) |
-| 13 | request-context wiring | Runs the remainder of the request inside an async context carrying `requestId` only -- Clerk auth has not run yet at this point |
+| 3 | Asset Links route | `GET /.well-known/assetlinks.json` (`registerWellKnownRoutes()` in `server/bootstrap/wellKnown.ts`) -- the Android app's Digital Asset Links, built from `ANDROID_APP_PACKAGE` and `ANDROID_APP_CERT_SHA256` and cached for an hour; a `404` when they are unset. Registered **before CORS**, auth and the SPA fallback, because `express.static` ignores dot-directories and the fallback would otherwise answer with `index.html`. |
+| 4 | `cors()` | CORS with origin allowlist (see below) |
+| 5 | `cspNonceMiddleware` | Per-request CSP nonce generation (production only) |
+| 6 | `helmet()` | Security headers, including the full **Content-Security-Policy** (per-request nonce) built by `buildCspDirectives()` in `server/middleware/csp.ts`, plus HSTS with preload and referrer policy. |
+| 7 | `permissionsPolicy` | Sets `Permissions-Policy: camera=(self), microphone=(self), geolocation=()` (`server/middleware/permissionsPolicy.ts`): the camera and microphone for the app's own origin only (the nutrition barcode scanner and voice dictation), geolocation off |
+| 8 | `express.json({ limit: "100kb" })` | Default JSON body parsing with raw body capture, wrapped in `skipLargeJsonBodyPaths()`. The few routes that take a larger body (plan import, coaching materials, chat sends, image parses) are skipped here and parsed inside their protected route stack, after auth and the rate limiter -- see [Body Size Limits](#body-size-limits) |
+| 9 | `express.urlencoded()` | URL-encoded body parsing (100 kb limit) |
+| 10 | `cookieParser()` | Cookie parsing -- required by the CSRF double-submit middleware mounted in `registerRoutes` |
+| 11 | `pino-http` | Structured request logging with request ID. Runs before Clerk auth, so user identity is limited (see [pino-http Middleware](#pino-http-middleware)) |
+| 12 | request-context wiring | Runs the remainder of the request inside an async context carrying `requestId` only -- Clerk auth has not run yet at this point |
 
 Clerk auth, CSRF protection and idempotency are **not** part of this global chain. `clerkMiddleware()` is installed by `setupAuth()` (when Clerk keys are configured) at the start of `registerRoutes()`, and `csrfProtection` is mounted on `/api/v1` after it; idempotency is applied per protected mutating route through the `protectedRouteBuilder` guards (`protectedMutationGuards = [isAuthenticated, idempotencyMiddleware]`).
 
@@ -93,10 +92,12 @@ Same-origin requests (no `Origin` header) are always allowed. Credentials are en
 `server/routes.ts` exports `registerRoutes(httpServer, app)` which performs:
 
 1. **Clerk auth setup** -- `setupAuth(app)` from `server/clerkAuth.ts`
-2. **CSRF token endpoint** -- `GET /api/v1/csrf-token` is mounted before the protecting middleware so the safe-method request can set the cookie.
-3. **CSRF protection** -- `app.use("/api/v1", csrfProtection)` guards every mutating `/api/v1` request. Two exceptions mount just before it, because their callers send neither a session cookie nor a CSRF token. The first, `registerStravaWebhookRoutes(app)` from `server/stravaWebhook.ts`, registers `GET`/`POST /api/v1/strava/webhook`, which Strava calls without a token (see [Integrations → Automatic Sync](integrations.md#automatic-sync)). The second, `registerEmailUnsubscribeRoutes(app)` from `server/routes/emailUnsubscribe.ts`, registers `GET`/`POST /api/v1/emails/unsubscribe`, which mail clients POST to for one-click unsubscribe and which is authorised by its signed token alone (see [Integrations → One-Click Unsubscribe](integrations.md#one-click-unsubscribe)).
-4. **Strava + Garmin OAuth routes** -- `registerStravaRoutes(app)` from `server/strava.ts` and `registerGarminRoutes(app)` from `server/garmin.ts`.
-5. **API route modules** -- Each mounted via `app.use(router)`:
+2. **Native app version gate** -- `app.use("/api/v1", appVersionGate)` from `server/middleware/appVersion.ts`. The mobile app sends `X-App-Platform` and `X-App-Version` on every request; once `MIN_APP_VERSION_ANDROID` or `MIN_APP_VERSION_IOS` is set, a build older than that minimum, or one whose version is missing or malformed, is answered `426` with code `APP_UPDATE_REQUIRED`. It mounts first so an outdated build sees its update prompt rather than whatever auth or CSRF error it would trip over. Requests without a recognised platform header (the web app, Strava's webhook) pass untouched.
+3. **CSRF token endpoint** -- `GET /api/v1/csrf-token` is mounted before the protecting middleware so the safe-method request can set the cookie.
+4. **CSRF protection** -- `app.use("/api/v1", csrfProtection)` guards every mutating `/api/v1` request. Two exceptions mount just before it, because their callers send neither a session cookie nor a CSRF token. The first, `registerStravaWebhookRoutes(app)` from `server/stravaWebhook.ts`, registers `GET`/`POST /api/v1/strava/webhook`, which Strava calls without a token (see [Integrations → Automatic Sync](integrations.md#automatic-sync)). The second, `registerEmailUnsubscribeRoutes(app)` from `server/routes/emailUnsubscribe.ts`, registers `GET`/`POST /api/v1/emails/unsubscribe`, which mail clients POST to for one-click unsubscribe and which is authorised by its signed token alone (see [Integrations → One-Click Unsubscribe](integrations.md#one-click-unsubscribe)).
+5. **Training-context invalidation** -- `app.use("/api/v1", invalidateTrainingContextOnWrite)` from `server/services/trainingContextCache.ts`. Once a write (`POST`/`PUT`/`PATCH`/`DELETE`) outside `/chat` has answered with a status below 400, the athlete's cached coach-chat training context is dropped.
+6. **Strava + Garmin OAuth routes** -- `registerStravaRoutes(app)` from `server/strava.ts` and `registerGarminRoutes(app)` from `server/garmin.ts`.
+7. **API route modules** -- Each mounted via `app.use(router)`:
 
 Listed in mount order:
 
@@ -116,6 +117,7 @@ Listed in mount order:
 | Coaching | `server/routes/coaching.ts` |
 | Consent | `server/routes/consent.ts` |
 | Push | `server/routes/push.ts` |
+| Health Connect | `server/routes/healthConnect.ts` |
 | Timeline annotations | `server/routes/timelineAnnotations.ts` |
 | Athlete facts (the athlete card) | `server/routes/athleteFacts.ts` |
 | Recycle bin | `server/routes/recycleBin.ts` |

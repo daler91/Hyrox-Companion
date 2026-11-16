@@ -172,12 +172,26 @@ is acceptable to skip backups entirely and rebuild by re-embedding (§5.3).
    pnpm ops:reembed                 # provision schema + re-embed every athlete
    ```
 
-   Requires `GEMINI_API_KEY` and, when split, `VECTOR_DATABASE_URL`. It
-   provisions the vector schema itself, walks every athlete who owns coaching
-   materials, and exits non-zero if any material still has no chunks afterwards.
-   Dropping `document_chunks` first is **not** required: each material's chunks
-   are replaced transactionally, so an interrupted run is safe to repeat.
-   `--user <id>` restricts it to one athlete; `--dry-run` writes nothing.
+   The rebuild requires `GEMINI_API_KEY` and, when split, `VECTOR_DATABASE_URL`;
+   `--verify-only` and `--dry-run` run without the key. It provisions the
+   vector schema itself, walks every athlete who owns coaching materials **and
+   has AI processing switched on**, and exits non-zero if any material failed
+   to embed or still has no chunks afterwards. Athletes with AI processing off
+   are left out — their material text would go to the embedding provider, and
+   this command runs outside the consent-gated routes — and the run prints how
+   many. Dropping `document_chunks` first is **not** required: each material's
+   chunks are replaced transactionally, so an interrupted run is safe to repeat.
+   `--user <id>` restricts it to one athlete; `--dry-run` writes nothing. An
+   unrecognised flag is an error, not ignored.
+
+   `--verify-only` does not create the schema. Against a bare vector DB it
+   reports every athlete as failed with "the vector DB has no document_chunks
+   table" — the answer is to run the rebuild.
+
+   `food_embeddings` is not rebuilt by this command. The
+   `nutritionEmbeddingBackfill` cron re-embeds the `foods` cache in bounded
+   batches every 30 minutes, when `NUTRITION_SEMANTIC_ENABLED=true` and AI is
+   configured; until it has caught up, semantic food search has less to return.
 
 ## 6. Restore-drill cadence & verification
 
@@ -186,6 +200,11 @@ Run a **monthly** restore drill into a throwaway service (never into prod):
 ```bash
 RESTORE_DRILL_DATABASE_URL=postgres://... ENCRYPTION_KEY=... pnpm ops:restore-drill
 ```
+
+It refuses to run when `RESTORE_DRILL_DATABASE_URL` equals `DATABASE_URL`
+unless `--allow-primary` is passed: every check is a `SELECT`, but a pass
+against the live primary proves nothing about the backup. `--json` emits the
+results in machine-readable form.
 
 Automated by that command — exit code 0 only if all of them pass:
 
@@ -201,11 +220,12 @@ Automated by that command — exit code 0 only if all of them pass:
       empty `users` fails: schema restored, dump never loaded.
 - [x] FK integrity — a generic orphan sweep over every foreign key in the
       catalog, so new tables are covered without touching the script.
-- [x] The known ownerless-row shapes, which doubles as verification for the
-      outstanding DELETEs in [`pending-manual-steps.md`](./pending-manual-steps.md).
+- [x] The known ownerless-row shapes (0081, 0082) and the duplicate-version
+      shapes 0091 removed, which doubles as verification for those entries in
+      [`pending-manual-steps.md`](./pending-manual-steps.md).
 - [x] A stored Strava credential **decrypts** with the supplied `ENCRYPTION_KEY`
       (proves key + ciphertext integrity — see §3.2). Skipped, not failed, when
-      no key is exported.
+      no key is exported or the restored data holds no Strava connection.
 
 Still manual, and still part of the drill:
 
@@ -225,8 +245,9 @@ Still manual, and still part of the drill:
 - `server/vectorDb.ts` — vector pool / single-DB fallback.
 - `server/maintenance.ts` — boot-time migrations, `ensureVectorSchema()`, and
   the `vectorSchema` status reported on the readiness probe.
-- `server/migrationGuards.ts` — which migration errors count as benign, and the
-  critical-table assertion that gates readiness.
+- `server/migrationGuards.ts` — which migration errors count as benign, the
+  critical-table and schema-column assertions that gate readiness, and the
+  ledger-versus-journal comparison that names an unapplied migration.
 - `server/crypto.ts` — at-rest credential encryption + key rotation (`docs` and
   `.env.example` cover `ENCRYPTION_KEY` / `ENCRYPTION_KEY_V2`).
 - `script/restore-drill.ts` — `pnpm ops:restore-drill` (§6).

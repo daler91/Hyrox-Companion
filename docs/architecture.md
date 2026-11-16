@@ -95,11 +95,12 @@ sequenceDiagram
 
 1. `compression()` -- gzip/brotli response compression (skipped for `text/event-stream`)
 2. `GET /api/v1/health` -- health endpoint, registered **before CORS** so platform probes always reach it
+   (`GET /.well-known/assetlinks.json`, the Android app's Digital Asset Links, is registered at the same point)
 3. `cors()` -- origin allowlist with `credentials: true`
 4. CSP nonce middleware -- per-request nonce for `<script>` tags (production only)
 5. `helmet()` -- security headers, including the full Content-Security-Policy (Clerk/Strava/Sentry origins + per-request nonce) built by `buildCspDirectives()` in `server/middleware/csp.ts`, plus HSTS with preload, X-Frame-Options, etc.
 6. Permissions-Policy header
-7. `express.json()` -- body parsing: 1mb for `/api/v1/plans/import`, 2mb for `/api/v1/coaching-materials`, 10mb for image-parse routes, 100kb default
+7. `express.json()` -- body parsing with a 100kb limit. The routes that take more (1mb for `/api/v1/plans/import`, 2mb for `/api/v1/coaching-materials`, 5mb for coach chat sends, 10mb for image-parse routes) are skipped here and parsed inside their protected route stack, after auth and the route's rate limiter (`server/largeBodyParsers.ts`)
 8. `express.urlencoded()` -- form body parsing (100kb limit)
 9. `cookieParser()` -- required by the CSRF double-submit middleware
 10. `pino-http` -- structured request logging; it runs before Clerk auth, so `req.log` carries `userId: "anonymous"` and only the completion line of a failed (>= 400) request logs the real Clerk user id

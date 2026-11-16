@@ -28,8 +28,10 @@ The maintained description of how the system works. Start here.
 | [Environment Variables](env-reference.md) | Every env var, defaults, feature gates, safety invariants                                  |
 
 **Machine-readable:** [`openapi.json`](openapi.json) — OpenAPI 3.0 snapshot, regenerated with
-`pnpm docs:openapi` and CI-gated against drift. It covers workout CRUD and preferences only;
-`server/routes/` remains the source of truth for the rest.
+`pnpm docs:openapi` and CI-gated against drift. It describes every client route under `/api/v1`,
+and `test/docs/openapiCoverage.test.ts` fails when a route is registered without being added to it.
+Webhooks, unsubscribe links, health probes and operator endpoints are left out on purpose; that
+test lists each with its reason. The mobile app's Kotlin API models are generated from this file.
 
 ## Operations
 
@@ -40,6 +42,7 @@ Runbooks for people with production access.
 | [Backup, Restore & DR](operations/backup-restore.md)       | Backup topology, restore procedure, drill cadence, vector-DB rebuild                                          |
 | [Account Erasure](operations/account-erasure.md)           | GDPR Art. 17 deletion runbook, including the separate vector DB                                               |
 | [Pending Manual Steps](operations/pending-manual-steps.md) | Data-bearing migrations awaiting a production audit, with per-migration consequences and verification queries |
+| [Play Console Answers](mobile-play-console.md)             | What to enter in Play Console for the Android app: policy links, data safety, Health Connect, reviewer login  |
 
 ## Decisions
 
@@ -60,7 +63,7 @@ Scoped to one feature. Accurate for what they cover, but not a description of th
 | [Weekly Review](weekly-review-spec.md)                            | Scope and shape of the in-app weekly review                    |
 | [AI Coach Auto-Regulation Flow](ai-coach-auto-regulation-flow.md) | How fatigue signals reach a plan adjustment                    |
 | [New Training Style Checklist](new-training-style-checklist.md)   | Every place that needs touching when a training style is added |
-| [Native Mobile](native-mobile.md)                                 | Capacitor vs. React Native comparison and packaging phases     |
+| [Native Mobile](native-mobile.md)                                 | The original Capacitor vs. React Native comparison — superseded by the Mobile App Plan |
 | [Mobile App Plan](mobile-app-plan.md)                             | The decided native app: Compose Multiplatform, Android first, then iOS |
 | [Mobile app README](../mobile/README.md)                          | Building `mobile/`, the generated API models and their contract test |
 | [Mobile Shared Logic](mobile-shared-logic.md)                    | Which client-side `shared/` logic the app ports, renders, or gets from the API |
@@ -81,6 +84,7 @@ In-flight or completed work. Check the referenced code before trusting a status.
 | [React 19 Upgrade Plan](react-19-upgrade-plan.md)                           | `react@18.3.1` → `react@19.x` — **shipped**; kept for its §6 follow-up menu |
 | [Structured Text Optional](migration-readiness-structured-text-optional.md) | Migration-readiness spec and telemetry plan                                 |
 | [`training_styles_v1` Rollout](training-styles-rollout.md)                  | Phased rollout plan for training styles                                     |
+| [Android App Parity](mobile-parity.md)                                      | Web features the Android app lacked on 2026-11-09, in six waves — all ticked by 2026-11-15 — and what stays on the web |
 
 ## Registers
 
@@ -100,6 +104,7 @@ above and the source.
 
 | Document                                                              | Date                                                                                      |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [Mathematical Audit](MATHEMATICAL_AUDIT_2026-10-18.md)                | 2026-10-18 — the formulas, aggregations and unit conversions across `shared/`, `server/` and `client/`; five findings (2 high, 3 medium), each marked executed and cited by ID (`M-NEW-1` to `M-NEW-5`) in the code that fixed it |
 | [Codebase Analysis](CODEBASE_ANALYSIS_2026-10-03.md)                  | 2026-10-03 — 28 discovery agents (18 subsystem mappers, 10 cross-cutting lenses); 315 findings that survived adversarial verification (8 high), ranked priority items, and every open item from earlier audits re-checked against the code |
 | [AI Coach Chat Review](AI_COACH_CHAT_REVIEW_2026-10-01.md)           | 2026-10-01 — the conversational coach end to end: six defects to fix first, then improvements ranked into three waves; read from the code, not run against a live model; carries a remediation section for wave 1 |
 | [Onboarding Audit](ONBOARDING_AUDIT_2026-09-23.md)                   | 2026-09-23 — first-run flow, reproduced end to end in the running app; carries a remediation section: every finding's fix, the behaviour changes, and what was left, with reasons |
@@ -130,5 +135,6 @@ including the undated _Deep Codebase Audit_ that sat unlinked at the repo root u
 Several catalogues in these docs are pinned to the code by `test/docs/docsSync.test.ts`, which goes
 red when they drift: pg-boss queues and cron keys against `integrations.md`, env vars against
 `env-reference.md`, storage domains and schema tables against `database.md`, CI workflows against
-`testing.md`, and every internal link and heading anchor across all markdown in the repo. If you add
-a document here, add it to this index too — nothing enforces that one.
+`testing.md`, and every internal link and heading anchor across all markdown in the repo. Beside it,
+`test/docs/openapiCoverage.test.ts` pins `openapi.json` to the routes the server registers. If you
+add a document here, add it to this index too — nothing enforces that one.

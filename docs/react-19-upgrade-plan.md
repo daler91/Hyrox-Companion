@@ -1,16 +1,16 @@
 # React 19 Upgrade Plan — `react@18.3.1` → `react@19.x`
 
 Status: **Done — Phases 0–3 complete.** The upgrade shipped and soaked; `main` is
-now on `react`/`react-dom`/`@types/react`/`@types/react-dom` **19.3.0**, past the
+now on `react`/`react-dom` **19.3.1** (with `@types/react`/`@types/react-dom` 19.3.x), past the
 19.2.8 this plan was written against. The §3 code changes are all in place: the
 three `RefObject` annotations carry `| null`, and `client/src/main.tsx` passes
 `onUncaughtError` / `onCaughtError` / `onRecoverableError` to `createRoot`.
 
 The plan is kept for the §6 follow-up menu, none of which has been taken up yet
-(verified 2026-09-19): no `<StrictMode>` at the root, `onNeedRefresh` in
-`main.tsx` is still an empty callback, `ElementRef`/`MutableRefObject` renames
-are outstanding (15 files each), and `babel-plugin-react-compiler` is not
-installed. Everything below §5 is therefore still a live menu; §§1–5 are history.
+(verified 2026-11-16): no `<StrictMode>` at the root, `onNeedRefresh` in
+`main.tsx` is still an empty callback, the `ElementRef` and `MutableRefObject`
+renames are outstanding (15 and 4 files), and `babel-plugin-react-compiler` is
+not installed. Everything below §5 is therefore still a live menu; §§1–5 are history.
 
 Codebase and dependency audit completed 2026-08-01 against `main`; all
 version/peer-range facts below were verified live against the npm registry on
@@ -287,8 +287,8 @@ Ordered by value/effort; none block the upgrade.
 
 1. **Deprecation renames** (~1h, mechanical): `React.ElementRef` →
    `React.ComponentRef` (52 sites, 15 ui files), `MutableRefObject` →
-   `RefObject` (15 sites, 6 files — `workout-editor/*`, `useWorkoutVoiceForm`,
-   `VoiceFieldButton`).
+   `RefObject` (13 sites, 4 files, all under `hooks/workout-editor/`, on
+   2026-11-16; the voice-form hook and button that also used it are gone).
 2. **Add `<StrictMode>`** at the root (2 lines): the app has never run under
    StrictMode; React 19's dev double-invoking (including ref callbacks on
    mount) will surface latent effect bugs. Land alone, soak in dev for a

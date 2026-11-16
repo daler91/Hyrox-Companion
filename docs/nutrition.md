@@ -358,6 +358,22 @@ to resolve against real food data.
   comparison to targets, watch-outs, and a focus for the next 1–2 weeks. The `GET`
   returns the last stored analysis instantly (no AI spend) with a `stale` flag if a
   meal has been logged since; the `POST` regenerates it.
+- **Push reminders** (`server/services/nutrition/reminders.ts`) — two opt-in,
+  push-only nudges, off by default (`users.push_refuel_reminder`,
+  `users.push_logging_reminder`; toggled in Settings → Notifications), sent by
+  the hourly `nutritionReminders` cron over whichever push channels are
+  configured (see [Integrations → Web Push Notifications](integrations.md#web-push-notifications)):
+  - **Refuel** — when the athlete's latest device-timed session ended between
+    45 minutes and 3 hours ago and its post-session target still has at least
+    20 g of carbs or 15 g of protein outstanding. A session with no logged
+    duration is taken as an hour long. Deep-links to `/nutrition` with the
+    post-workout meal selected. At most one per session.
+  - **Evening log** — at 20:00 in the athlete's timezone, when nothing is
+    logged for today and they have logged within the last 14 days, so a
+    lapsed or never-started athlete is not nagged. One per local day.
+
+  Both claim the send before sending: a failed push forgoes the nudge rather
+  than risk a duplicate.
 
 ---
 
@@ -854,13 +870,17 @@ server/services/nutrition/
   sanitize.ts                   import sanity clamp at the cache boundary
   mealParser.ts                 NL/photo → items (Gemini)
   labelParser.ts                nutrition-label photo → per-100g macros (Gemini vision)
+  visionParsing.ts              the Gemini vision call both photo parsers share
   energy.ts                     the day's energy balance for /summary
   rollup.ts                     THE scaling site; daily summary math
   recipe.ts                     ingredient list → per-100g macros
   micros.ts                     13-micro definitions, RDIs, unit conversion
   blockView.ts                  intake macros ⋈ training UTSS
+  dailyLoad.ts                  per-day training load (UTSS) for the summary, block and range routes
+  fuellingRange.ts              the target version in effect on each date of a range
   sessionFuelling.ts            pre/post-session windowing
   nutritionInsightsService.ts   14-day context → reasoning model
+  reminders.ts                  push-only refuel and evening-log reminders (hourly cron)
 
 server/routes/nutrition/
   index.ts                      feature-flag gate (404 when disabled), then
@@ -890,7 +910,7 @@ server/prompts.ts               PARSE_MEAL_PROMPT, MEAL_IMAGE_PREAMBLE,
                                 PARSE_LABEL_PROMPT, NUTRITION_INSIGHTS_PROMPT
 
 client/src/pages/Nutrition.tsx  the page
-client/src/pages/nutrition/*    27 components + useQuickLog / useAiConsentGate
+client/src/pages/nutrition/*    28 components + useQuickLog / useAiConsentGate / useLogTimezoneSync
                                 (the UI map below names the top-level surfaces)
 client/src/hooks/useNutrition.ts  query + mutation hooks
 client/src/lib/api/nutrition.ts   typed API client

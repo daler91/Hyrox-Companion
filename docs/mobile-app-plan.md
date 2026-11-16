@@ -2,7 +2,10 @@
 
 # Mobile App Plan: Compose Multiplatform
 
-**Status:** decided 2026-11-07.
+**Status:** decided 2026-11-07. The Android app has since been built in [`mobile/`](../mobile/README.md):
+Phases 1 and 2 carry their own "Done" notes below, and [mobile-parity.md](mobile-parity.md) lists
+the web features the app gained after its first version, all of them shipped by 2026-11-15.
+Phase 7 (iOS) has not started: the build has no iOS targets yet.
 
 The mobile app is native: Kotlin with **Compose Multiplatform** (CMP). **Android ships first**;
 iOS comes later from the same code. The web app (PWA) stays as it is and remains the
@@ -119,7 +122,7 @@ All of this ships to production first. The web is unaffected.
      documented nor on the shrink-only `test/docs/openapiUndocumented.ts` list, and
      `openapi-breaking.yml` fails a PR whose document would break installed app builds
      (`script/openapiBreaking.ts`, written in-repo rather than pinning a third-party action).
-   - **Done:** every client operation is registered (173), in per-area modules under
+   - **Done:** every client operation is registered (174 on 2026-11-16), in per-area modules under
      `shared/openapiRoutes/`, with the chat stream documented as `text/event-stream`
      (`ChatStreamEvent`). Entities several areas return (`ExerciseSetRow`,
      `WorkoutStructureBlock`, `ParsedExercise`, `CoachNoteInputs`, `PlanProposal`) are
@@ -231,6 +234,10 @@ Built in order of daily use.
 | Weekly review (`/review`) | | Full review | |
 | Onboarding | Wizard, including first plan generation | | |
 | Settings | Profile and units, notifications, integrations, privacy, account deletion, sign-out | Preferences parity | Coaching materials upload, data tools |
+
+The "After launch" column did not wait for launch: the weekly review, the remaining analytics
+tabs, timeline annotations and the settings that were missing are all ticked in
+[mobile-parity.md](mobile-parity.md). Its closing section lists what stays on the web.
 
 ### Phase 5: native integrations (Android)
 
