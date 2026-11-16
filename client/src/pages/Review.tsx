@@ -1,5 +1,6 @@
 import { CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
 
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { WeeklyReviewHighlights } from "@/components/review/WeeklyReviewHighlights";
 import { WeeklyReviewIntent } from "@/components/review/WeeklyReviewIntent";
 import { WeeklyReviewSessions } from "@/components/review/WeeklyReviewSessions";
@@ -13,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useUrlQueryState } from "@/hooks/useUrlQueryState";
 import { useWeeklyReview } from "@/hooks/useWeeklyReview";
+import { queryLoadState } from "@/lib/queryLoadState";
 import { addDays, formatWeekRange, lastCompletedWeekStart, mondayOf } from "@/lib/weekDates";
 
 function EmptyWeek({ isCurrentWeek }: { readonly isCurrentWeek: boolean }) {
@@ -43,7 +45,9 @@ export default function Review() {
   // Any date inside the week is a valid param; the server anchors it to the
   // Monday, so a shared link never has to be normalised first.
   const [week, setWeek] = useUrlQueryState("week", lastCompletedWeekStart());
-  const { data: review, isLoading, isError, refetch } = useWeeklyReview(week);
+  const weeklyReviewQuery = useWeeklyReview(week);
+  const { data: review, isLoading, refetch } = weeklyReviewQuery;
+  const { failed, retrying } = queryLoadState(weeklyReviewQuery);
 
   // Page from the week the SERVER resolved, not the requested string: they can
   // differ by a day when the athlete's stored timezone is not the browser's,
@@ -121,15 +125,13 @@ export default function Review() {
 
       {isLoading && !review && <LoadingSpinner />}
 
-      {isError && !review && (
-        <Card data-testid="weekly-review-error">
-          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <p className="font-medium">Couldn&apos;t load this week</p>
-            <Button variant="outline" onClick={() => void refetch()} data-testid="weekly-review-retry">
-              Try again
-            </Button>
-          </CardContent>
-        </Card>
+      {failed && !review && (
+        <LoadErrorCard
+          title="Couldn't load this week"
+          onRetry={() => void refetch()}
+          isRetrying={retrying}
+          testId="weekly-review-error"
+        />
       )}
 
       {review && (
