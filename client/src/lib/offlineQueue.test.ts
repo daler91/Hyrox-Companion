@@ -530,6 +530,41 @@ describe("offlineQueue", () => {
     });
   });
 
+  describe("stored queue validation", () => {
+    const valid = {
+      id: "a",
+      method: "POST",
+      url: "/api/v1/workouts",
+      body: { title: "Run" },
+      timestamp: 1,
+    };
+
+    it("reads a well-formed queue and strips unknown keys", () => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify([{ ...valid, retryCount: 2, extra: "x" }, { ...valid, id: "b" }]),
+      );
+
+      expect(getPendingMutations()).toEqual([
+        { ...valid, retryCount: 2 },
+        { ...valid, id: "b" },
+      ]);
+    });
+
+    it.each([
+      ["not an array", { ...valid }],
+      ["a missing id", [{ ...valid, id: undefined }]],
+      ["a non-numeric timestamp", [{ ...valid, timestamp: "1" }]],
+      ["a null retryCount", [{ ...valid, retryCount: null }]],
+      ["one bad entry among good ones", [valid, { ...valid, url: 5 }]],
+      ["a non-object entry", [valid, "oops"]],
+    ])("treats %s as an empty queue", (_label, stored) => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+
+      expect(getPendingCount()).toBe(0);
+    });
+  });
+
   it("drops mutations that exceed the retry limit", async () => {
     const dropped = vi.fn();
     const unsubscribe = onMutationDropped(dropped);

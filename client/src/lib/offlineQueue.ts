@@ -1,5 +1,4 @@
 import { inSequence } from "@shared/inSequence";
-import { z } from "zod";
 
 import { rawRequest } from "./api/client";
 import { parseApiError } from "./apiError";
@@ -89,16 +88,53 @@ function notifySyncComplete(detail: OfflineSyncCompleteDetail) {
   dispatchWindowEvent<OfflineSyncCompleteDetail>(OFFLINE_SYNC_COMPLETE_EVENT, detail);
 }
 
-const pendingMutationSchema: z.ZodType<PendingMutation> = z.object({
-  id: z.string(),
-  method: z.string(),
-  url: z.string(),
-  body: z.unknown(),
-  timestamp: z.number(),
-  retryCount: z.number().optional(),
-  serverErrorCount: z.number().optional(),
-});
-const pendingMutationArraySchema = z.array(pendingMutationSchema);
+// A hand-written guard instead of a zod schema: this module sits in the app
+// entry chunk's static graph (via OfflineIndicator and friends), and it was the
+// only client file importing zod, so validating these 7 fields pulled the whole
+// zod runtime (~88 kB raw / ~25 kB gzip chunk) into every page load. Same rules
+// as the old `z.array(z.object({...}))`: required strings/number, optional
+// numbers, `body` is anything, unknown keys are stripped, and one bad entry
+// rejects the whole stored queue.
+function isOptionalNumber(value: unknown): value is number | undefined {
+  return value === undefined || (typeof value === "number" && Number.isFinite(value));
+}
+
+function toPendingMutation(value: unknown): PendingMutation | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  if (
+    typeof v.id !== "string" ||
+    typeof v.method !== "string" ||
+    typeof v.url !== "string" ||
+    typeof v.timestamp !== "number" ||
+    !Number.isFinite(v.timestamp) ||
+    !isOptionalNumber(v.retryCount) ||
+    !isOptionalNumber(v.serverErrorCount)
+  ) {
+    return null;
+  }
+  const mutation: PendingMutation = {
+    id: v.id,
+    method: v.method,
+    url: v.url,
+    body: v.body,
+    timestamp: v.timestamp,
+  };
+  if (v.retryCount !== undefined) mutation.retryCount = v.retryCount;
+  if (v.serverErrorCount !== undefined) mutation.serverErrorCount = v.serverErrorCount;
+  return mutation;
+}
+
+function parsePendingMutations(value: unknown): PendingMutation[] | null {
+  if (!Array.isArray(value)) return null;
+  const queue: PendingMutation[] = [];
+  for (const item of value) {
+    const mutation = toPendingMutation(item);
+    if (mutation === null) return null;
+    queue.push(mutation);
+  }
+  return queue;
+}
 
 const STORAGE_KEY = "fitai-offline-queue";
 // Tracks which signed-in user last owned the queue, so a shared/kiosk device
@@ -179,8 +215,7 @@ function getQueue(): PendingMutation[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    const parsed = pendingMutationArraySchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : [];
+    return parsePendingMutations(JSON.parse(raw)) ?? [];
   } catch {
     // Corrupted localStorage data — return empty queue so it gets overwritten on next save
     return [];
