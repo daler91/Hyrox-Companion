@@ -6,8 +6,8 @@ The fitai.coach app uses [Clerk](https://clerk.com) for authentication. Clerk pr
 
 The authentication flow works as follows:
 
-1. The client authenticates the user through Clerk's hosted UI components.
-2. Clerk issues a JWT that is automatically attached to every API request via session cookies.
+1. The client authenticates the user through Clerk's prebuilt sign-in modal (`<SignInButton mode="modal">` on the landing page).
+2. Clerk issues a JWT that is automatically attached to every API request via session cookies. The native Android app has no cookies and sends the same session token in an `Authorization: Bearer` header instead (see [Bearer-Token Clients](#bearer-token-clients-native-app)).
 3. The server validates the JWT using Clerk middleware and extracts the `userId`.
 4. On the first authenticated API call, the server syncs the Clerk user profile into the application database.
 
@@ -22,21 +22,30 @@ The authentication flow works as follows:
 The entire application is wrapped in a `<ClerkProvider>` component from `@clerk/react`, initialized with the publishable key from the `VITE_CLERK_PUBLISHABLE_KEY` environment variable:
 
 ```tsx
-<ClerkProvider publishableKey={clerkPubKey!}>
-  <QueryClientProvider client={queryClient}>
-    ...
-  </QueryClientProvider>
+<ClerkProvider publishableKey={clerkPubKey}>
+  <BaseProviders>{appShell}</BaseProviders>
 </ClerkProvider>
 ```
 
-When the dev auth bypass is active, `ClerkProvider` is omitted entirely and the app renders without any Clerk context.
+`BaseProviders` holds the `QueryClientProvider`, `ThemeProvider` and `TooltipProvider`. When the dev auth bypass is active, `ClerkProvider` is omitted entirely and the app renders `<BaseProviders>` alone, without any Clerk context.
 
 ### Conditional Rendering with Show
 
-The `<Show>` component from `@clerk/react` gates access to the authenticated application. When the user is signed in, `<AuthenticatedLayout>` renders; otherwise, the `<Landing>` page is displayed:
+The `<Show>` component from `@clerk/react` gates access to the authenticated application. When the user is signed in, `<AuthenticatedLayout>` renders. Otherwise the fallback renders a small signed-out router: `/privacy` and `/delete-account` show their pages, and every other path shows the `<Landing>` page:
 
 ```tsx
-<Show when="signed-in" fallback={<Landing />}>
+<Show
+  when="signed-in"
+  fallback={
+    <Suspense fallback={<LazyFallback />}>
+      <Switch>
+        <Route path="/privacy"><Privacy /></Route>
+        <Route path="/delete-account"><DeleteAccount /></Route>
+        <Route><Landing /></Route>
+      </Switch>
+    </Suspense>
+  }
+>
   <AuthenticatedLayout />
 </Show>
 ```
@@ -72,8 +81,15 @@ sequenceDiagram
     Browser->>Clerk: Sign in
     Clerk->>Browser: JWT cookie
     React->>API: GET /api/v1/auth/user (credentials: include)
-    API->>API: clerkMiddleware extracts userId
-    API->>DB: storage.users.upsertUser({ id, email, firstName, lastName, profileImageUrl })
+    API->>API: clerkMiddleware verifies the JWT
+    API->>API: isAuthenticated reads userId, calls ensureUserExists
+    API->>DB: storage.users.getUser(userId)
+    opt First sign-in (no users row yet)
+        API->>DB: storage.users.upsertUser({ id })
+        API->>Clerk: clerkClient.users.getUser(userId)
+        API->>DB: storage.users.upsertUser({ id, email, firstName, lastName, profileImageUrl })
+    end
+    API->>DB: storage.users.getUser(userId) in the route handler
     DB->>API: User record
     API->>React: User JSON
     React->>React: useAuth returns { user, isAuthenticated: true }
@@ -91,7 +107,7 @@ The `setupAuth` function is called during server startup and configures authenti
 
 1. **Clerk keys present** -- Installs `clerkMiddleware()` from `@clerk/express`, which parses and validates Clerk JWTs on every incoming request.
 2. **No Clerk keys, dev bypass enabled** -- Skips Clerk middleware and seeds a hardcoded dev user in the database.
-3. **No Clerk keys, no bypass** -- Throws a fatal error, preventing the server from starting.
+3. **No Clerk keys, no bypass** -- Throws. `setupAuth` runs inside `registerRoutes`, after the HTTP server is already listening, so the process stays up but startup fails in the `routes` phase: no API route is mounted and the health endpoints answer `503`.
 
 If the dev bypass is enabled (regardless of whether Clerk keys are also present), the dev user is always seeded as a fallback.
 
@@ -99,8 +115,8 @@ If the dev bypass is enabled (regardless of whether Clerk keys are also present)
 
 The `isAuthenticated` request handler is applied to all protected routes. It runs in this order:
 
-1. If Clerk keys are configured, call `getAuth(req)` from `@clerk/express` to extract the `userId` from the validated JWT. If a `userId` is present, sync the user to the database (see User Sync Flow below) and proceed.
-2. If Clerk auth fails and the dev bypass is enabled, fall through to the dev user identity (unless the request carries an `x-test-no-bypass: true` header, used for testing 401 behavior).
+1. If Clerk keys are configured, call `getAuth(req)` from `@clerk/express` to extract the `userId` from the validated JWT. If a `userId` is present, sync the user to the database (see User Sync Flow below) and proceed. Two failures end the request here: an account that was just erased gets the same `401` as step 3, and any other sync error gets `500 { "error": "Failed to initialize user session", "code": "INTERNAL_SERVER_ERROR" }`.
+2. If Clerk auth fails and the dev bypass is enabled, fall through to the dev user identity (unless the request carries an `x-test-no-bypass: true` header, used for testing 401 behavior). The dev user row is created if it is missing; a failure there is a `500`.
 3. Otherwise, return a `401 Unauthorized` JSON response.
 
 ### getUserId Helper
@@ -143,17 +159,18 @@ Route handlers use this to obtain the current user's ID after the `isAuthenticat
 
 When a Clerk-authenticated request passes through `isAuthenticated`, the middleware calls `ensureUserExists(clerkUserId)`:
 
-1. **Check the user-seen cache.** A user-seen cache (5-minute TTL) tracks recently provisioned users. The cache is layered: a per-process in-memory `Map`, backed by a shared `server_runtime_cache` table so multiple instances share the signal. If the user was seen recently, return immediately (no DB or remote call).
+1. **Check the user-seen cache.** A user-seen cache (5-minute TTL) tracks users whose row this server recently confirmed. The cache is layered: a per-process in-memory `Map` (capped at 10,000 users, least recently seen dropped first), backed by a shared `server_runtime_cache` table so multiple instances share the signal. A hit in the `Map` returns immediately (no DB or remote call); a miss there costs one read of the shared table, and a hit in it also returns. Under `NODE_ENV=test` only the `Map` is used.
 2. **Check the database.** On a cache miss, look up the user row by ID. If a row already exists, mark the user seen and return.
-3. **Provision a minimal row.** If the user does not exist, upsert a minimal `users` row containing only the Clerk user ID, then call `hydrateClerkProfile()` to fill in the rest.
-4. **Hydrate the Clerk profile.** `hydrateClerkProfile()` fetches the full profile from Clerk's API via `clerkClient.users.getUser(clerkUserId)`, bounded by a 15-second timeout (`EXTERNAL_API_TIMEOUT_MS` in `server/constants.ts`, applied with `Promise.race` since the Clerk SDK does not accept an `AbortSignal`). It then upserts the `users` row with:
+3. **Refuse an erased account.** If there is no row and the ID carries an `auth-erased` tombstone (see [Account Deletion](#account-deletion)), throw instead of provisioning; `isAuthenticated` answers `401`.
+4. **Provision a minimal row.** Otherwise upsert a minimal `users` row containing only the Clerk user ID, then call `hydrateClerkProfile()` to fill in the rest.
+5. **Hydrate the Clerk profile.** `hydrateClerkProfile()` fetches the full profile from Clerk's API via `clerkClient.users.getUser(clerkUserId)`, bounded by a 15-second timeout (`EXTERNAL_API_TIMEOUT_MS` in `server/constants.ts`, applied with `Promise.race` since the Clerk SDK does not accept an `AbortSignal`). It then upserts the `users` row with:
    - `id` -- The Clerk user ID
-   - `email` -- The primary email address
+   - `email` -- The primary email address, or the first address on the Clerk user when none is marked primary
    - `firstName`, `lastName` -- Name fields
    - `profileImageUrl` -- Avatar URL
    If the Clerk fetch fails or times out, the minimal row is left in place (the warning is logged and the request proceeds).
 
-The `upsertUser` method in `UserStorage` uses an `INSERT ... ON CONFLICT DO UPDATE` query, so subsequent calls update the profile data if it has changed in Clerk. If the upsert hits the `users_email_unique` constraint (the email already belongs to a different user), the profile is re-upserted without the `email` field so provisioning still succeeds.
+The `upsertUser` method in `UserStorage` uses an `INSERT ... ON CONFLICT DO UPDATE` query, but `ensureUserExists` only hydrates the profile when it has just created the row. Once a row exists, a later change to the name, email or avatar in Clerk is not copied to it, and a hydration that failed is not retried. If the upsert hits the `users_email_unique` constraint (the email already belongs to a different user), the profile is re-upserted without the `email` field so provisioning still succeeds.
 
 For the dev bypass path, a similar `ensureDevUserExists` function creates a user with the hardcoded ID `"dev-user"`, email `dev@localhost`, and name `Dev User`.
 
@@ -161,11 +178,11 @@ For the dev bypass path, a similar `ensureDevUserExists` function creates a user
 
 ## Dev Auth Bypass
 
-The dev auth bypass allows the app to run without Clerk credentials. It is controlled by the `ALLOW_DEV_AUTH_BYPASS` environment variable and is protected by multiple guards to prevent accidental use in production.
+The dev auth bypass allows the app to run without Clerk credentials. On the server it is controlled by the `ALLOW_DEV_AUTH_BYPASS` environment variable and is protected by multiple guards to prevent accidental use in production. The client never reads that variable; it decides separately, from the conditions below.
 
 ### Activation Conditions
 
-The bypass activates when any of the following client-side conditions are met (evaluated in `client/src/lib/authBypass.ts`, used by `client/src/App.tsx` and `client/src/hooks/useAuth.ts`):
+The bypass activates when any of the following client-side conditions are met (evaluated in `client/src/lib/authBypass.ts`, used by `client/src/App.tsx`, `client/src/hooks/useAuth.ts` and `client/src/hooks/useSignOut.ts`):
 
 - **Cypress tests** -- `window.Cypress` is defined.
 - **Dev preview** -- The app is running in Vite dev mode (`import.meta.env.DEV`) AND either the `VITE_CLERK_PUBLISHABLE_KEY` is missing or the page is loaded inside an iframe (`window.self !== window.top`).
@@ -183,6 +200,8 @@ Three independent layers prevent the bypass from being used in production:
 2. **Startup guard** (`server/index.ts`, the block marked `// 🛡️ Sentinel: Dev Auth Bypass double-guard`) -- An explicit check near the top of the server entrypoint. If `ALLOW_DEV_AUTH_BYPASS=true` and `NODE_ENV=production`, the server logs a fatal message and calls `process.exit(1)`; in any other environment it logs a warning instead.
 
 3. **Runtime guard** (`server/clerkAuth.ts`) -- The `isDevBypassEnabled()` function returns `false` unconditionally when `NODE_ENV` is `"production"`, regardless of the `ALLOW_DEV_AUTH_BYPASS` value.
+
+All three key on `NODE_ENV`, so a further `server/env.ts` refinement covers a production deploy that forgot to set it: a `CLERK_PUBLISHABLE_KEY` starting with `pk_live_` with `NODE_ENV` other than `production` fails startup.
 
 ### Hook Selection Logic
 
@@ -204,9 +223,11 @@ export const useAuth = shouldBypassAuth() ? useTestAuthImpl : useClerkAuthImpl;
 
 ### Behavior When Active
 
-- **Client:** `ClerkProvider` is not rendered. The `<Show>` gate is skipped and `<AuthenticatedLayout>` renders directly. A yellow "DEV MODE" banner appears at the top of the page in dev preview mode. The `useTestAuthImpl` hook is used instead of `useClerkAuthImpl`.
+- **Client:** `ClerkProvider` is not rendered. The `<Show>` gate is skipped and `<AuthenticatedLayout>` renders directly. An amber "DEV MODE" banner appears at the top of the page in dev preview mode. The `useTestAuthImpl` hook is used instead of `useClerkAuthImpl`, and `useSignOut` only clears this device's local data, since there is no Clerk session to end.
 
-- **Server:** The `isAuthenticated` middleware falls through to the dev user path when Clerk auth is not present. All requests are treated as coming from the `"dev-user"` identity. The `x-test-no-bypass: true` request header can be used to opt out of the bypass for specific requests (useful for testing unauthenticated behavior).
+- **Server:** The `isAuthenticated` middleware falls through to the dev user path when Clerk auth is not present. Every request without a Clerk identity is treated as coming from the `"dev-user"` identity. The `x-test-no-bypass: true` request header can be used to opt out of the bypass for specific requests (useful for testing unauthenticated behavior).
+
+- **Cypress:** Specs that call `setupAuthIntercepts()` (`cypress/support/authIntercepts.ts`) stub `GET /api/v1/auth/user` and `GET /api/v1/csrf-token` with fixtures, so the athlete those specs see is `test-user-123` rather than `dev-user`.
 
 ---
 
@@ -238,10 +259,11 @@ router.get('/api/v1/auth/user', isAuthenticated, rateLimiter("auth", AUTH_USER_R
 The middleware chain for a typical protected route is:
 
 1. `clerkMiddleware()` (global, if Clerk keys are present) -- Parses the JWT and attaches auth data to the request.
-2. `csrfProtection` (global on `/api/v1`, mounted in `server/routes.ts` as `app.use("/api/v1", csrfProtection)`) -- Verifies the `x-csrf-token` header against the signed cookie on mutating requests. Safe methods (`GET`/`HEAD`/`OPTIONS`) pass through.
-3. `isAuthenticated` (per-route) -- Validates that the request has a valid user identity and syncs the user to the database. Returns `401` if unauthenticated.
-4. `rateLimiter(category, max)` (per-route) -- Applies per-user rate limiting, keyed by `userId` and backed by shared Postgres buckets outside tests.
-5. `asyncHandler(fn)` -- Wraps the route handler to catch async errors and forward them to Express error handling.
+2. `appVersionGate` (global on `/api/v1`, `server/middleware/appVersion.ts`) -- Answers `426` with code `APP_UPDATE_REQUIRED` to a native app build older than `MIN_APP_VERSION_ANDROID` / `MIN_APP_VERSION_IOS`. Requests without an `X-App-Platform` header (the web app) pass untouched.
+3. `csrfProtection` (global on `/api/v1`, mounted in `server/routes.ts` as `app.use("/api/v1", csrfProtection)`) -- Verifies the `x-csrf-token` header against the signed cookie on mutating requests. Safe methods (`GET`/`HEAD`/`OPTIONS`) pass through.
+4. `isAuthenticated` (per-route) -- Validates that the request has a valid user identity and syncs the user to the database. Returns `401` if unauthenticated. On mutations, `protectedMutationGuards` follows it with `idempotencyMiddleware`, which replays the stored response for a repeated `X-Idempotency-Key`.
+5. `rateLimiter(category, max)` (per-route) -- Applies per-user rate limiting, keyed by `userId` (by client IP when the request has no Clerk identity) and backed by shared Postgres buckets outside tests.
+6. `asyncHandler(fn)` -- Wraps the route handler to catch async errors and forward them to Express error handling.
 
 Unauthenticated requests receive:
 
@@ -257,7 +279,7 @@ with HTTP status `401`.
 
 **Key file:** `server/middleware/csrf.ts`
 
-The application uses CSRF protection via the `csrf-csrf` library (double-submit cookie pattern) to prevent cross-site request forgery on all state-changing endpoints. This complements Clerk's cookie-based JWT auth.
+The application uses CSRF protection via the `csrf-csrf` library (double-submit cookie pattern) to prevent cross-site request forgery on the state-changing `/api/v1` endpoints. Two `POST` receivers mount ahead of the guard in `server/routes.ts` because their callers can hold neither cookie nor token: the Strava webhook and the email unsubscribe link. This complements Clerk's cookie-based JWT auth.
 
 ### Integration with Clerk Auth
 
@@ -300,25 +322,27 @@ The `DELETE /api/v1/account` endpoint is the GDPR "right to erasure" entry point
 
 ### Order of Operations
 
-1. **Stamp `users.erasure_requested_at`.** Written before anything irreversible. Deleting the Clerk identity (step 3) is a point of no return — past it the athlete can no longer authenticate to retry — so a run that dies afterwards leaves this marker for the sweep below to finish.
+1. **Stamp `users.erasure_requested_at`.** Written before anything irreversible. Deleting the Clerk identity (step 3) is a point of no return — past it the athlete can no longer authenticate to retry — so a run that dies afterwards leaves this marker for the sweep below to finish. A run that fails before that point (in step 2, or when Clerk declines the delete with a 4xx other than 404) withdraws the stamp it wrote (`withdrawErasureStamp`), so the sweep does not later finish a deletion the athlete was told had failed. A stamp left by an earlier run is kept.
 
-2. **Purge the vector DB.** The user's RAG chunks and their private foods' embeddings live on a separate `vectorPool` database that the main-DB cascade cannot reach, so they are deleted explicitly, fail-loud, before any irreversible step.
+2. **Purge the vector DB.** The user's RAG chunks and their private foods' embeddings live on a separate `vectorPool` database that the main-DB cascade cannot reach, so they are deleted explicitly, fail-loud, before any irreversible step. The user's cached RAG retrievals, which hold excerpts of those chunks in `server_runtime_cache`, are purged in the same fail-loud step (`purgeRagCacheForUser`).
 
-3. **Delete the Clerk identity.** If the DB row were deleted before the Clerk identity, the user's next authenticated request would hit `ensureUserExists` and silently re-provision a fresh DB row ("undeleting" the account). Deleting Clerk before the DB row means no new session can be minted; a session token minted earlier still verifies until it expires, and is refused by the tombstone described in step 8.
+3. **Delete the Clerk identity.** If the DB row were deleted before the Clerk identity, the user's next authenticated request would hit `ensureUserExists` and silently re-provision a fresh DB row ("undeleting" the account). Deleting Clerk before the DB row means no new session can be minted; a session token minted earlier still verifies until it expires, and is refused by the tombstone described in step 8. The call is skipped when `CLERK_SECRET_KEY` is not set.
 
 4. **Clerk 404 is treated as success.** If `clerkClient.users.deleteUser(userId)` throws with `status === 404`, the handler logs `"Clerk user already deleted, continuing with DB cleanup"` and proceeds. This makes the endpoint idempotent for retries where a previous attempt succeeded at Clerk but failed at a later step. Any other Clerk error aborts the request so the DB row is left intact.
 
 5. **Best-effort Strava deauthorization.** `POST https://www.strava.com/oauth/deauthorize` is called with the stored Strava access token. Failures are logged at `warn` and swallowed — the user's data is still deleted. (Garmin requires no equivalent call: `@flow-js/garmin-connect` has no server-side revocation; discarding the tokens is sufficient.)
 
-6. **Delete the DB user row and the user's private custom foods, in one transaction.** FK `ON DELETE CASCADE` removes every child row: workouts, sets, plans, plan days, chat messages, coaching materials, Strava and Garmin connections, custom exercises, push subscriptions, AI usage logs, idempotency keys, and timeline annotations. (The coaching-material embeddings are not among them — they were purged in step 2.) Public custom foods survive by explicit opt-in.
+6. **Delete the DB user row and the user's private custom foods, in one transaction.** FK `ON DELETE CASCADE` removes every child row, among them workouts, sets, plans, plan days, chat messages, coaching materials, Strava and Garmin connections, custom exercises, web push subscriptions and native device push tokens, AI usage logs, idempotency keys, timeline annotations, consents, and the nutrition logs, targets, favorites and recipes. (The coaching-material embeddings are not among them — they were purged in step 2.) Public custom foods survive by explicit opt-in. A private food that another athlete's rows still reference is handed to those athletes as their own private copy and the original deleted. The embeddings of the foods deleted here are then purged a second time, best-effort. If there was no user row to delete, the endpoint answers `404` and stops here.
 
 7. **Best-effort purges.** The user's rate-limit buckets and any queued pg-boss jobs are removed; neither is FK-linked to `users`, so the cascade leaves them behind.
 
-8. **Evict the auth seen-cache.** `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache. Eviction on its own would *re-open* provisioning: Clerk verifies session JWTs locally, so a token minted before step 3 keeps authenticating for up to its lifetime (60 s by default), and with no row and no cache entry `ensureUserExists` would recreate the account. So before step 6 the erasure also writes a 10-minute `auth-erased` tombstone (`rememberUserErased`, local and shared runtime cache, fail-loud), and `ensureUserExists` answers 401 instead of provisioning while it stands (P5, CODEBASE_ANALYSIS_2026-10-03).
+8. **Evict the auth seen-cache.** `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache. Eviction on its own would *re-open* provisioning: Clerk verifies session JWTs locally, so a token minted before step 3 keeps authenticating for up to its lifetime (60 s by default), and with no row and no cache entry `ensureUserExists` would recreate the account. So straight after the Clerk identity is gone (before step 5) the erasure also writes a 10-minute `auth-erased` tombstone (`rememberUserErased`, local and shared runtime cache, fail-loud), and `ensureUserExists` refuses to provision while it stands, which `isAuthenticated` answers with a 401 (P5, CODEBASE_ANALYSIS_2026-10-03).
 
 Rate-limited to 3 per minute under the `accountDelete` category — enough to retry a transient failure, not enough to mass-delete.
 
-**Stranded runs.** `runStrandedErasureSweep` (hourly cron, advisory lock `accountErasureSweep`) re-runs the same steps for any row still carrying `erasure_requested_at` past a 15-minute threshold. Every step is idempotent, so replaying a partially-completed erasure is safe.
+On success the web client clears this device's local data (`clearUserLocalData()`, see [Session Management](#session-management)) and reloads to `/` after 1.5 seconds (`client/src/components/settings/AccountDangerZone.tsx`).
+
+**Stranded runs.** `runStrandedErasureSweep` (hourly cron, advisory lock `accountErasureSweep`) re-runs the same steps for any row still carrying `erasure_requested_at` past a 15-minute threshold, oldest first and at most 50 accounts per pass. Every step is idempotent, so replaying a partially-completed erasure is safe.
 
 ---
 
@@ -326,9 +350,10 @@ Rate-limited to 3 per minute under the `accountDelete` category — enough to re
 
 Clerk manages session lifecycle entirely. The app does not implement custom token storage or refresh logic.
 
-- **Token delivery:** Clerk session cookies are included in every request via `credentials: "include"` on all `fetch` calls.
+- **Token delivery:** Clerk session cookies are included in every request via `credentials: "include"` on all `fetch` calls. The native app instead asks Clerk's Android SDK for the session token before each request and sends it as `Authorization: Bearer` (`ClerkAuth.token()` in `mobile/androidApp`, attached by `mobile/core`'s `ApiClient`).
 - **Token refresh:** Handled automatically by the Clerk SDK. The `@clerk/react` provider monitors token expiration and refreshes tokens transparently.
 - **Session state:** The `useAuth` / `useUser` hooks from `@clerk/react` expose reactive `isSignedIn` and `isLoaded` properties that update when the session state changes.
+- **Sign-out:** `useSignOut` (`client/src/hooks/useSignOut.ts`) awaits `clearUserLocalData()` (`client/src/lib/userLocalData.ts`) and then calls Clerk's `signOut()`. The cleanup empties the offline write queue, removes this device's workout drafts, onboarding flag and cached analytics/AI snapshots from `localStorage` and `sessionStorage`, deletes the Workbox `api-cache`, and unsubscribes the browser's push subscription (server row first, while the session is still valid). The sidebar's Log out button goes through `useConfirmedSignOut`, which asks for confirmation first when offline writes are still queued.
 
 The server configures Express's `trust proxy` setting in `server/bootstrap/appConfig.ts` (driven by the `TRUST_PROXY` env var) to ensure correct client IP detection behind reverse proxies, which is important for rate limiting and the CSRF session identifier's IP fallback.
 
@@ -338,13 +363,13 @@ The server configures Express's `trust proxy` setting in `server/bootstrap/appCo
 
 | Variable | Required | Side | Description |
 |---|---|---|---|
-| `CLERK_PUBLISHABLE_KEY` | Optional* | Server | Clerk publishable key. Passed to Clerk middleware on the server. |
-| `CLERK_SECRET_KEY` | Optional* | Server | Clerk secret key. Used by `@clerk/express` to validate JWTs and by `clerkClient` to call the Clerk API (including `users.deleteUser` in `/api/v1/account`). |
+| `CLERK_PUBLISHABLE_KEY` | Optional* | Server | Clerk publishable key. Read from the environment by Clerk middleware on the server. A `pk_live_` key is rejected at startup unless `NODE_ENV` is `production`. |
+| `CLERK_SECRET_KEY` | Optional* | Server | Clerk secret key. Used by `@clerk/express` to validate JWTs and by `clerkClient` to call the Clerk API (`users.getUser` when a user is provisioned, `users.deleteUser` in `/api/v1/account`). |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Optional* | Client | Clerk publishable key for the React client. Vite exposes this to the browser bundle. |
 | `CSRF_SECRET` | Required in production** | Server | 32+ char secret for CSRF token HMAC. Must differ from `ENCRYPTION_KEY` in every environment (see [Key Separation](#key-separation-csrf_secret-vs-encryption_key)). When unset in dev/test, a random per-process secret is generated. |
-| `ALLOW_DEV_AUTH_BYPASS` | Optional | Both | Set to `"true"` to enable the dev auth bypass. Only permitted in `development` and `test` environments. Fatal in production. |
+| `ALLOW_DEV_AUTH_BYPASS` | Optional | Server | Set to `"true"` to enable the server-side dev auth bypass. Only permitted in `development` and `test` environments. Fatal in production. The client does not read it (see [Activation Conditions](#activation-conditions)). |
 
-*The Clerk keys are optional in the Zod schema but are effectively required for production. If they are absent and `ALLOW_DEV_AUTH_BYPASS` is not `"true"`, the server will throw an error on startup.
+*The Clerk keys are optional in the Zod schema but are effectively required for production. If either server key is absent and `ALLOW_DEV_AUTH_BYPASS` is not `"true"`, `setupAuth` throws and startup fails (see [setupAuth](#setupauth)).
 
 **Enforced at boot by `server/env.ts` `.refine()` guards: a missing `CSRF_SECRET` in production, or one equal to `ENCRYPTION_KEY` in any environment, aborts startup with an `❌ FATAL:` message.
 

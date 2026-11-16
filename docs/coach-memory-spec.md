@@ -2,8 +2,10 @@
 
 **Status.** **Paths A, B and C shipped.** Path C (§2–§6) went in as the five PRs in §6, built
 ahead of the §7 measurement at the owner's call, so `pnpm tsx script/coach-memory-usage.ts`
-against production is now the way to see whether athletes use the card rather than a gate on
-building it. The chat-proposed facts §8 deferred ("v1 has no AI writes") shipped too, as
+is no longer a gate on building it. The script still counts only the capture surfaces that
+came before the card (the `training_constraints` note, `principles` materials, timeline
+annotations, skip reasons); it has no query on `athlete_facts`, so it does not show whether
+athletes use the card. The chat-proposed facts §8 deferred ("v1 has no AI writes") shipped too, as
 proposals the athlete saves or turns down, never writes (AI coach chat review, I5). Where each
 piece lives: [AI and RAG → The Athlete Card](ai-and-rag.md#the-athlete-card). Register entry:
 recommendation #8 in [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md). **Read §0 before
@@ -24,14 +26,15 @@ chat, suggestions and auto-coach at once through `aiContextService.ts`". There a
 
 | Assembler                                                                | Reaches                                                              |
 | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| `buildSystemPrompt` (`server/prompts.ts:526`)                            | chat, chat/stream, coach insights                                    |
-| `buildPromptDataSections` (`server/gemini/suggestionService.ts:227`)     | auto-coach suggestions, review notes, conversational plan adjustment |
-| `buildGenerationPrompt` (`server/services/planGenerationService.ts:102`) | AI plan generation — never sees `TrainingContext` at all             |
+| `buildSystemPrompt` (`server/prompts.ts:797`)                            | chat, chat/stream, coach insights                                    |
+| `buildPromptDataSections` (`server/gemini/suggestionService.ts:316`)     | auto-coach suggestions, review notes, conversational plan adjustment |
+| `buildGenerationPrompt` (`server/services/planGenerationService.ts:194`) | AI plan generation — never sees `TrainingContext` at all             |
 
-Only two files import from `coachingContext.ts`: `server/prompts.ts`, and
-`suggestionService.ts` — which takes `relativeDayLabel`, a date-label helper, and nothing else.
-A builder added there reaches **chat and coach insights only**. This is a wiring job across
-four render sites, not a one-line insertion.
+Only two of them import from `coachingContext.ts`: `server/prompts.ts`, which takes its section
+builders, and `suggestionService.ts` — which takes two formatting helpers, `relativeDayLabel`
+and `formatCompletionRate`, and no builder. (Five renderers under `server/prompts/` also take
+its date-label helpers.) A builder added there reaches **chat and coach insights only**. This
+is a wiring job across four render sites, not a one-line insertion.
 
 **"Uploading a PDF is the wrong shape for six sentences" is true as principle, false as a
 description of this implementation.** Settings → Coaching Knowledge → _Add Training Principles_
@@ -50,6 +53,13 @@ its inclusion is incidental rather than guaranteed (it degrades the moment the c
 six chunks), and nothing about it is structured — you cannot ask "which equipment does this
 athlete lack" or expire a fact. Those are real gaps. They are smaller and differently shaped
 than the register implied.
+
+**Retrieval has since changed.** `retrieveRelevantChunks` (`server/services/ragService.ts`) now
+drops search results further than `RAG_MAX_COSINE_DISTANCE` (default 0.6, `server/env.ts`) from
+the query, and pins up to three `principles` chunks (oldest first) ahead of the search, out of
+the same budget of six and exempt from that cut-off. So there is a threshold now, and those
+pinned chunks are in every retrieval whatever the size of the corpus. RAG still does not reach
+plan generation.
 
 ---
 
@@ -77,22 +87,41 @@ with no new capture surface.
 **Path C — the full athlete card (M–L).** New `athlete_facts` table, Settings CRUD, four render
 sites, review dates, safety-corpus split. §2 onward specs this.
 
-**Path A is now built.** `users.training_constraints` (migration `0086`), written on every
+**Path A is now built.** `users.training_constraints` (migration `0086`) was written on every
 plan generation from the wizard's textarea, prefilled back into it, editable and clearable in
-Settings → Injuries & Limitations, and the interpolation is sanitised. Two semantics worth
-knowing:
+Settings → Injuries & Limitations, and the interpolation was sanitised. **Path C has since
+moved the capture onto the card.** `POST /api/v1/plans/generate` now puts the textarea on the
+athlete card, a fact per sentence (`moveStatementsToCard`,
+`server/services/athleteFactsService.ts`), and clears the column unless the card's cap left a
+sentence out; no client writes a new note. An athlete who still has one gets it prefilled
+in the wizard's box, and in Settings → Athlete card sees it as "Your older injuries note"
+with _Add to card_ and _Remove note_ (`LegacyNoteBanner.tsx`) instead of an editable field.
+Two semantics worth knowing:
 
 - **Presence is authoritative.** The client now always sends `injuries`, even empty, and an
   empty string writes `null`. Omitting the field when blank would make "I cleared the box"
   indistinguishable from "this client never sends one", so a resolved injury could never be
   forgotten — the exact `maf_injury_illness_medication` failure in §2.
 - **The remembered value is a prefill, not a fallback.** The server never substitutes the
-  stored constraints into a generation request that omitted them. Reviving text the athlete
-  deleted is the staleness bug, not a convenience.
+  stored constraints for a box the athlete sent empty. Only a request with no `injuries`
+  field at all (a client that never sends the box) is generated from the stored note
+  (`normalized.injuries ?? user?.trainingConstraints` in `executePlanGeneration`). Reviving
+  text the athlete deleted is the staleness bug, not a convenience.
 
 What Path A deliberately does **not** do: reach chat, auto-coach, or any prompt other than plan
 generation. That is Paths B and C, and it is the honest boundary — this is one durable string
-in the one prompt that already asked for it.
+in the one prompt that already asked for it. Both have since crossed it: a note the athlete
+still has is rendered into the chat and auto-coach prompts as `STANDING CONSTRAINTS`, after
+the card (`formatAthleteConstraints`, `server/prompts/athleteConstraints.ts`).
+
+**Path B is now built.** `buildTrainingContext` reads `timeline_annotations` and passes the
+ranges that overlap the window from 70 days before today to 28 days after it, eight at most,
+as `absences` (`selectAbsencesForContext`, `server/services/ai/index.ts`).
+`formatAthleteConstraints` renders them in both coach assemblers, and `buildGenerationAbsences`
+(`server/services/planGenerationService.ts`) gives plan generation the ones inside the plan's
+weeks. A skip the athlete gave a reason for reaches the coach as `RECENT SKIPS` in the coaching
+analysis (`collectRecentSkips`). The third capture, `users.mafInjuryIllnessMedication`, is
+still read by no prompt.
 
 **Recommendation for what remains: B, then C.** Path C's own centre of gravity is the write path — an
 empty facts table makes the whole feature worthless — and A is the cheapest honest measurement
