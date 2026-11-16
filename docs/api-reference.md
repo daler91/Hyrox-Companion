@@ -733,7 +733,7 @@ Kick off an **asynchronous** AI training-plan generation. The request creates a 
 - **Auth:** Required
 - **Rate limit:** `planGenerate` category, 3/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Body:** `GeneratePlanInput` — `{ goal, totalWeeks (1-24), daysPerWeek (2-7), experienceLevel, raceDate?, startDate?, restDays?, focusAreas?, injuries? }`
+- **Body:** `GeneratePlanInput` — `{ goal: string (1-500), experienceLevel: "beginner" | "intermediate" | "advanced", startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD", endDateIsRaceDate?: boolean (default true), daysPerWeek?: number (2-7, default 5), restDays?: weekday names, focusAreas?: string[] (max 10, each max 100), injuries?: string (max 500), supersedePlanIds?: string[] (max 5) }`. There is no weeks or race-date field: the plan's length is derived from the `startDate` to `endDate` span and must come to 1-24 weeks, and `endDateIsRaceDate` says whether `endDate` is the race the plan peaks for (it is then stored as the plan's `raceDate`, and the span is counted through the week that holds the race). `endDate` must be after `startDate`.
 - **Validation:** `generatePlanInputSchema`
 - **Response:** `202 Accepted` with the pending `TrainingPlan` stub. Poll [`GET /api/v1/plans/:id/generation-status`](#get-apiv1plansidgeneration-status) for progress.
 - **`supersedePlanIds?: string[]`** (max 5): plans the athlete is switching away from. They are retired **only** once this plan generates successfully, atomically with the flip to `ready`, and effective from the later of the new plan's start date and today. A failed or timed-out generation retires nothing, so the athlete is never left without an active plan.
@@ -1450,7 +1450,7 @@ Send a message to the AI coach and receive a complete response.
 
 - **Auth:** Required
 - **Rate limit:** `chat` category, 10/min
-- **Body:** `{ message: string (1-4000 chars, CHAT_MESSAGE_MAX_LENGTH), photo?: { mimeType, imageBase64 }, userMessageId?: uuid, assistantMessageId?: uuid, replaceAssistantId?: uuid, focusPlanDayId?: string, focusWorkoutLogId?: string, history?: ChatMessage[] }`.
+- **Body:** `{ message: string (1-4000 chars, CHAT_MESSAGE_MAX_LENGTH), photo?: { mimeType, imageBase64 }, userMessageId?: uuid, assistantMessageId?: uuid, replaceAssistantId?: uuid, focusPlanDayId?: string, focusWorkoutLogId?: string, history?: ChatMessage[], planEditing?: boolean (default true) }`. `planEditing: false` is the opt-out for a chat surface that does not render proposal cards: the reply then never raises a plan-change proposal.
   - **`photo`** (I20) is one image with the message: `mimeType` `image/jpeg`, `image/png` or `image/webp`, `imageBase64` at most `CHAT_PHOTO_MAX_BASE64_CHARS` (4 MiB of base64, about 3 MB of image), whose first bytes must match the declared type. The two chat send routes accept a 5 MB body for it. Gemini vision reads it into words for the coach (`server/services/chatPhoto.ts`) alongside the context build; the coach reads that reading after the message, marked as data, and the athlete's turn keeps it as `attachment: { kind: "photo", reading }`. The image itself is never stored. A photo that can't be read refuses the send with `502 CHAT_PHOTO_UNREADABLE` before anything is saved.
   - **The message ids** hand the conversation to the server, and the current client always sends them. They must come together and differ. The server reads the history from its own saved conversation (see [AI and RAG → Chat History](ai-and-rag.md#chat-history)) and, once the reply exists, saves both turns under these ids. A retry sends the same `userMessageId`, which is saved once, and the failed reply's id as `replaceAssistantId`; the server deletes that reply first.
   - **`history`** is read only from a request without the ids (a tab opened before the server owned the conversation), keeping its last 20 messages; nothing is saved for such a request.
@@ -1612,7 +1612,7 @@ Generate AI coaching suggestions for upcoming planned workouts.
 - **Auth:** Required
 - **Rate limit:** `suggestions` category, 3/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Response:** `{ suggestions: WorkoutSuggestion[], ragInfo: RagInfo }`
+- **Response:** `{ suggestions: WorkoutSuggestion[], ragInfo?: RagInfo, message?: string, responseMetadata?: Record<workoutId, { trainingStyleId, phase, strategyRuleVersion, promptBundleVersion, rationaleCodes? }> }` — only `suggestions` is always present. `message` is a note for the athlete (no upcoming workouts, a safety escalation, or why nothing changed); `responseMetadata` is the recommendation trace, keyed by each suggestion's `workoutId`.
 - **Note:** Returns empty suggestions if no upcoming planned workouts exist. An empty `suggestions` list otherwise means the coach looked and found nothing to change.
 - **Errors:** a failed model call (provider error, open circuit breaker, timeout, or a reply that isn't the JSON array asked for) is an error, not an empty list: `503 AI_UNAVAILABLE`, `429 AI_QUOTA_EXCEEDED`, `400 AI_INVALID_INPUT` or `502 AI_ERROR`. The one exception is a red-flag safety escalation, which is still returned as the single suggestion.
 
