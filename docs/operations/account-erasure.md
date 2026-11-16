@@ -24,8 +24,13 @@ means the very next request silently undeletes the account.
 
 ## 2. The mechanism
 
-`users.erasure_requested_at` is stamped **before** step 2 and is never cleared
-— the only thing that removes it is the row itself being deleted. So:
+`users.erasure_requested_at` is stamped **before** step 2. Once step 2 has run
+it is never cleared — the only thing that removes it is the row itself being
+deleted. A run that fails *before* the identity is gone (a vector-DB or
+RAG-cache purge in step 1, or Clerk declining the delete with a 4xx) withdraws
+the stamp it wrote: that athlete can still sign in, was told "Deletion failed",
+and must not have the sweep finish the deletion behind their back. A stamp an
+earlier run wrote is left alone, because that run may have got past step 2. So:
 
 | Row state | Meaning |
 |-----------|---------|
@@ -72,10 +77,15 @@ failing).
    ```
 
 2. **Find out which step is failing.** Search the logs for the user id; the
-   erasure logs each best-effort failure and the sweep logs the fatal one. The
-   fail-loud steps are the two vector-DB purges (step 1) and the user-row
-   transaction (step 5) — everything else is best-effort and cannot strand a
-   run.
+   erasure logs each best-effort failure and the sweep logs the fatal one. A
+   replay runs every step again, so any fail-loud step can be the one holding
+   a stranded row: the two vector-DB purges and the RAG retrieval-cache purge
+   (steps 1 and 1b), the Clerk delete (step 2 — any error but a 404), the auth
+   tombstone write (step 2b), the Garmin connection read ahead of step 5 (it
+   decrypts the stored credentials, so a row that no longer decrypts throws),
+   and the user-row transaction (step 5). The Strava deauthorization, the
+   second embeddings purge, and the rate-limit-bucket and queued-job purges are
+   best-effort and cannot strand a run.
 
 3. **Fix the underlying store, then let the sweep pick it up** on the next
    hourly pass. This is the preferred path — it runs the same code as the
@@ -90,7 +100,8 @@ failing).
    ```
 
    Do **not** hand-write `DELETE FROM users`: it skips the vector DB (which
-   the FK cascade cannot reach), the private custom-food purge, the rate-limit
+   the FK cascade cannot reach), the cached RAG retrievals in
+   `server_runtime_cache`, the private custom-food purge, the rate-limit
    buckets and the queued-job purge, all of which retain personal data.
 
 ## 5. What survives erasure by design
@@ -98,6 +109,13 @@ failing).
 - **Public custom foods** (`foods.is_public = true`): sharing was an explicit,
   disclosed opt-in, so other athletes' logs keep resolving. Ownership is
   set-null, so the row no longer identifies its creator.
+- **The numbers of a private food other athletes still use.** A custom food
+  that was shared, logged or put in a recipe by someone else, then unshared,
+  cannot simply be deleted. Each athlete who references it gets their own
+  private copy with the same nutrition under a neutral name, their log entries
+  and recipe lines move onto it, and the original is deleted
+  (`server/storage/erasedAccountFoods.ts`). The erased athlete's wording goes;
+  the other athletes' history keeps its figures.
 - **Garmin upstream tokens**: no revocation API exists in the SDK. Our copies
   are destroyed by the step-5 cascade; the upstream tokens expire on their own.
   Athletes needing immediate upstream invalidation change their Garmin
