@@ -447,7 +447,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | Linting                | ESLint                 | `pnpm lint`                                                  |
 | Formatting             | Prettier               | `pnpm format:check`                                          |
 
-The suite is around 490 Vitest test files plus 12 Cypress E2E specs (2026-09-23). The count moves with every branch that lands, so [Testing](docs/testing.md) carries the commands to derive it, alongside setup, local database requirements, Cypress conventions, and CI details.
+The suite is around 835 Vitest test files, 51 of them integration tests that need PostgreSQL, plus 12 Cypress E2E specs (2026-11-16). The mobile app has its own Kotlin test suites, run through Gradle (see the [mobile README](mobile/README.md)). The count moves with every branch that lands, so [Testing](docs/testing.md) carries the commands to derive it, alongside setup, local database requirements, Cypress conventions, and CI details.
 
 ---
 

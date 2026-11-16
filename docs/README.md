@@ -84,7 +84,7 @@ In-flight or completed work. Check the referenced code before trusting a status.
 | [React 19 Upgrade Plan](react-19-upgrade-plan.md)                           | `react@18.3.1` → `react@19.x` — **shipped**; kept for its §6 follow-up menu |
 | [Structured Text Optional](migration-readiness-structured-text-optional.md) | Migration-readiness spec and telemetry plan                                 |
 | [`training_styles_v1` Rollout](training-styles-rollout.md)                  | Phased rollout plan for training styles                                     |
-| [Android App Parity](mobile-parity.md)                                      | Web features the Android app lacked on 2026-11-09, in waves, ticked as they ship |
+| [Android App Parity](mobile-parity.md)                                      | Web features the Android app lacked on 2026-11-09, in six waves — all ticked by 2026-11-15 — and what stays on the web |
 
 ## Registers
 

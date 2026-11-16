@@ -11,6 +11,9 @@ Three modules, in the Android Gradle Plugin 9 layout:
   repositories) and the ported logic. It also has a JVM target, so its tests run
   on any machine without an Android SDK.
 
+A fourth Gradle module, `baselineprofile`, holds no app code: it generates the
+Baseline Profile and runs the macrobenchmarks (see [Performance](#performance)).
+
 iOS targets join in Phase 7.
 
 ## Build and test

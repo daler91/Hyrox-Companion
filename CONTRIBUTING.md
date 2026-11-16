@@ -43,8 +43,8 @@ Run these locally before pushing. CI runs all of them except `pnpm format:check`
 | `pnpm format:check` | Prettier formatting check (use `pnpm format` to fix)                                                                                           |
 
 **Prettier is configured but not yet enforced.** No workflow runs `pnpm format:check`, and
-about 800 existing files predate the Prettier config, so it fails on a clean checkout
-(801 files on 2026-09-22). New files should pass `pnpm exec prettier --check <file>`; in
+over a thousand existing files do not match the Prettier config, so it fails on a clean
+checkout (1,134 files on 2026-11-16). New files should pass `pnpm exec prettier --check <file>`; in
 existing files, match the surrounding style rather than reformatting the whole file in a
 feature PR, which buries the real change in the diff.
 
@@ -98,7 +98,7 @@ a single `typescript` dependency.
 ### `noUncheckedIndexedAccess` ratchet
 
 The base `tsconfig.json` doesn't yet enable `noUncheckedIndexedAccess`: turning it on
-reports ~420 errors (416 on 2026-09-23 — server 222, client 157, script 37, shared 0;
+reports ~510 errors (513 on 2026-11-16 — server 265, client 204, script 44, shared 0;
 re-derive with `node node_modules/typescript7/bin/tsc -p tsconfig.json
 --noUncheckedIndexedAccess --noEmit --incremental false`). `tsconfig.strict.json` turns it on for a growing
 subset — currently `shared/**` — and CI runs it as `pnpm check:strict`.
@@ -141,10 +141,35 @@ Update the relevant docs when your change affects public behavior or setup:
 
 - Public API changes → [`docs/api-reference.md`](docs/api-reference.md), and regenerate the
   OpenAPI snapshot with `pnpm docs:openapi` (the Build workflow fails if
-  [`docs/openapi.json`](docs/openapi.json) drifts from the generated spec).
+  [`docs/openapi.json`](docs/openapi.json) drifts from the generated spec). A new client
+  route must also be registered in a module under `shared/openapiRoutes/`:
+  `test/docs/openapiCoverage.test.ts` fails until the snapshot describes it.
 - Schema/storage changes → [`docs/database.md`](docs/database.md).
 - New jobs, crons, or integrations → [`docs/integrations.md`](docs/integrations.md).
+- New environment variables → [`docs/env-reference.md`](docs/env-reference.md) and `.env.example`.
 - Client/state changes → [`docs/client.md`](docs/client.md) / [`docs/state-management.md`](docs/state-management.md).
+
+`test/docs/docsSync.test.ts` enforces part of this: it fails while a queue, cron job,
+environment variable, schema table, storage domain or CI workflow is missing from the doc
+that catalogues it, or while any internal markdown link is broken.
+
+### Changes the mobile app depends on
+
+The native app in `mobile/` is generated from, and tested against, files outside it. The
+unit suite fails while a committed generated file differs from its source, so regenerate
+and commit in the same change:
+
+| When you change                                   | Run                     |
+| ------------------------------------------------- | ----------------------- |
+| `docs/openapi.json` (any API change)              | `pnpm mobile:models`    |
+| Logic in `shared/` that the app ports to Kotlin   | `pnpm mobile:fixtures`  |
+| The exercise definitions, aliases or equipment    | `pnpm mobile:catalogue` |
+
+Installed app builds keep calling the API long after a deploy, so the OpenAPI Breaking
+Changes workflow fails a pull request whose snapshot would break them. A deliberate
+breaking change needs the `openapi-breaking-ok` label and a raised `MIN_APP_VERSION_*`
+in the same release. Building and testing the app itself is covered in
+[`mobile/README.md`](mobile/README.md).
 
 When a user-facing feature changes, also update the [README](README.md) feature list.
 

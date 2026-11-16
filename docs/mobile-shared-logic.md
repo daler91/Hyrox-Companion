@@ -37,7 +37,7 @@ imported:
 
 How this feeds the rest of Phase 2:
 
-- The **Port list** below is the input to `script/mobile-fixtures.ts`. Each ported module lists the
+- The **Port list** below is the input to `script/mobile-fixtures/` (`pnpm mobile:fixtures`; one suite per module under `suites/`). Each ported module lists the
   exact functions, what they pull in from `shared/`, and the fixture inputs.
 - **API fields to add** is server work in the style of Phase 1. Each field has to ship before the
   app screen that reads it.
