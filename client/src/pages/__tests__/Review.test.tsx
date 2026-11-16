@@ -482,7 +482,7 @@ describe("Review page", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByTestId("weekly-review-error")).toBeInTheDocument());
-    expect(screen.getByTestId("weekly-review-retry")).toBeInTheDocument();
+    expect(screen.getByTestId("weekly-review-error-retry")).toBeInTheDocument();
   });
 
   it("re-fetches the week when retry is clicked after a failed load", async () => {
@@ -492,7 +492,7 @@ describe("Review page", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByTestId("weekly-review-error")).toBeInTheDocument());
-    await user.click(screen.getByTestId("weekly-review-retry"));
+    await user.click(screen.getByTestId("weekly-review-error-retry"));
 
     await waitFor(() => expect(screen.getByTestId("weekly-review")).toBeInTheDocument());
     expect(mocks.getWeeklyReview).toHaveBeenCalledTimes(2);
