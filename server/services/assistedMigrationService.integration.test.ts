@@ -11,7 +11,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../db";
 import { seedUser, seedWorkoutLog } from "../storage/__tests__/integrationDb";
-import { runAssistedMigrationBackfill } from "./assistedMigrationService";
+import { listBackfillReviews, runAssistedMigrationBackfill } from "./assistedMigrationService";
 
 const { parseExercisesFromText } = vi.hoisted(() => ({ parseExercisesFromText: vi.fn() }));
 vi.mock("../gemini", () => ({ parseExercisesFromText }));
@@ -29,6 +29,7 @@ vi.mock("../gemini", () => ({ parseExercisesFromText }));
  */
 
 const ATHLETE = "assisted-migration-text-athlete";
+const OTHER_ATHLETE = "assisted-migration-other-athlete";
 
 /** `days` from today, UTC: the backfill reads logs from the last 90 days and plan days after today. */
 function dayOffset(days: number): string {
@@ -74,8 +75,17 @@ async function removeAthlete(): Promise<void> {
   }
   await db
     .delete(structuredExerciseBackfillReviews)
+    .where(
+      inArray(structuredExerciseBackfillReviews.ownerId, [
+        "review-own",
+        "review-other",
+        "review-orphan",
+      ]),
+    );
+  await db
+    .delete(structuredExerciseBackfillReviews)
     .where(eq(structuredExerciseBackfillReviews.userId, ATHLETE));
-  await db.delete(users).where(eq(users.id, ATHLETE));
+  await db.delete(users).where(inArray(users.id, [ATHLETE, OTHER_ATHLETE]));
 }
 
 async function seedPlanDay(mainWorkout: string, accessory: string | null) {
@@ -177,5 +187,23 @@ describe("runAssistedMigrationBackfill: the text it parses", () => {
     for (const nothing of [empty, blank, unicodeBlank, blankDay]) {
       expect(flagged).not.toContain(nothing.id);
     }
+  });
+});
+
+describe("listBackfillReviews: whose flags it returns", () => {
+  it("returns only the athlete's own flags, never another athlete's or an ownerless one", async () => {
+    await seedUser(OTHER_ATHLETE);
+    await db.insert(structuredExerciseBackfillReviews).values([
+      { ownerType: "workoutLog", ownerId: "review-own", userId: ATHLETE, status: "needs_manual_review", reason: "parse_error" },
+      { ownerType: "workoutLog", ownerId: "review-other", userId: OTHER_ATHLETE, status: "needs_manual_review", reason: "parse_error" },
+      // A row left without an owner used to be returned to everyone.
+      { ownerType: "workoutLog", ownerId: "review-orphan", userId: null, status: "needs_manual_review", reason: "parse_error" },
+    ]);
+
+    const all = await listBackfillReviews(ATHLETE);
+    expect(all.map((row) => row.ownerId)).toEqual(["review-own"]);
+
+    const orphan = await listBackfillReviews(ATHLETE, { ownerType: "workoutLog", ownerId: "review-orphan" });
+    expect(orphan).toEqual([]);
   });
 });
