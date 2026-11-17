@@ -652,7 +652,9 @@ const [trainingContext, coachingContext] = await Promise.all([
   cachedTrainingContext                             // chat only (see below)
     ? getCachedTrainingContext(userId, buildTrainingContext)
     : buildTrainingContext(userId),                 // Latest 400 timeline entries + 70-day load window
-  retrieveCoachingContext(userId, query, log),      // RAG or legacy materials
+  query === null                                    // chat's "thanks!": nothing to retrieve for
+    ? NO_RETRIEVAL                                  // { ragInfo: { source: "none", chunkCount: 0 } }
+    : retrieveCoachingContext(userId, query, log),  // RAG or legacy materials
 ]);
 ```
 
@@ -683,13 +685,14 @@ Aggregates the user's training state from two windows that `buildTrainingContext
 The context carries:
 - Workout counts (total, completed, planned, missed, skipped, and missed sessions the athlete let go — rendered on their own line only when there are any)
 - Completion rate (completed ÷ completed + missed + skipped; let-go sessions are in neither) and current streak
-- The 10 most recent completed workouts, with exercise details
+- The 10 most recent completed workouts, with exercise details (the auto-coach prompts list all 10, the chat prompt the latest 7)
 - Upcoming planned workouts (the next 7 planned days), each with its priority tier (key, supporting or optional) — the auto-coach's suggestion prompt tells it to protect key sessions and trim optional ones first when a week has to get lighter
 - Exercise breakdown (completed workouts per functional exercise named in the focus text, or per focus when none is named)
 - Structured exercise stats (max weight, max distance, best time per exercise)
 - Active plan info (name, weeks, current week, goal)
 - **Coaching insights:** RPE trends, fatigue/undertraining flags, station gaps, recent skips with their reasons (`recentSkips`, up to 5), recent missed key and supporting sessions with whether the athlete let each go (`recentMisses`, up to 5 — the prompt says a let-go session is the athlete's decision and not to add it back), plan phase, weekly volume trends, progression flags per exercise, the training-load governor overview (`loadGovernor`, from `calculateTrainingLoad()` over the last 70 days), and the rule-based training-state decision (`decisionTree` from `decideTrainingState()`: phase, allowed workout types, whether intensity is permitted, rationale codes). When the data supports them, it also carries personal records, PRs this week, plan compliance, neglected movement patterns and muscle groups, race readiness, and load by body system (`bodySystemLoad`, from `calculateBodySystemLoad()` over the same window's training sessions — the numbers the Analytics card shows). The body-system block reaches the prompt only when a system is above its usual week, new, or at a six-week high, and names what spares the flagged system.
 - **The athlete card** (`athleteFacts`): the active facts, each with its category and review date — see [The Athlete Card](#the-athlete-card). Top level rather than in `coachingInsights`, which is persisted into `plan_days.ai_inputs_used`, so the athlete's free text stays out of that audit.
+- **Declared absences** (`absences`): the injury, illness, travel and planned-rest ranges the athlete logged on the timeline that overlap the window from 70 days back to 28 days ahead, at most 8, newest first (`selectAbsencesForContext()`). `formatAthleteConstraints()` renders them in the ATHLETE CONSTRAINTS block as CURRENTLY AFFECTED, RECENTLY AFFECTED and UPCOMING, and an active injury or illness sets the decision tree's `illnessFlag`.
 - **Exercise selection brief** (`exerciseSelection`): built from the same 70-day training sets, the active plan's goal, the athlete's standing constraints (the older note and the card's facts), the station gaps and the upcoming planned days — see [Exercise Selection Brief](#exercise-selection-brief). Rendered after the COACHING ANALYSIS block in the auto-coach, review-note, chat plan-edit and chat prompts; a failure to build it is logged and leaves the context without it.
 - **Training targets** (`trainingTargets`): the athlete's estimated 1RMs on up to 6 lifts (the plan's primary lifts first), each with its 5- and 8-rep working loads at RPE 8, and their run paces — computed by the [workout engine](#workout-engine) from the same 70-day window. Rendered as TRAINING TARGETS after the brief in the auto-coach and chat prompts, so a load or pace the coach suggests agrees with the plan.
 - **MAF trend** (`mafHr`, `mafTrend`): for athletes whose current training style is `maf_method` only, the aerobic ceiling and a summary of their MAF tests from `summarizeMafTrend()` (`server/services/ai/mafTrend.ts`): how many are logged, how long ago the last one was, the latest classification and compliance, and whether compliance is improving, flat or declining. The trend compares the latest test with the oldest one in the last 180 days and needs more than 5 percentage points of movement to call a direction. `formatMafContext()` (`server/prompts/mafContext.ts`) renders it as the MAF METHOD block, tells the model not to prescribe heart-rate targets above the ceiling, and suggests a retest once the last test is more than 28 days old. It is gated on `mafTrend` rather than `mafHr`, which can linger on the profile after the athlete leaves the style.
@@ -789,7 +792,7 @@ Short statements the athlete says are true every week ("bad left knee", "no sled
 
 **The older note.** `users.training_constraints`, written by the plan wizard before the card existed, keeps rendering as STANDING CONSTRAINTS until it is moved. Settings shows it with "Add to card" (`POST /api/v1/athlete-facts/import`) and "Remove note"; the wizard's box arrives prefilled with it, and generating moves it. Either way the note is cleared only once all of it fits on the card. A Settings preferences save never sends it.
 
-**Facts offered in chat (I5b).** When the athlete's message may state something lasting (a keyword gate in `mayStateLastingFact()`), `extractFactCandidate()` reads it on the fast model alongside the reply, with the coach's previous turn for context, and returns at most one fact in the athlete's words. A fact the card doesn't already hold (by its dedupe key) is offered under the reply as its last stream event (`factProposal`), saved on the reply row, and rendered as a "Save to your athlete card?" card with Save to card / Not now. Nothing is written until the athlete saves it (`POST /api/v1/chat/messages/:id/fact`), which also drops the cached training context so the next reply reads it. Never after a red-flag symptom, and a reply never waits more than 2 seconds on the read. The tools path uses the same read rather than a tool, so the offer doesn't depend on the model choosing to call one.
+**Facts offered in chat (I5b).** When the athlete's message may state something lasting (a keyword gate in `mayStateLastingFact()`), `extractFactCandidate()` reads it on the fast model alongside the reply, with the coach's previous turn for context, and returns at most one fact in the athlete's words. A fact the card doesn't already hold (by its dedupe key) is offered under the reply as its last stream event before `done` (`factProposal`), saved on the reply row, and rendered as a "Save to your athlete card?" card with Save to card / Not now. Nothing is written until the athlete saves it (`POST /api/v1/chat/messages/:id/fact`), which also drops the cached training context so the next reply reads it. Never after a red-flag symptom, never on a request without message ids (there is no saved reply to keep the offer on), never under a reply that failed, was stopped or came back empty, and a reply never waits more than 2 seconds on the read. The tools path uses the same read rather than a tool, so the offer doesn't depend on the model choosing to call one.
 
 ## Exercise Selection Brief
 
@@ -801,11 +804,11 @@ The COACHING ANALYSIS decides whether and how much to change a session; the brie
 |------|---------------|
 | Goal lens | `hyrox`, `running`, `strength`, `hybrid` (running + strength), `weight_loss` or `general`, classified from the goal text (word-bounded, so "10kg" is not a 10K), falling back to the plan wizard's focus areas. Each lens states what exercise choice is for — a runner's strength work is for durability, a HYROX athlete's makes the stations cheaper. |
 | Familiar exercises | Up to 8 exercises the athlete logged in 2+ sessions, most-practised first, with the last session ("4 sets, top 100 kg x 5", read through each set's own unit stamp) and days since. |
-| Needs | Up to 7, ranked: plan-wizard focus areas first; then HYROX station gaps of 14+ days or with no recent session (at most 2 — only for HYROX goals or station focus areas, "no recent session" only once there are 6+ sessions of history, and never for a station the constraints rule out) alongside whole patterns the goal needs that the last 4 weeks never touched (at most 3 — e.g. single-leg, hinge and trunk work for a runner; skipped when a listed station gap already stands for the pattern, as farmers carry does for carries); then lifts stalled at the same top load for 3 sessions without a rep gain (at most 2), with same-pattern variations and a method alternative (tempo, pauses, rep-range shift), and lopsided ratios once 20+ sets are logged (pulling under 70% of pushing, hinging under half of squatting, no single-leg work); then 10-13 day station gaps and missing calf/foot work for runners. |
+| Needs | Up to 7, ranked: plan-wizard focus areas first; then HYROX station gaps of 14+ days or with no recent session (at most 2 — only for HYROX goals or station focus areas, "no recent session" only once there are 6+ sessions of history, and never for a station the constraints rule out) alongside whole patterns the goal needs that the last 4 weeks never touched (at most 3; these, the lopsided ratios and the calf need below all wait for 6+ sessions of history — e.g. single-leg, hinge and trunk work for a runner; skipped when a listed station gap already stands for the pattern, as farmers carry does for carries); then lifts stalled at the same top load for 3 sessions without a rep gain (at most 2), with same-pattern variations and a method alternative (tempo, pauses, rep-range shift), and lopsided ratios once 20+ sets are logged (pulling under 70% of pushing, hinging under half of squatting, no single-leg work); then 10-13 day station gaps and missing calf/foot work for runners. |
 | Candidates | Up to 4 per need, from curated pools, familiar ones first (push and pull pools alternate horizontal and vertical options, so a cut offers both). Filtered by the athlete's constraints text: equipment they say they lack ("no sled", "just dumbbells and a pull-up bar"), movements they say they can't do (needs a limiting word — "lunges hurt", not "I love lunges"), and body regions (knee/ankle/achilles → no jumps or sprints, shoulder → no overhead pressing, lower back → no heavy unsupported hinging), plus high-skill lifts for beginners they haven't logged. The constraints text itself still reaches the model, which decides anything this reading misses. |
 | Station substitutes | For a HYROX athlete whose constraints rule a station out, what trains the same demand (sled push → leg press, walking lunges, box step-overs). A ruled-out station appears here only, never as a gap to close. |
-| Race standards | The athlete's division and gender loads from `STATION_LOADS_KG`, in their weight unit; both categories when gender is unset. |
-| Upcoming week shape | Coach only: planned sets per pattern across the next 7 days, the patterns the goal needs that the week never touches, and heavy squat/hinge days that land back to back. |
+| Race standards | HYROX lens only: the athlete's division and gender loads from `STATION_LOADS_KG`, in their weight unit; both categories when gender is unset. |
+| Upcoming week shape | Coach only, and only when at least 2 of the days carry exercise rows: planned sets per pattern across the next 7 planned days, the patterns the goal needs that those days never touch, and heavy squat/hinge days (4+ weighted sets) that land on consecutive dates. |
 | Primary lifts | Plan generation only: one backbone lift per slot for the goal (e.g. squat, hinge, vertical push, pull, single-leg for HYROX), the athlete's most-practised eligible lift when they have one, otherwise the first default their constraints, equipment and experience allow. |
 
 The renderer names exercises by display name for the coach (its rationale is athlete-facing) and by exact key for plan generation (its `exerciseName` must be a key), and sanitizes athlete-named custom exercises like every other free-text field.
@@ -853,15 +856,15 @@ Not adapted: an edit to a log that was already applied (its first version stands
 ## Security
 
 - **Consent gate:** `aiConsentCheck` (`server/middleware/aiConsent.ts`) returns 403 `AI_COACH_DISABLED` unless `user.aiCoachEnabled === true` before any AI provider call runs on the user's behalf. See [Overview](#overview).
-  - Two endpoints are deliberately **not** AI routes, because their non-AI layers must serve every athlete: the [planned-session estimate](api-reference.md#nutrition-routes) and nutrition semantic search. Both check `aiCoachEnabled` **inline** instead, immediately before the provider call, so consent still governs whether any data leaves the server. Anything that calls a provider must pass through one of these two gates — middleware or inline — with no third option.
+  - Two endpoints are deliberately **not** AI routes, because their non-AI layers must serve every athlete: the [planned-session estimate](api-reference.md#nutrition-routes) and nutrition semantic search. Both check `aiCoachEnabled` **inline** instead, immediately before the provider call, so consent still governs whether any data leaves the server. `POST /api/v1/workouts` does the same for its legacy text parse (`legacyParseAllowed()` in `server/services/workoutUseCases.ts`), a branch reached only while the structured-write gate is rolled back, and the cron-side generators and the embed and plan-generation workers re-check consent before they call a provider. Anything that calls a provider must pass through one of these two gates — middleware or inline — with no third option.
 - **Budget enforcement:** `aiBudgetCheck` (`server/middleware/aibudget.ts`) runs an operator kill switch (`AI_FEATURES_ENABLED=false` -> 503 `AI_FEATURES_DISABLED`), an application-wide spend ceiling, and a per-user rolling 24h cost cap. See [Cost controls](#cost-controls).
 - **Outbound requests:** both provider adapters set `redirect: "error"` on their `fetch` calls. `fetch` follows redirects by default, which would re-POST the request body — athlete prompt data — to whatever `Location` the endpoint returned, with no second [SSRF-guard](server.md#ssrf-guard) check. A chat-completions endpoint has no legitimate reason to redirect.
-- **Input sanitization:** `sanitizeUserInput()` wraps all user text in XML tags and strips potential injection patterns before sending to the selected text provider. This applies to text placed in **system instructions** as well as user turns — a model weights the system instruction more heavily, so it is the last place raw input should appear. Athlete-authored custom exercise names (workout parser) and the client-supplied focused-day id (plan adjustment) are escaped and fenced like any other input.
-- **Output validation:** `validateAiOutput()` checks AI text responses for safety.
-- **HTML sanitization:** `sanitizeHtml()` strips HTML from all AI-generated content before database storage.
+- **Input sanitization:** `sanitizeUserInput()` (`server/utils/sanitize.ts`) escapes `&`, `<` and `>` in user text before it goes into a prompt, so the text cannot close or forge the delimiters the prompt builders wrap it in (`<user_input>`, `<custom_exercises>`, `<earlier_conversation>` and the like). It removes nothing: quotes and wording reach the model as typed. This applies to text placed in **system instructions** as well as user turns — a model weights the system instruction more heavily, so it is the last place raw input should appear. Athlete-authored custom exercise names (workout parser) and the client-supplied focused-day id (plan adjustment) are escaped and fenced like any other input.
+- **Output validation:** `validateAiOutput()` fails a reply (502 `AI_ERROR`) that contains `<system>`, `</system>`, "system prompt" or "ignore previous instructions", and logs a warning for a few softer markers ("as an AI", "developer mode") without blocking them. It runs on chat replies (and coach insights, which reuse `chatWithCoach`), the conversation notes, the exercise, meal and photo parsers' raw output, nutrition insights and a proposal's summary; auto-coach suggestions, review notes and generated plans are held to their Zod schemas instead. Streamed replies go through `createStreamingOutputValidator()`, which checks each chunk together with the tail of the text before it, so a phrase split across two chunks is still caught; the chunks already sent stay sent and the stream is cut.
+- **HTML sanitization:** `sanitizeHtml()` encodes `&`, `<`, `>` and both quote characters. It is used where the server builds HTML itself (the email templates and the unsubscribe page), not on AI output: suggestions, review notes, plan text and chat replies are stored as plain text, with `&` rewritten to `and` in the coach and plan paths.
 - **Content length limits:** Chat messages max 4,000 chars (request) / 50,000 chars (storage), and `role` is constrained to `user | assistant` so a client cannot seed a `system` turn into the history that is later replayed into the model's context. Coaching materials max 1,500,000 chars. Model *output* written back to the database is bounded too: the auto-coach recommendation is capped at 10,000 chars and its rationale at 2,000, matching the manual apply route so both paths agree.
 - **Image inputs:** the shared image-parse schema checks the decoded leading bytes against the declared mime type (JPEG/PNG/WebP magic bytes), so a mislabelled or non-image payload is rejected before it is billed for and forwarded to the vision model.
-- **RAG injection prevention:** Retrieved chunks are wrapped in `<coaching_data>` tags with instructions to treat content as data only.
+- **RAG injection prevention:** Retrieved chunks, and the legacy full-text materials with their titles, go through `sanitizeUserInput()` and sit between `--- COACHING REFERENCE MATERIALS ---` and `--- END COACHING MATERIALS ---` markers, each chunk under an `[Excerpt N]` label (`server/prompts/materialsBuilder.ts`). The section carries no instruction to treat its content as data only.
 - **Prompt protection:** System prompts include instructions refusing to reveal their own content.
 - **Streaming transport:** The `compression` middleware is configured to skip `text/event-stream` responses so the streaming-chat output is delivered without being held in a gzip buffer (see [Server → Middleware Ordering Rationale](server.md#middleware-ordering-rationale)).
 
@@ -869,9 +872,19 @@ Not adapted: an edit to a log that was already applied (its first version stands
 
 ## Cost controls
 
-Every provider call passes through `checkAiBudget(userId)`
-(`server/services/aiUsageService.ts`), whether it came from an HTTP route, a
-cron job, or a queue worker. There are two ceilings, checked in this order:
+A provider call made for an athlete is checked against `checkAiBudget(userId)`
+(`server/services/aiUsageService.ts`) in one of two places. On the AI routes the
+`aiBudgetCheck` middleware runs it, which also covers the jobs those routes
+queue: plan generation and coaching-material embedding are checked when queued,
+not again in the worker. Code that reaches a provider outside such a route
+calls it inline: the auto-coach job, the `…IfAllowed` generators the midnight
+recompute uses (coach insights, overview analysis, nutrition insights), race
+prediction, the planned-session estimate, semantic food search, the structured
+apply of a timeline suggestion and the legacy text parse on workout creation.
+Two calls are neither budget-checked nor recorded against an athlete: the
+food-embedding cron (`embedMissingFoods()`), which embeds cached foods, and the
+RAG status health probe, which embeds the word "test" and caches the result
+for 5 minutes. There are two ceilings, checked in this order:
 
 | Ceiling | Setting | Reached → | Rationale |
 |---------|---------|-----------|-----------|
@@ -900,7 +913,12 @@ assumes every athlete maxes out their $2, which none will.
   query. Each replica keeps its own cache; a slightly stale total is fine.
 - The global check **fails open** to the per-user cap: a transient aggregate
   query failure must not take AI down for every user. The per-user check fails
-  closed, as before (`503 AI_BUDGET_UNAVAILABLE`).
+  closed in the middleware, as before (`503 AI_BUDGET_UNAVAILABLE`), in the
+  auto-coach job (the job fails and is retried), and in the planned-session
+  estimate, semantic food search and the legacy text parse, which skip the AI
+  step. The other inline callers (coach insights, overview analysis, nutrition
+  insights, race prediction, the structured apply) log the failed lookup and
+  make the call.
 - Both checks are **check-then-act** — usage is recorded after the provider call
   returns — so concurrent requests inside one rate-limit window can each pass a
   check that the sum of them exceeds. The per-route rate limits bound that
