@@ -148,6 +148,12 @@ the flag and feeds it back into `calculateMafHr`, but the save payload does not 
 field. **A healed knee still caps this app's training zones, with no in-product way to un-cap
 it.** That is the `active`-boolean design, in production, unrepaired.
 
+**Since repaired** (audit M6). Onboarding and Settings → Training style → _Edit MAF setup_ now
+ask Maffetone's own category question (`users.maf_category`) and neither sends the old flag.
+A stored category decides the adjustment alone (`calculateMafHr`, `shared/maf.ts`), so the
+flag still costs 10 bpm only on an account that answered the old questions and has not picked
+a category since.
+
 **Decision: every row carries `review_on`, NOT NULL, defaulted 90 days out.** A row past its
 review date still renders — silently dropping a fact the athlete typed is worse than keeping a
 stale one — but renders flagged (`(unconfirmed since …)`), sorts to the top of the Settings
@@ -169,11 +175,11 @@ CHECK-constrained, indexed CRUD table.
 id          varchar(255) PK default gen_random_uuid()
 user_id     varchar(255) NOT NULL references users.id onDelete cascade
 fact        text         NOT NULL          -- CHECK length 1..140
-dedupe_key  varchar(160) NOT NULL          -- server-derived: lower(collapse_ws(trim(fact)))
+dedupe_key  varchar(160) NOT NULL          -- server-derived: lower(collapse_ws(trim(fact))), closing "." "!" dropped
 category    varchar(24)  NOT NULL          -- constraint | equipment | schedule | preference | other
-source      varchar(24)  NOT NULL default 'athlete'   -- athlete | plan_generation | onboarding
+source      varchar(24)  NOT NULL default 'athlete'   -- athlete | plan_generation | onboarding | chat
 active      boolean      NOT NULL default true
-review_on   date         NOT NULL
+review_on   date         NOT NULL          -- default CURRENT_DATE + 90
 created_at / updated_at  timestamptz
 uniqueIndex (user_id, dedupe_key)
 index       (user_id, active)
@@ -184,27 +190,38 @@ index       (user_id, active)
 - **`dedupe_key` makes the seed re-runnable.** Regenerating a plan with the same injuries text
   must not accumulate duplicates. Derived server-side, never trusted from input.
 - **Row cap 20 active per user**, enforced on write with a 409, not at render — a render-side
-  cap silently discards facts the athlete typed.
+  cap silently discards facts the athlete typed. The two seeds (the wizard's box and the
+  older note's import) skip a fact that does not fit and count it, rather than fail.
 - **No status enum, no `superseded_by`, no proposal table.** v1 has zero AI writes, so a state
   machine would have two reachable states. `plan_adjustment_proposals` cannot be reused
   regardless: its `plan_id` is NOT NULL with an FK to `training_plans`, and its storage keeps
-  an at-most-one-pending-per-user invariant that is exactly wrong for N facts.
+  an at-most-one-pending-per-user invariant that is exactly wrong for N facts. `athlete_facts`
+  still has none of the three now that the coach proposes facts in chat: the offer, with its
+  own status, is a jsonb column on the reply (`chat_messages.fact_proposal`, migration `0116`),
+  and the row is written only when the athlete saves it (`decideChatFactProposal`,
+  `server/services/chatFactProposal.ts`).
 
 `tables.cascade.test.ts` sweeps every exported table automatically, so the cascade obligation is
 enforced with no registration; bump its guard-the-guard floor. Account deletion is then correct
-for free — `server/routes/account.ts` is a single cascade call.
+for free — the `users` delete inside `eraseAccount`
+(`server/services/accountErasureService.ts`) cascades to it.
 
 ---
 
 ## 4. Injection — one data site, four render sites
 
-**Data side, one site.** `buildTrainingContext` (`server/services/ai/index.ts:224`) is the only
-build site, and has exactly three non-test callers: `aiContextService.ts` (→ chat, chat/stream,
-timeline suggestions, coach insights) and **two direct calls in `coachService`** that bypass
-`buildAIContext` entirely — `triggerAutoCoach` and `regenerateCoachNoteForPlanDay`. Injecting in
+**Data side, one site.** `buildTrainingContext` (`server/services/ai/index.ts:487`) is the only
+build site, and has exactly four non-test callers: `aiContextService.ts` (→ chat, chat/stream,
+timeline suggestions, coach insights), `coachWelcome.ts` (the chat panel's welcome) and **two
+direct calls in `coachService`** that bypass `buildAIContext` entirely — `triggerAutoCoach` and
+`regenerateCoachNoteForPlanDay`. Injecting in
 `aiContextService` instead would miss auto-coach, the consumer that silently rewrites the
 athlete's upcoming plan. Add the read as a seventh entry in the existing `Promise.all`, never a
-serial await: this is the heaviest read in the app and it is uncached.
+serial await: this is the heaviest read in the app and it is uncached. It shipped as the eighth
+entry (`storage.athleteFacts.listActive`), after the annotations read Path B added. The chat
+and its welcome now read the context through a per-athlete cache
+(`server/services/trainingContextCache.ts`), which a successful write outside the chat, a fact
+write included, drops; the other callers still build their own.
 
 **Type: top level on `TrainingContext`, not inside `coachingInsights`.** Two reasons.
 `buildSystemPrompt` early-returns when `totalWorkouts === 0`, and that branch never calls
@@ -218,11 +235,14 @@ land there by accident.
 1. `server/prompts.ts` — the **zero-workout branch**, for the day-one athlete.
 2. `server/prompts.ts` — main branch, inside the training-data envelope → chat, chat/stream,
    coach insights.
-3. `server/gemini/suggestionService.ts` — into the `header` array → auto-coach suggestions,
-   review notes, conversational plan adjustment (which reuses the chat turn's context and needs
-   no separate wiring).
+3. `server/gemini/suggestionService.ts` — straight after the `header` lines → auto-coach
+   suggestions, review notes, conversational plan adjustment (which reuses the chat turn's
+   context and needs no separate wiring).
 4. `server/services/planGenerationService.ts` — **replacing** the raw `Injuries/Limitations`
    line. Thread it exactly as the existing optional `startLoadPosture` param is threaded.
+   Shipped as an optional `card` argument to `buildGenerationPrompt`, built by
+   `buildGenerationCard` (`server/services/planGenerationCard.ts`) from the card's facts plus
+   any sentence of the wizard's box the card had no room for.
 
 **Site 4 is the one to protect if the PR must shrink, not the one to cut.** Equipment and
 schedule facts bind hardest at plan generation: cutting it means the generator programs sled
@@ -238,7 +258,9 @@ zero-workout branch) and `buildPromptDataSections` (`server/gemini/suggestionSer
 
 Follow the same shape for the athlete card, and keep the lesson: adding a field to the type is not
 the same as it reaching the model. Ship a co-located test asserting the marker and the fact text
-appear in the output of **both** assemblers, so the two paths cannot drift apart again.
+appear in the output of **both** assemblers, so the two paths cannot drift apart again. That
+test is `server/prompts/athleteFacts.test.ts`: it checks `buildSystemPrompt` with and without
+logged workouts, and `buildPromptDataSections`.
 
 ---
 
@@ -250,8 +272,10 @@ from logged sets, with no equipment model, so `formatStationGaps` could render
 at my gym" — every week, forever. **Closed via the suppression option**: `computeExerciseGaps`
 now takes `trainingConstraints` and drops any station `stationsRuledOutByConstraints`
 (`shared/stationCoverage.ts`) matches, rather than only instructing the model to reconcile it.
+Since Path C the text it is given is the older note plus every active fact
+(`standingConstraintsText`, `shared/athleteFacts.ts`).
 
-**5.2 The safety layer breaks in both directions.** `analyzeSafetySignals` returns two signals
+**5.2 The safety layer breaks in both directions.** `analyzeSafetySignals` returned two signals
 from one text blob, with opposite tolerances for durability:
 
 - `hrMedicationDetected` **appends** a disclaimer — idempotent, safe to make permanent.
@@ -261,7 +285,10 @@ from one text blob, with opposite tolerances for durability:
 **Decision: split the corpus.** Facts feed the medication stream only; the red-flag scan stays
 on dated workout text. Leaving facts out of both is also wrong — a permanent written statement
 of a heart medication sitting in every prompt while the deterministic disclaimer never fires
-makes the app look like it was told and ignored it.
+makes the app look like it was told and ignored it. **Shipped as decided**:
+`analyzeSafetySignals` (`server/services/aiSafety.ts`) runs the medication patterns over the
+dated workout text plus `standingConstraintsText` (the older note and every active fact), and
+the red-flag patterns over the dated text alone.
 
 ---
 
@@ -290,15 +317,21 @@ Consent is enforced where facts are _read_ — every render path already sits be
   the strongest argument for Path A, whose capture point already exists.
 - **The audience is small.** `aiCoachEnabled` defaults **false** and is presented in Settings as
   "Auto-Adjust Workouts". A feature whose entire value is invisible to opted-out users needs
-  that switch understood before it needs more memory.
+  that switch understood before it needs more memory. The switch has since been relabelled
+  "AI Coach and AI data processing", with a description of everything it turns on
+  (`AiCoachCard.tsx`); the default is still off.
 - **Facts reach the prose, not the machinery.** The load governor, `decideTrainingState` and the
   gap computation all run on structured data. A sentence cannot suppress a computed signal —
-  see §5.1.
+  see §5.1. The gap computation now reads the card by keyword match (§5.1), and so does the
+  exercise-selection brief (`parseConstraintProfile`, `server/services/ai/exerciseProfile.ts`).
+  The load governor and `decideTrainingState` still take no fact.
 - **Demand is unmeasured.** Nothing in this tree says how many athletes have a `principles`
   material or send a non-empty `injuries` string. If both are near zero, the card will be too;
   if `principles` usage is meaningful, the real gap is retrieval _determinism_ — pin
   `type='principles'` chunks ahead of the topK search — which is about a day and no schema
-  change.
+  change. That pin has since shipped (`listPinnedPrincipleChunks`,
+  `server/services/ragService.ts`; see §0), and `script/coach-memory-usage.ts` counts both
+  against a database.
 
 ---
 
@@ -306,6 +339,8 @@ Consent is enforced where facts are _read_ — every render path already sits be
 
 - **Reusing `plan_adjustment_proposals` for coach-inferred facts.** Plan-shaped end to end, and
   its one-pending-per-user invariant is wrong for N facts. v1 has no AI writes anyway.
+  Coach-proposed facts have since shipped without that table (I5; see §3): at most one offer
+  per reply, kept on the chat message, and put on the card only when the athlete saves it.
 - **Putting facts in `coachingInsights`.** Cheapest shared renderer, but misses the
   zero-workout chat branch and pollutes the persisted audit blob (§4).
 - **A 500-char blob instead of N rows.** Matches the existing `injuries` field, but makes
