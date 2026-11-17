@@ -3,7 +3,6 @@ import {
   barcodeLookupSchema,
   type CreateCustomFoodInput,
   createCustomFoodSchema,
-  type Food,
   type FoodSearchQuery,
   foodSearchQuerySchema,
   type ServingInput,
@@ -22,21 +21,10 @@ import { searchFoods } from "../../services/nutrition/foodSearch";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
 import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/protectedRouteBuilder";
-import { FOOD_NOT_FOUND } from "./shared";
+import { FOOD_NOT_FOUND, redactFoodOwner } from "./shared";
 
 const FOOD_BY_ID_PATH = "/api/v1/nutrition/foods/:id";
 
-/**
- * Null a food's owner id unless the requester is the owner. A public custom or
- * recipe-backing food is visible to every searcher, and its internal Clerk user
- * id would let anyone link all of that author's shared foods. The client never
- * reads `foods.createdByUserId`, so the owner keeps theirs and everyone else
- * sees null. P16 (CODEBASE_ANALYSIS_2026-10-03)
- */
-export function redactFoodOwner<T extends Food>(food: T, userId: string): T {
-  if (food.createdByUserId == null || food.createdByUserId === userId) return food;
-  return { ...food, createdByUserId: null };
-}
 
 // Foods: search / recent / custom lists, barcode lookup, custom-food CRUD and
 // named servings (FR-1.1, FR-1.4, FR-2.1, FR-2.2, FR-2.4).
