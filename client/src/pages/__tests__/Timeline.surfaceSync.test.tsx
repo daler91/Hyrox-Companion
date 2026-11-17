@@ -438,9 +438,12 @@ describe("Timeline surface sync", () => {
     vi.useRealTimers();
   });
 
-  it("keeps sheet identity stable across refetch/state transitions", () => {
+  it("keeps sheet identity stable across refetch/state transitions", async () => {
     const qc = new QueryClient();
     const { rerender } = renderTimeline(qc);
+    // The sheets are a lazy chunk; wait for the sheet so the refetch below
+    // hits a mounted one.
+    await screen.findByTestId("log-sheet");
     // simulate refetch changing object reference + adding workoutLogId (planned->completed lifecycle)
     timelineData = [makeEntry({ id: "e2", workoutLogId: "wl1", status: "completed" })];
     rerender(

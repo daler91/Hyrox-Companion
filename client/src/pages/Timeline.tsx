@@ -39,12 +39,12 @@ import { useTimelineState } from "@/hooks/useTimelineState";
 import { getTodayString } from "@/lib/dateUtils";
 import { featureFlags } from "@/lib/featureFlags";
 import { canMoveEntryTo, timelineCollisionDetection } from "@/pages/timeline/dropTargets";
+import { LazyTimelineWorkoutSurfaces } from "@/pages/timeline/LazyTimelineWorkoutSurfaces";
 import { renderedFuellingWindow } from "@/pages/timeline/fuellingWindow";
 import { startScrollTodayConvergence } from "@/pages/timeline/scrollTodayConvergence";
 import { TimelineCoachPanels } from "@/pages/timeline/TimelineCoachPanels";
 import { TimelineContent } from "@/pages/timeline/TimelineContent";
 import { TimelineOnboardingWizard } from "@/pages/timeline/TimelineOnboardingWizard";
-import { TimelineWorkoutSurfaces } from "@/pages/timeline/TimelineWorkoutSurfaces";
 import { useBulkDeleteSelection } from "@/pages/timeline/useBulkDeleteSelection";
 import { useEmbeddedCoachRouting } from "@/pages/timeline/useEmbeddedCoachRouting";
 import { useMissedRecoveryFlow } from "@/pages/timeline/useMissedRecoveryFlow";
@@ -535,7 +535,7 @@ export default function Timeline() {
               />
             )}
 
-            <TimelineWorkoutSurfaces
+            <LazyTimelineWorkoutSurfaces
               isMobile={isMobile}
               toast={toast}
               adhocOpen={adhocOpen}
