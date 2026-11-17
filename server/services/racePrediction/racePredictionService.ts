@@ -433,6 +433,9 @@ async function resolveAiBlocker(
     // A budget that can't be confirmed is not spent: the athlete gets the
     // deterministic prediction, flagged as an AI error, as when the provider
     // fails. It used to log the failure and make the call.
+    // err is the budget-lookup failure and userId the internal id used for
+    // correlation, as at the other budget-check call sites; no training data.
+    // bearer:disable javascript_lang_logger_leak
     log.warn({ err, userId }, "[race-predictor] AI budget check failed; returning the deterministic prediction");
     return "ai_error";
   }

@@ -263,6 +263,9 @@ export async function getStructuredApplyBlocker(
     // can't be confirmed, it fails as that middleware does (503
     // AI_BUDGET_UNAVAILABLE) before anything is written, instead of making an
     // unconfirmed AI call as it used to.
+    // err is the budget-lookup failure and userId the internal id used for
+    // correlation, as at the other budget-check call sites; no plan content.
+    // bearer:disable javascript_lang_logger_leak
     log.warn({ err, userId }, "[timeline] AI budget check failed before structured apply; refusing the parse");
     throw new AppError(ErrorCode.AI_BUDGET_UNAVAILABLE, "AI budget enforcement is temporarily unavailable.", 503);
   }
