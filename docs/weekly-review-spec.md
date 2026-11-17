@@ -299,12 +299,11 @@ still read by no prompt, only by the review, the Sunday reminder email and the d
    `plannedCompleted` can never exceed `sessionsPlanned`. The API returns no rate at all; if the
    page wants one, it computes it from the plan-day pair alone. `getWeeklyStats` itself is
    untouched — the email reports its counts rather than a rate, so it was never affected.
-   **Both halves of that last sentence have since been corrected in code** (audit H6): the
-   email did turn the counts into a rate, so `getWeeklyStats` (`server/storage/analytics.ts:415`)
-   now also returns `planCompletedCount`, and `processWeeklySummary` builds the email's
-   completion rate from plan days alone, `null` when nothing was due. The counts have also
-   gained `excused` (days inside a declared absence) and `letGo` (missed days the athlete let
-   go), both held out of `missed` in the review and in the email.
+   **That last sentence no longer holds** (audit H6): the email does carry a completion rate,
+   which `processWeeklySummary` now builds from plan days alone (`null` when nothing was due),
+   and `getWeeklyStats` (`server/storage/analytics.ts:415`) gained `planCompletedCount` for it.
+   The counts have also gained `excused` (days inside a declared absence) and `letGo` (missed
+   days the athlete let go), both held out of `missed` in the review and in the email.
 2. **The planless athlete.** No plan → `planned`/`missed`/`skipped` are all zero and
    completion rate is meaningless. The page must lead with what was logged, not with a 0%.
 3. **The annotated week.** Injury or illness overlapping the week suppresses the
@@ -316,9 +315,9 @@ still read by no prompt, only by the review, the Sunday reminder email and the d
 4. **The empty first week.** A new athlete's first review must read as a starting point, not
    a report card. No red, no zero-percent hero number.
 5. **The in-progress week.** "So far" framing, no completion verdict, no delta against a week
-   that has not finished. As shipped the tiles relabel to "Sessions so far" and the header
-   shows "In progress", but `WeeklyReviewSummary` still renders the session and duration deltas
-   against the previous week while the week is running.
+   that has not finished. As shipped the sessions tile is relabelled "Sessions so far" and the
+   header shows "In progress", but `WeeklyReviewSummary` still renders the session and duration
+   deltas against the previous week while the week is running.
 6. **Missing or invalid timezone.** `getLocalDateStrSafe` (`server/timezone.ts:208`) already
    handles this; use it rather than assuming `userTimezone` is populated.
 7. **Deleted plans.** `workout_logs.planId` is `ON DELETE SET NULL` — a week whose plan was
