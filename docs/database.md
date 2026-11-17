@@ -9,6 +9,7 @@ Key technology choices:
 - **Drizzle ORM** (`drizzle-orm/node-postgres`) -- type-safe schema, query builder, and migration tooling
 - **node-postgres (`pg`)** -- connection pooling for both the main database and the vector database
 - **pgvector** -- PostgreSQL extension for storing and querying high-dimensional embedding vectors
+- **pg_trgm** -- PostgreSQL extension behind the trigram indexes for typo-tolerant food search (migration `0074`)
 - **drizzle-zod** -- automatic Zod validation schema generation from Drizzle table definitions
 - **drizzle-kit** -- CLI for generating and running SQL migrations
 
@@ -16,7 +17,7 @@ Key technology choices:
 
 ## Schema Tables
 
-All table definitions live in `shared/schema/tables.ts` (~2,300 lines, 44 tables plus their Drizzle relations); the eight nutrition tables are summarized under [Nutrition tables](#nutrition-tables) below and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `deviceActivity.ts` (the `DeviceActivitySnapshot` shape stored in `workout_logs.device_activity`), `sessionStream.ts` (the `SessionStreamSamples` shape stored in `workout_log_streams.samples`), `nutrition.ts` (the nutrition module's request/response contracts), `micros.ts` (micronutrient display metadata, re-exported through `nutrition.ts`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of nineteen modules — `ai.ts`, `analytics.ts`, `analyticsRequests.ts`, `annotations.ts`, `athleteFacts.ts`, `coachRequests.ts`, `coaching.ts`, `connections.ts`, `native.ts`, `planProposals.ts`, `plans.ts`, `plansRequests.ts`, `recovery.ts`, `recycleBin.ts`, `requests.ts`, `sessionGrades.ts`, `users.ts`, `workouts.ts`, `workoutsRequests.ts` — and `types.ts` is now just a barrel that re-exports them.
+All table definitions live in `shared/schema/tables.ts` (~2,400 lines, 44 tables plus their Drizzle relations); the eight nutrition tables are summarized under [Nutrition tables](#nutrition-tables) below and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `deviceActivity.ts` (the `DeviceActivitySnapshot` shape stored in `workout_logs.device_activity`), `sessionStream.ts` (the `SessionStreamSamples` shape stored in `workout_log_streams.samples`), `nutrition.ts` (the nutrition module's request/response contracts), `micros.ts` (micronutrient display metadata, re-exported through `nutrition.ts`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of nineteen modules — `ai.ts`, `analytics.ts`, `analyticsRequests.ts`, `annotations.ts`, `athleteFacts.ts`, `coachRequests.ts`, `coaching.ts`, `connections.ts`, `native.ts`, `planProposals.ts`, `plans.ts`, `plansRequests.ts`, `recovery.ts`, `recycleBin.ts`, `requests.ts`, `sessionGrades.ts`, `users.ts`, `workouts.ts`, `workoutsRequests.ts` — and `types.ts` is now just a barrel that re-exports them.
 
 Most tables use `varchar(255)` primary keys with `gen_random_uuid()` defaults; a few (`rate_limit_buckets`, `server_runtime_cache`) use a `text` key, and `idempotency_keys` / `structured_exercise_health_counters` use composite primary keys.
 
@@ -58,7 +59,7 @@ User accounts and preferences.
 | `activity_level` | `varchar(24)` | nullable — Mifflin–St Jeor multiplier bucket (`sedentary`/`light`/`moderate`/`active`/`very_active`) |
 | `weight_goal_direction` | `varchar(16)` | nullable — `lose`/`maintain`/`gain`; null ⇒ no calorie adjustment |
 | `weight_goal_rate_kg_per_week` | `real` | nullable — magnitude only; the sign comes from `weight_goal_direction` |
-| `training_constraints` | `text` | nullable — the older free-text note of injuries, equipment and scheduling limits, from before the [athlete card](#athlete_facts). Still read by the coach until the athlete moves it onto the card (Settings, or generating a plan with the wizard's box) or removes it; nothing writes a new one |
+| `training_constraints` | `text` | nullable — the older free-text note of injuries, equipment and scheduling limits, from before the [athlete card](#athlete_facts). Still read by the coach until the athlete moves it onto the card (Settings, or generating a plan with the wizard's box) or removes it; the client only ever clears it, though `PATCH /api/v1/preferences` still accepts a string |
 | `maf_age` | `integer` | nullable |
 | `maf_injury_illness_medication` | `boolean` | nullable |
 | `maf_consistency` | `text` | nullable |
@@ -86,7 +87,7 @@ User accounts and preferences.
 | `push_logging_reminder` | `boolean` | default `false` — opt-in 20:00-local push nudge when nothing has been logged |
 | `last_refuel_reminder_at` | `timestamp` | nullable |
 | `last_logging_reminder_at` | `timestamp` | nullable |
-| `erasure_requested_at` | `timestamp with time zone` | nullable — stamped when [account erasure](operations/account-erasure.md) starts; cleared only by the row itself being deleted |
+| `erasure_requested_at` | `timestamp with time zone` | nullable — stamped when [account erasure](operations/account-erasure.md) starts; withdrawn (`clearErasureRequest`) only by the run that wrote it, when that run fails before the Clerk identity is deleted; otherwise it goes with the row |
 | `created_at` | `timestamp` | default `now()` |
 | `updated_at` | `timestamp` | default `now()` |
 
@@ -458,8 +459,7 @@ Structured-format primitives (EMOM, AMRAP, intervals, etc.) attached to a workou
 
 **Check constraints:**
 - `workout_structure_block_single_owner_check`: `(workout_log_id IS NULL) <> (plan_day_id IS NULL)`
-- Seven value guards, each allowing NULL: `workout_structure_block_duration_non_negative_check` (`duration_seconds >= 0`), `..._work_non_negative_check` (`work_seconds >= 0`), `..._rest_non_negative_check` (`rest_seconds >= 0`), `..._rounds_positive_check` (`rounds > 0`), `..._duration_minutes_positive_check` (`duration_minutes > 0`), `..._round_count_positive_check` (`round_count > 0`) and `..._time_cap_positive_check` (`time_cap_minutes > 0`)
-- Non-negative / positive guards on the duration, rounds, and interval columns
+- Seven value guards, each allowing NULL: `workout_structure_block_duration_non_negative_check` (`duration_seconds >= 0`), `..._work_non_negative_check` (`work_seconds >= 0`), `..._rest_non_negative_check` (`rest_seconds >= 0`), `..._rounds_positive_check` (`rounds > 0`), `..._duration_minutes_positive_check` (`duration_minutes > 0`), `..._round_count_positive_check` (`round_count > 0`) and `..._time_cap_positive_check` (`time_cap_minutes > 0`). `work_interval_sec` and `rest_interval_sec` have no guard
 
 **Indexes:**
 - `idx_workout_structure_blocks_workout_sort` on (`workout_log_id`, `sort_order`) -- composite
@@ -722,6 +722,8 @@ Chunked and embedded fragments of coaching materials for vector similarity searc
 - `idx_document_chunks_material_id` on (`material_id`)
 - `idx_document_chunks_user_id` on (`user_id`)
 
+The two foreign keys exist only in the Drizzle declaration. `ensureVectorSchema()` creates the real table without them (it may sit on a separate database), so neither cascade fires: `CoachingStorage.deleteChunksByMaterialId()` and `deleteChunksByUserId()` delete the chunks explicitly, and `pruneDanglingChunks()` sweeps any whose material is gone. See [Schema Bootstrapping](#schema-bootstrapping).
+
 ---
 
 ### strava_connections
@@ -846,7 +848,7 @@ Entries expire after 7 days. The `idempotencyMiddleware` checks this table befor
 
 ### rate_limit_buckets
 
-Shared rate-limit counters for `server/routeUtils.ts`. Production and development route limiters store their buckets here so limits apply globally across app replicas.
+Shared rate-limit counters for the route limiters in `server/routeUtils.ts`, written through `PostgresRateLimitStore` (`server/rateLimitStore.ts`). Every environment except `NODE_ENV=test` (which uses an in-memory store) keeps its buckets here so limits apply globally across app replicas.
 
 | Column | Type | Constraints |
 |---|---|---|
@@ -882,6 +884,7 @@ Current use cases:
 - Single-use Strava OAuth state (`strava-oauth-state:*`, `server/strava.ts`), claimed atomically with `claimRuntimeCacheKey()` so a replayed callback is rejected
 - Strava webhook subscription record (`strava:webhook-subscription`, `server/stravaWebhook.ts`) and the shared background-sync cooldown after a 429 (`strava:sync-cooldown`, `server/services/stravaAutoSync.ts`)
 - Garmin 429 breaker (`garmin:breaker`) and per-user in-flight lock (`garmin:inflight:<userId>`, claimed with `claimRuntimeCacheKey()`), both in `server/garmin.ts`
+- What a USDA food-detail read lacked, per `fdcId`, kept 30 days (`usda-detail-read:*`, `server/services/nutrition/foodDetail.ts`)
 
 Gemini embeddings are **not** cached here: that cache is process-local by design (`server/gemini/client.ts`), so attacker-controlled input volume cannot grow this table.
 
@@ -932,7 +935,7 @@ A proposed rewrite of the athlete's upcoming plan, raised by the AI coach rather
 | `payload` | jsonb | Not null -- `PlanAdjustmentProposalPayload`; the changes plus their baselines |
 | `ai_source` | text | Nullable |
 | `created_at` | timestamp with time zone | Not null, default `now()` |
-| `resolved_at` | timestamp with time zone | Nullable -- set when applied or dismissed |
+| `resolved_at` | timestamp with time zone | Nullable -- set when the proposal leaves `pending` (applied, dismissed, superseded or invalidated) |
 | `apply_undo` | jsonb | Nullable -- `PlanProposalApplyUndo`, written by the apply: for each day it changed (only the athlete's pick, on a partial apply), the fields it replaced and wrote, the coach note it replaced, and, where it replaced or cleared the exercise table, the old rows whole plus a fingerprint of the table it left. Null until applied, and on proposals applied before migration `0112`, which cannot be undone |
 | `reverted_at` | timestamp with time zone | Nullable -- when the athlete undid the apply; `resolved_at` stays the apply time |
 
@@ -1015,7 +1018,7 @@ What a payload holds (`RecycleBinPayload`, discriminated on `kind`):
 - `plan_day` — the `plan_days` row, its sets/blocks/steps, and the ids of `workout_logs` whose `plan_day_id` the delete SET NULL (restore re-links the ones that still exist and re-derives the day's status).
 - `training_plan` — the `training_plans` row, every plan day (each as above), and the `workout_logs` that pointed at the plan or one of its days.
 
-Not captured: `plan_adjustment_proposals` (cascade with the plan and are not restored), and workouts removed by `POST /api/v1/workouts/combine` (their sets are moved to the merged log before the delete, so there is nothing left to snapshot — combine is permanent). `payload.version` (currently `1`) lets a later shape change migrate or refuse old items instead of mis-inserting them.
+Not captured: `plan_adjustment_proposals` (cascade with the plan and are not restored), and the manual workouts removed by `POST /api/v1/workouts/combine` (their sets are moved to the merged log before the delete, so there is nothing left to snapshot — combine is permanent for them). A combined source carrying a Strava, Garmin or Health Connect id is captured, without the sets the merged log now owns, so the device dedupe keeps treating its activity as imported (`server/services/combineWorkouts.ts`). `payload.version` (currently `1`) lets a later shape change migrate or refuse old items instead of mis-inserting them.
 
 | Column | Type | Constraints |
 |---|---|---|
@@ -1130,6 +1133,7 @@ Note: the other 17 tables — `rate_limit_buckets`, `server_runtime_cache`, `ide
 users
   |-- 1:N --> training_plans
   |             |-- 1:N --> plan_days
+  |                           |-- 1:N --> exercise_sets   (prescribed rows)
   |
   |-- 1:N --> workout_logs
   |             |-- 1:N --> exercise_sets
@@ -1160,9 +1164,10 @@ erDiagram
     users ||--o{ chatMessages : "sends"
     users ||--o{ coachingMaterials : "uploads"
     users ||--o{ customExercises : "defines"
-    users ||--|| stravaConnections : "connects"
+    users ||--o| stravaConnections : "connects"
     
     trainingPlans ||--o{ planDays : "contains"
+    planDays ||--o{ exerciseSets : "prescribes"
     workoutLogs ||--o{ exerciseSets : "has"
     workoutLogs }o--o| planDays : "links to"
     workoutLogs }o--o| trainingPlans : "belongs to"
@@ -1175,26 +1180,10 @@ Key relationships:
 - **users -> workout_logs -> exercise_sets**: A user logs workouts, each containing multiple exercise sets. Exercise sets cascade on workout deletion.
 - **workout_logs -> plan_days** (optional): A workout log may be linked to a plan day via `plan_day_id`. When a workout is logged against a plan day, the plan day's status is automatically set to `"completed"`. This FK uses `ON DELETE SET NULL` so deleting a plan day does not remove the workout log.
 - **workout_logs -> training_plans** (optional): Direct link to the plan for fast lookups, also `ON DELETE SET NULL`.
-- **users -> coaching_materials -> document_chunks**: Coaching materials are chunked and embedded for RAG. Deleting a material cascades to its chunks.
-- **users -> strava_connections**: One-to-one relationship enforced by UNIQUE constraint on `user_id`.
+- **users -> coaching_materials -> document_chunks**: Coaching materials are chunked and embedded for RAG. The chunks live on the vector database with no foreign keys, so deleting a material deletes its chunks explicitly (`CoachingStorage.deleteChunksByMaterialId()`) rather than by cascade.
+- **users -> strava_connections** / **garmin_connections**: One-to-one relationships, each enforced by a UNIQUE constraint on `user_id`.
 - **users -> chat_messages**: Conversation history for the AI coach, ordered by timestamp.
 - **users -> custom_exercises**: User-defined exercises with a unique constraint on `(user_id, name)` to prevent duplicates.
-
-```mermaid
-erDiagram
-    users ||--o{ trainingPlans : "has"
-    users ||--o{ workoutLogs : "logs"
-    users ||--o{ chatMessages : "sends"
-    users ||--o{ coachingMaterials : "uploads"
-    users ||--o{ customExercises : "defines"
-    users ||--|| stravaConnections : "connects"
-    
-    trainingPlans ||--o{ planDays : "contains"
-    workoutLogs ||--o{ exerciseSets : "has"
-    workoutLogs }o--o| planDays : "links to"
-    workoutLogs }o--o| trainingPlans : "belongs to"
-    coachingMaterials ||--o{ documentChunks : "chunked into"
-```
 
 ---
 
@@ -1203,16 +1192,19 @@ erDiagram
 ### Main Database Connection (`server/db.ts`)
 
 ```typescript
-const pool = new Pool({
+export const pool = new Pool({
   connectionString: env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30_000,       // DB_IDLE_TIMEOUT_MS
   connectionTimeoutMillis: 10_000, // DB_CONNECTION_TIMEOUT_MS
   statement_timeout: 30_000,       // DB_STATEMENT_TIMEOUT_MS
+  ssl: env.NODE_ENV === "production" && !isInternalHost ? { rejectUnauthorized: true } : false,
 });
 
 export const db = drizzle(pool, { schema });
 ```
+
+The module throws at import if `DATABASE_URL` is unset. SSL (with certificate verification) is used only in production and only for hosts outside Railway's private network: a `*.railway.internal` hostname connects without it, because Railway's internal Postgres does not support SSL. The timeouts are constants in `server/constants.ts`. The module also exports `Tx` (a Drizzle transaction) and `DbExecutor` (`db` or a `Tx`), which storage methods accept so they can join a caller's transaction.
 
 The `db` instance is the single Drizzle client used by all storage classes except for vector operations. The full schema is imported from `@shared/schema` and passed to `drizzle()` for relational query support.
 
@@ -1295,14 +1287,16 @@ const vectorUrl = env.VECTOR_DATABASE_URL || env.DATABASE_URL;
 export const vectorPool = new Pool({
   connectionString: vectorUrl,
   max: 5,
-  idleTimeoutMillis: 30_000,
-  connectionTimeoutMillis: 10_000,
-  statement_timeout: 30_000,
+  idleTimeoutMillis: 30_000,       // DB_IDLE_TIMEOUT_MS
+  connectionTimeoutMillis: 10_000, // VECTOR_DB_CONNECTION_TIMEOUT_MS
+  statement_timeout: 30_000,       // DB_STATEMENT_TIMEOUT_MS
+  ssl: env.NODE_ENV === "production" && !isInternalHost ? { rejectUnauthorized: true } : false,
 });
 ```
 
 - When `VECTOR_DATABASE_URL` is set, vector operations go to a separate Neon instance.
-- When unset, it falls back to `DATABASE_URL` (single-DB mode).
+- When unset, it falls back to `DATABASE_URL` (single-DB mode). `isVectorDbSeparate` records which mode is active, and the choice is logged at startup.
+- The SSL rule is the main pool's, applied to whichever URL the pool uses, so the single-DB fallback to a Railway-internal `DATABASE_URL` connects without SSL.
 - The pool is smaller (`max: 5`) since vector queries are less frequent but potentially longer-running.
 
 ### Vector Similarity Search
@@ -1346,7 +1340,7 @@ The whole pass is best-effort — it swallows its own errors so a vector-DB prob
 
 ### Architecture
 
-The storage layer follows a **repository pattern** with domain-oriented classes. The `IStorage` type (defined in `server/storage/IStorage.ts`) is a composed object exposing each domain class as a property:
+The storage layer follows a **repository pattern** with domain-oriented classes. The `IStorage` interface (defined in `server/storage/IStorage.ts`) is a composed object exposing each domain class as a property:
 
 ```typescript
 export interface IStorage {
@@ -1357,6 +1351,7 @@ export interface IStorage {
   planDayMoves: PlanDayMovesStorage;
   timeline: TimelineStorage;
   timelineAnnotations: TimelineAnnotationsStorage;
+  athleteFacts: AthleteFactsStorage;
   analytics: AnalyticsStorage;
   analyticsResults: AnalyticsResultsStorage;
   coaching: CoachingStorage;
@@ -1369,6 +1364,7 @@ export interface IStorage {
   weeklyReviews: WeeklyReviewsStorage;
   recycleBin: RecycleBinStorage;
   sessionStreams: SessionStreamStorage;
+  dataExport: DataExportStorage;
 }
 ```
 
@@ -1379,16 +1375,17 @@ Each domain class owns a cohesive slice of functionality:
 | Class | File | Responsibility |
 |---|---|---|
 | `UserStorage` | `server/storage/users.ts` | Users, chat, Strava/Garmin connections, custom exercises, notification bookkeeping |
-| `WorkoutStorage` | `server/storage/workouts.ts` | Workout logs, exercise sets, Strava/Garmin activity dedupe |
+| `WorkoutStorage` | `server/storage/workouts.ts` | Workout logs, exercise sets, Strava/Garmin/Health Connect activity dedupe |
 | `PlanStorage` | `server/storage/plans.ts` | Training plans, plan days, scheduling, missed-day marking |
 | `TimelineStorage` | `server/storage/timeline.ts` | Unified timeline and upcoming planned days |
 | `TimelineAnnotationsStorage` | `server/storage/timelineAnnotations.ts` | Timeline annotation bands (injury/illness/travel/rest) |
+| `AthleteFactsStorage` | `server/storage/athleteFacts.ts` | The athlete card (`athlete_facts`): list, list active, add, seed, update, delete, with the active-fact limit checked under a per-athlete advisory lock |
 | `AnalyticsStorage` | `server/storage/analytics.ts` | Weekly stats, date-range queries, missed-workout reporting |
 | `AnalyticsResultsStorage` | `server/storage/analyticsResults.ts` | Durable last-computed analytics results (Coach Insights, Race Predictor): get/upsert, engaged-user scan, atomic per-day recompute claim |
 | `CoachingStorage` | `server/storage/coaching.ts` | Coaching materials and RAG document chunks (on the vector pool) |
-| `IdempotencyStorage` | `server/storage/idempotency.ts` | Idempotency key caching (get, set, cleanup) |
-| `AiUsageStorage` | `server/storage/aiUsage.ts` | AI token usage logging and daily-spend totals |
-| `PushStorage` | `server/storage/push.ts` | Web Push subscription storage |
+| `IdempotencyStorage` | `server/storage/idempotency.ts` | Idempotency keys: get, claim, complete, release, and expired-row cleanup |
+| `AiUsageStorage` | `server/storage/aiUsage.ts` | AI token usage logging, per-user and global daily-spend totals, the 7-day prune, and the per-user list for export |
+| `PushStorage` | `server/storage/push.ts` | Web Push subscriptions and native device push tokens |
 | `MafTestStorage` | `server/storage/mafTests.ts` | MAF test results and per-workout MAF analyses (create/update, lookup and delete by workout) |
 | `ConsentStorage` | `server/storage/consent.ts` | Auditable consent decisions (record, read back for a DSAR) |
 | `NutritionStorage` | `server/storage/nutrition.ts` | The nutrition module, delegating to `nutritionFoods.ts`, `nutritionLogs.ts`, `nutritionTargets.ts`, `nutritionFavorites.ts`, `nutritionRecipes.ts` and `nutritionShared.ts` |
@@ -1397,8 +1394,9 @@ Each domain class owns a cohesive slice of functionality:
 | `WeeklyReviewsStorage` | `server/storage/weeklyReviews.ts` | Per-week athlete intents behind the weekly review |
 | `RecycleBinStorage` | `server/storage/recycleBin.ts` | Recycle bin: list, restore (single or bulk-delete batch), purge; the delete-time snapshots themselves are written by `recycleBinCapture.ts` |
 | `SessionStreamStorage` | `server/storage/sessionStreams.ts` | Session-grading streams: pending-fetch lists, the upsert, the read-budget ledger, and the unlink/disconnect purges |
+| `DataExportStorage` | `server/storage/dataExport.ts` | Read side of the GDPR data export for user-owned rows no other storage method returns whole, all uncapped |
 
-Shared query logic is extracted into helper modules: `server/storage/shared.ts` (e.g. joining exercise sets with workout dates), `planDayStatus.ts`, `timelineWindow.ts`, `absenceGuard.ts`, `exerciseSetOwners.ts`, `planRetirement.ts`, `raceDayView.ts` and `recycleBinCapture.ts` (the delete-time snapshot writers that `workouts.ts`, `plans.ts` and `bulkDeleteWorkouts.ts` call inside their own transactions). `WorkoutStorage` is a single module, `server/storage/workouts.ts`; custom exercises live on `UserStorage`.
+Shared query logic is extracted into helper modules: `server/storage/shared.ts` (e.g. joining exercise sets with workout dates), `planDayStatus.ts`, `timelineWindow.ts`, `absenceGuard.ts`, `exerciseSetOwners.ts`, `planRetirement.ts`, `raceDayView.ts`, `planSlot.ts`, `letGoGuard.ts` and `recycleBinCapture.ts` (the delete-time snapshot writers that `workouts.ts`, `plans.ts`, `healthConnectLogs.ts`, `services/bulkDeleteWorkouts.ts` and `services/combineWorkouts.ts` call inside their own transactions). `WorkoutStorage` is defined in `server/storage/workouts.ts` and binds some methods from sibling modules (`workoutLogReads.ts`, `healthConnectLogs.ts`, `exerciseSetOrder.ts`) so they still read as `storage.workouts.*`; custom exercises live on `UserStorage`.
 
 ### Composed Facade (`server/storage/index.ts`)
 
@@ -1449,9 +1447,9 @@ Adding a new storage method means editing exactly one file — the owning domain
 
 - **Upserts**: `UserStorage.upsertUser()` and `upsertStravaConnection()` use Drizzle's `onConflictDoUpdate` for idempotent writes.
 - **Cascading status updates**: a plan day's status follows its linked logs. `createWorkoutInTx` (`server/services/workoutService/workouts.ts`) and the bulk Strava insert `WorkoutStorage.createWorkoutLogs()` mark the linked plan day `"completed"`; deletes and re-links call `syncPlanDayStatusFromWorkouts` (`server/storage/planDayStatus.ts`), which recomputes it under a row lock.
-- **Token encryption**: Strava access and refresh tokens are encrypted before storage and decrypted on read.
+- **Token encryption**: Strava access and refresh tokens, and the Garmin email, password and OAuth token blobs, are encrypted (`encryptToken()`, `server/crypto.ts`) before storage and decrypted on read.
 - **Batch operations**: `CoachingStorage.replaceChunks()` batch-inserts in groups of 100 using raw SQL through the vector pool.
-- **Transactions**: `PlanStorage.deleteTrainingPlan()` and `schedulePlan()` use Drizzle transactions. `CoachingStorage.replaceChunks()` uses raw `BEGIN/COMMIT/ROLLBACK` on the vector pool.
+- **Transactions**: `PlanStorage.deleteTrainingPlan()` and `schedulePlan()` use Drizzle transactions (`schedulePlan()` joins the caller's when one is passed, as plan generation does). `CoachingStorage.replaceChunks()` uses raw `BEGIN/COMMIT/ROLLBACK` on the vector pool.
 
 ---
 
@@ -1466,6 +1464,8 @@ Three npm scripts manage migrations:
 | `pnpm run db:generate` | Generates a new SQL migration from schema changes (`drizzle-kit generate`) |
 | `pnpm run db:migrate` | Applies pending migrations to the database (`drizzle-kit migrate`) |
 | `pnpm run db:check` | Validates that the schema and migrations are in sync (`drizzle-kit check`) |
+
+CI (`.github/workflows/migrations.yml`) runs `db:check`, then `db:generate` followed by `git diff --exit-code migrations/` so a schema change without its migration fails, and applies the full chain to a fresh PostgreSQL 16 + pgvector database twice (the second run must be a no-op), checking the applied count against the journal.
 
 ### Migration Files
 
@@ -1514,22 +1514,38 @@ migrations/
   0100_amusing_moonstone.sql         # drop idx_exercise_sets_workout_log_id / _plan_day_id
   0101_heavy_rogue.sql               # drop idx_workout_structure_blocks_workout_log_id / _plan_day_id
   0102_widen_users_gender.sql        # users.gender varchar(16) -> varchar(32)
+  0103_training_plans_engine_state.sql               # training_plans.engine_state
+  ...
+  0106_plan_days_priority_and_recovery.sql           # plan_days.priority / recovery / missed_on
+  0107_plan_days_recovery_undo.sql                   # plan_days.recovery_undo
+  0108_workout_log_streams.sql                       # workout_log_streams table
+  ...
+  0115_athlete_facts.sql                             # athlete_facts table
+  ...
+  0118_plan_day_moves.sql                            # plan_day_moves table
+  ...
+  0120_workout_logs_auto_link_recording_only.sql     # workout_logs.auto_link_recording_only
+  0121_pending_proposal_unique_and_constraint_parity.sql  # one pending proposal per athlete
+  0122_food_servings_unique_and_fk_indexes.sql       # FK indexes + uq_food_servings_shared
+  ...
+  0125_device_push_tokens.sql                        # device_push_tokens table
+  0126_health_connect_ids.sql                        # health_connect_id on workout_logs / recycle_bin_items
   meta/
     _journal.json
     0000_snapshot.json
     ...
-    0102_snapshot.json
+    0126_snapshot.json
 ```
 
 - **SQL files**: Each migration contains the raw SQL statements.
 - **`meta/_journal.json`**: Tracks migration ordering and versions.
 - **`meta/NNNN_snapshot.json`**: Full schema snapshots at each migration point.
 
-Migrations `0008` through `0014` relating to `document_chunks` are no-ops on the main database (the vector DB schema is managed at startup). They contain only `SELECT 1;` placeholders.
+Migrations `0008`, `0010`, `0012`, `0013` and `0014`, which related to `document_chunks`, are no-ops on the main database (the vector DB schema is managed at startup). They contain only `SELECT 1;` placeholders. (`0009` and `0011` in that range are ordinary migrations.)
 
 Notable recent migrations:
-- `0016`: Renames exercise category from "hyrox" to "functional"
-- `0017`: Adds unique constraint on `strava_activity_id` in `workout_logs`
+- `0016`: Renames the exercise category `hyrox_station` to `functional` in `exercise_sets` and `custom_exercises`
+- `0017`: Adds the partial unique index `idx_workout_logs_user_strava_unique` on (`user_id`, `strava_activity_id`) in `workout_logs`
 - `0018`: Backfills `training_plans.start_date`/`end_date` and the workout-to-plan links
 - `0019`: Creates the `idempotency_keys` table for server-side idempotency
 - `0027`: Adds coach-note columns to `plan_days` (`ai_rationale`, `ai_note_updated_at`, `ai_inputs_used`) so the auto-coach can persist prescriptive rationale per day.
@@ -1552,7 +1568,7 @@ Notable recent migrations:
 - `0086`: Adds `users.training_constraints` — the athlete's durable injuries/equipment/scheduling limits, previously discarded after plan generation.
 - `0088`: Adds `exercise_sets.weight_unit` / `distance_unit`.
 - `0089`: Adds `training_plans.retired_on`.
-- `0091`: Dedupes `meal_targets` / `nutrition_targets` and adds the unique indexes that stop a second versioned row per effective date.
+- `0091`: Dedupes `meal_targets` / `nutrition_targets` and adds the unique indexes that stop a second versioned row per effective date; also fails all but one in-flight plan generation per athlete and adds `uq_training_plans_user_in_flight`.
 - `0092`: Adds `users.erasure_requested_at`, the point-of-no-return stamp for [account erasure](operations/account-erasure.md).
 - `0093`: Adds the device-link columns on `workout_logs` (`device_link_source`, `device_link_confidence`, `device_activity`, and the two suggestion FKs) that let a synced activity enrich or complete an existing session.
 - `0094`: Adds `workout_logs.counts_as_training`, so a non-training device import is excluded from load and adherence.
@@ -1570,12 +1586,12 @@ Notable recent migrations:
 
 In addition to Drizzle Kit migrations, `runStartupMaintenance()` in `server/maintenance.ts` runs at application startup to:
 
-1. Test the database connection (`testDatabaseConnection`)
-2. Execute Drizzle migrations (`runDrizzleMigrations`)
+1. Test the database connection (`testDatabaseConnection`): up to four attempts, each with a 15-second timeout, backing off exponentially from 2 seconds
+2. Execute Drizzle migrations (`runDrizzleMigrations`) under a non-blocking Postgres advisory lock: an instance that finds another holding it skips `migrate()`, since that one applies the same migrations
 3. Assert the critical tables exist (`assertCriticalTablesExist` in `server/migrationGuards.ts`: `users`, `workout_logs`, `plan_days`, `foods`, `analytics_results`) — throws rather than serve an empty or partial schema — and that every table and column the Drizzle schema declares is present (`assertSchemaColumnsExist`, same file; `document_chunks` excepted), so a release whose migration did not run (skipped by the migrator, as 0019 was, or rolled back) fails its deploy instead of failing every query on the new columns. Before that check, boot compares the ledger with the journal (`findUnappliedMigrations`, same file) and logs any unapplied entry by name; the check's error names it too
 4. Ensure the pgvector extension (`ensurePgvectorExtension`)
 5. Bootstrap the vector schema (`ensureVectorSchema`)
-6. Mark past planned days as missed and reset stale `isAutoCoaching` flags
+6. Mark past planned days as missed and reset `isAutoCoaching` flags older than the cron's stale threshold (`STALE_AUTO_COACHING_THRESHOLD_MS`), so a replica booting mid-deploy leaves another replica's in-flight run alone
 7. Fail plan generations left `pending`/`generating` for over an hour by a crashed worker (`failStalePlanGenerations`); the `stalePlanGenerations` cron repeats this every 10 minutes
 8. Restore the persisted AI circuit-breaker state from `server_runtime_cache` (`loadPersistedBreakerState`)
 9. Run the opt-in encryption-key rotation sweep (`maybeReencryptOnBoot`), a no-op unless `ENCRYPTION_KEY_V2` is set and `ENCRYPTION_REENCRYPT_ON_BOOT=true`
@@ -1638,16 +1654,17 @@ await db.transaction(async (tx) => {
 });
 ```
 
-The workout creation flow is a single transaction: `createWorkoutAndScheduleCoaching()` in `server/services/workoutService/workouts.ts` opens it with `db.transaction` and runs `createWorkoutInTx()` inside it, which:
+The workout creation flow is a single transaction: `createWorkoutAndScheduleCoaching()` in `server/services/workoutService/workouts.ts` opens it with `db.transaction`, runs `createWorkoutInTx()` inside it, and, when the athlete has AI coaching on, sets `users.is_auto_coaching` in the same transaction. `createWorkoutInTx()`:
 
-1. Inserts the `workoutLogs` record
+1. Inserts the `workoutLogs` record — for a plan-day log it first takes the plan day's lock, and a create with no exercises or structure of its own returns the log already on that day instead of inserting (`existingLogForPlainConfirm`)
 2. If linked to a plan day, updates `planDays` status to `"completed"` via JOIN-based update
-3. Expands the client's parsed exercises into `exerciseSets` rows (using `expandExercisesToSetRows()`) — or, when none were sent for a plan-day log, copies the day's prescribed sets and structure into the log
-4. Inserts `customExercises` for any new custom exercise names (`onConflictDoNothing`)
+3. Expands the client's parsed exercises into `exerciseSets` rows (using `expandExercisesToSetRows()`) and inserts `customExercises` for any new custom exercise names (`onConflictDoNothing`) — or, when none were sent for a plan-day log, copies the day's prescribed sets and structure into the log
+4. For a plan-day log, writes the adherence snapshot (`planned_set_count` etc.)
+5. Replaces the log's structure blocks when the request or parse resolved any
 
 Anything slow or external stays outside that transaction: the AI parse fallback (`parseExercisesFromText`, in `server/services/workoutUseCases.ts`) runs before it opens, and the auto-coach job is enqueued after commit. The reparse paths likewise call the AI provider first and then persist through a replace transaction like the one above, so old sets are never deleted without their replacements being inserted.
 
-**Custom exercise deduplication** uses a `Map` with "last-wins" strategy:
+**Custom exercise deduplication** (`extractAndDeduplicateCustomExercises()` in `server/services/workoutService/setRows.ts`) uses a `Map` with "last-wins" strategy:
 
 ```typescript
 // Single-pass deduplication using Map (O(N) instead of O(N^2))
@@ -1671,10 +1688,10 @@ for (const ex of exercises) {
 - Single-column: `scheduled_date`, `status`
 - Composite: `(plan_id, week_number)` for week-based queries, `(plan_id, status)` for filtering by plan and completion state, `(plan_id, scheduled_date)` for the date-ordered plan read
 
-**workout_logs** (12 indexes -- most heavily indexed):
+**workout_logs** (13 indexes -- most heavily indexed):
 - Single-column: `date`, `plan_day_id`, `plan_id`, `strava_activity_id`, `garmin_activity_id`, `source`
 - Composite: `(user_id, date)` for the most common query pattern (user's workouts by date), `(user_id, started_at)`. Both lead with `user_id`, so there is no standalone `user_id` index (dropped in migration 0099)
-- Partial unique: `(user_id, strava_activity_id)` and `(user_id, garmin_activity_id)` for per-user import dedupe
+- Partial unique: `(user_id, strava_activity_id)`, `(user_id, garmin_activity_id)` and `(user_id, health_connect_id)` (migration 0126) for per-user import dedupe
 - Device-link suggestions (migration 0093): `suggested_plan_day_id`, `suggested_workout_log_id`
 
 **exercise_sets** (4 indexes):
@@ -1710,7 +1727,7 @@ Every foreign-key column leads some index, so deleting a parent row never scans 
 ## Performance Considerations
 
 **Coalesced Analytics Cache:**
-The analytics routes (`server/routes/analytics.ts`) use three in-memory promise caches — exercise sets (`getExerciseSetsCoalesced`), the column-slim sets behind Personal Records (`getPersonalRecordSetsCoalesced`, keys prefixed `pr-`) and workout logs (`getWorkoutLogsCoalesced`, prefixed `wl-`) — to prevent redundant DB queries within a single process. All three are built by `createCoalescedCache()` in `server/services/analyticsRouteCache.ts`, which also exports `invalidateAnalyticsCachesForUser()`. Every workout write path calls it to drop that athlete's entries from this process's caches instead of waiting out the TTL (D10, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)): the workout and exercise-set use cases (`server/services/workoutUseCases.ts`, `server/usecases/workouts/mutateExerciseSet.usecase.ts`); the workout routes for delete, bulk delete, combine, seed-from-plan, reparse, device link and unlink, and the assisted-migration backfill; recycle-bin restore; the Strava and Garmin syncs when they import anything; reopening a completed plan day (`updatePlanDayStatus`, which deletes or unlinks its logs and releases a Strava recording); and deleting a plan or a plan day, which sets `workout_logs.plan_day_id` to NULL. Other app instances keep their own copies until the TTL runs out. These caches only coalesce duplicate DB reads and are not part of abuse prevention or AI provider-spend controls; those shared concerns use the Postgres-backed runtime-state tables above. The cache entry stores the *pending* promise, so concurrent callers on the same replica share the same in-flight query. This in-memory coalescing is separate from the durable [`analytics_results`](#analytics_results) store, which persists the last *computed* Coach Insights / Race Prediction across restarts for instant paint and the midnight recompute.
+The analytics routes (`server/routes/analytics.ts`) use three in-memory promise caches — exercise sets (`getExerciseSetsCoalesced`), the column-slim sets behind Personal Records (`getPersonalRecordSetsCoalesced`, keys prefixed `pr-`) and workout logs (`getWorkoutLogsCoalesced`, prefixed `wl-`) — to prevent redundant DB queries within a single process. All three are built by `createCoalescedCache()` in `server/services/analyticsRouteCache.ts`, which also exports `invalidateAnalyticsCachesForUser()`. Every workout write path calls it to drop that athlete's entries from this process's caches instead of waiting out the TTL (D10, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)): the workout and exercise-set use cases (`server/services/workoutUseCases.ts`, `server/usecases/workouts/mutateExerciseSet.usecase.ts`); the workout routes for delete, bulk delete, combine, seed-from-plan, reparse, device link and unlink, and the assisted-migration backfill; recycle-bin restore; the Strava and Garmin syncs when they import anything; the Health Connect sync when it imports or deletes anything (`server/routes/healthConnect.ts`); reopening a completed plan day (`updatePlanDayStatus`, which deletes or unlinks its logs and releases a Strava recording); and deleting a plan or a plan day, which sets `workout_logs.plan_day_id` to NULL. Other app instances keep their own copies until the TTL runs out. These caches only coalesce duplicate DB reads and are not part of abuse prevention or AI provider-spend controls; those shared concerns use the Postgres-backed runtime-state tables above. The cache entry stores the *pending* promise, so concurrent callers on the same replica share the same in-flight query. This in-memory coalescing is separate from the durable [`analytics_results`](#analytics_results) store, which persists the last *computed* Coach Insights / Race Prediction across restarts for instant paint and the midnight recompute.
 
 ```typescript
 // Multiple concurrent requests for the same user's analytics data
@@ -1772,25 +1789,26 @@ These types are used throughout the storage layer and API routes, ensuring that 
 
 ### Validation Schemas
 
-Request-level validation schemas are defined alongside the types in the `shared/schema/types/` modules (notably `requests.ts`):
+Request-level validation schemas are defined alongside the types in the `shared/schema/types/` modules:
 
-- `updateUserPreferencesSchema` -- validates preference updates with enum constraints
-- `chatRequestSchema` -- validates chat messages with length limits, truncates history to last 20 messages
-- `parseExercisesRequestSchema` -- validates free-text exercise parsing input
-- `importPlanRequestSchema` -- validates CSV import payloads (up to 100K characters)
-- `schedulePlanRequestSchema` -- validates start date format
-- `exercisesPayloadSchema` -- validates arrays of exercise data (up to 200 exercises)
-- `generatePlanInputSchema` -- validates AI plan generation parameters
-- `insertCoachingMaterialSchema` -- validates coaching material uploads (up to 1.5M characters)
+- `updateUserPreferencesSchema` (`users.ts`) -- validates preference updates with enum constraints
+- `chatRequestSchema` (`requests.ts`) -- validates chat messages with length limits, truncates history to last 20 messages
+- `parseExercisesRequestSchema` (`requests.ts`) -- validates free-text exercise parsing input (up to 2,000 characters)
+- `importPlanRequestSchema` (`requests.ts`) -- validates CSV import payloads (up to 100K characters)
+- `schedulePlanRequestSchema` (`requests.ts`) -- validates start date format
+- `exercisesPayloadSchema` (`workouts.ts`) -- validates arrays of exercise data (up to 200 exercises)
+- `generatePlanInputSchema` (`ai.ts`) -- validates AI plan generation parameters
+- `insertCoachingMaterialSchema` (`coaching.ts`) -- validates coaching material uploads (up to 1.5M characters)
 
 ### Enums
 
-Type-safe enums are defined in `shared/schema/enums.ts`:
+Type-safe enums are defined in `shared/schema/enums.ts` as `as const` arrays with a derived union type. They include:
 
 - `WorkoutStatus`: `"planned" | "completed" | "missed" | "skipped"`
 - `ExerciseCategory`: `"functional" | "running" | "strength" | "conditioning"`
 - `PlanDayPriority`: `"key" | "supporting" | "optional"`
 - `PlanDayRecovery`: `"folded" | "shortened" | "let_go"`
+- and others for skip reasons, meal types, device links, recycle-bin entities, session streams, chat messages, athlete facts, plan-day moves and device platforms
 
 ### Exercise Definitions
 
