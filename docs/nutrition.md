@@ -654,7 +654,10 @@ Safety properties:
   only fires when the keyword/fuzzy set is thin (< 5 hits), so it stays off the hot
   path; any failure (no key/consent/budget, vector error) degrades silently to the
   keyword results. Query embeddings are LRU-cached, and foods are embedded by a
-  bounded background cron, so repeated searches don't re-bill.
+  bounded background cron, so repeated searches don't re-bill. The cron runs every
+  30 minutes, embeds up to 200 foods a run (`embedMissingFoods`) and takes only
+  shared rows, public custom foods and the custom foods of athletes who have AI
+  consent on; ids it returns are resolved back through `getVisibleFoodsByIds`.
 - **The planned-session estimate is soft-gated the same way.**
   `/planned-session-estimate/:planDayId` must serve every athlete, because its
   deterministic and pace-personalized layers are not AI, so it carries no consent
@@ -693,15 +696,23 @@ and barcode lookup tries it ahead of Open Food Facts.
 
 | | USDA FoodData Central | Open Food Facts |
 |---|---|---|
-| Used for | Food **search** + named portions | Food **search** + **barcode** lookup |
+| Used for | Food **search** + named portions and micros (backfilled on food-detail open) | Food **search** + **barcode** lookup |
 | Endpoint | `/fdc/v1/foods/search`, `/food/{id}` | `/cgi/search.pl` (search), `/api/v2/product/{code}.json` (barcode) |
-| Auth | `USDA_API_KEY` (free) — **missing key ⇒ degraded, cached-only** | none; custom `User-Agent` required by policy |
+| Auth | `USDA_API_KEY` (free) — **missing key ⇒ USDA is skipped** (no call; search carries on with the other providers, and food detail and refresh leave the row as cached) | none; custom `User-Agent` required by policy |
 | Caching | Upserted into `foods` keyed by `(usda, fdcId)`; portions cached in `food_servings` | Upserted into `foods` keyed by `(off, barcode)` |
 | Timeout / retries | 8 s/attempt; retry 429/5xx with jitter (2 search, 1 detail) | 8 s; 2 retries (barcode), 1 retry (search — tighter ~10 req/min/IP limit); cache-first |
-| Result quality | Lab-verified; trusted as-is | Crowd-sourced; search hits pass a **relevance gate** (every query token must prefix a word in the name/brand) before being surfaced |
-| Unit handling | Per-100g already; energy nutrient IDs `1008/2047/2048`; micros read unit-filtered (mg/µg) | `*_100g` reported in **grams** → multiplied by `1000`/`1e6` to mg/mcg (the one guard against the classic 1000× error) |
+| Result quality | Lab-verified; the search request sets `requireAllWords` | Crowd-sourced; a product with no energy value and a completeness score under 0.5 is rejected (`isAcceptableOffProduct`) |
+| Unit handling | Per-100g already; energy nutrient IDs `1008/2047/2048`; micros read unit-filtered (mg/µg). A Branded food missing a per-100g macro falls back to its per-serving label value scaled by the serving's grams | Micros: `*_100g` reported in **grams** → multiplied by `1000`/`1e6` to mg/mcg (the one guard against the classic 1000× error). Energy: `energy-kcal_100g`, else the kJ field × 0.239 |
+
+Search hits from every provider, Edamam included, pass the same **relevance gate**
+in `foodSearch.ts` before being surfaced (`isRelevantMatch` in `relevance.ts`:
+every query token must prefix a word of the name or brand, or equal one up to a
+plural or a registered synonym). The local cache is not gated.
 
 The cache is refreshed lazily rather than expired (`refresh.ts`). Every upsert
+replaces the row's name, brand, serving size and macros but merges `micros` key by
+key (`upsertFoods`), so a sparse search hit doesn't wipe the micros a USDA detail
+read filled in. Every upsert
 stamps `lastFetchedAt`; a shared external row older than 60 days (or never stamped)
 is re-fetched from its source in the background when a search result or a barcode
 cache hit serves it, at most 3 per request. The athlete gets the cached row
@@ -718,7 +729,7 @@ source no longer has doesn't cost an upstream call on every response (PF13).
 |----------|-------|--------|
 | `NUTRITION_ENABLED` | server | `default "true"`. `!= "true"` ⇒ the whole `/api/v1/nutrition` tree 404s. |
 | `VITE_NUTRITION_ENABLED` | client (build) | Gates the page route + sidebar nav (`featureFlags.nutritionEnabled`, default `true`). |
-| `USDA_API_KEY` | server | Enables live food search; absent ⇒ graceful degradation. |
+| `USDA_API_KEY` | server | Enables the USDA provider (search, the food-detail portions and micros backfill, stale-row refresh); absent ⇒ USDA is skipped and search runs on Open Food Facts, plus Edamam when configured. |
 | `EDAMAM_APP_ID` / `EDAMAM_APP_KEY` | server | Optional; enable Edamam for search and barcode lookup. Env validation rejects one without the other; unset ⇒ USDA + Open Food Facts only. |
 | `NUTRITION_FUZZY_ENABLED` | server | `default "true"`. Gates the pg_trgm trigram (typo) arm of local search; `"false"` falls back to exact substring (kill switch / pre-migration). Synonyms + diacritics are unaffected. |
 | `NUTRITION_SEMANTIC_ENABLED` | server | `default "false"`. Gates **semantic (embeddings) search** — both the query-time vector lookup and the background embedding-backfill cron. Requires `AI_FEATURES_ENABLED != "false"` + `GEMINI_API_KEY`; reuses the pgvector pool (`VECTOR_DATABASE_URL`, falls back to the main DB). Safe to leave off — keyword/fuzzy search is unaffected. |
@@ -734,7 +745,7 @@ Gate `VITE_NUTRITION_ENABLED` and `NUTRITION_ENABLED` together per tier (`.env.e
 The module is heavily unit-tested, with the pure-math core (`rollup.ts`,
 `recipe.ts`, `blockView.ts`, `sessionFuelling.ts`, `micros.ts`) deliberately
 DB-free for fast, exhaustive coverage. There are co-located tests for the external
-clients (`usdaClient.test.ts`, `offClient.test.ts`), the meal parser, the route
+clients (`usdaClient.test.ts`, `offClient.test.ts`, `edamamClient.test.ts`), the meal parser, the route
 layer (`nutrition.routes.test.ts` drives the router composed by
 `registerNutritionRoutes`; `server/routes/__tests__/nutrition.partition.test.ts`
 pins the index export and the full 38-endpoint table across the sub-modules), and
@@ -823,13 +834,19 @@ The biggest unrealised value is connecting fuelling to the race itself:
   body. _Remaining:_ entry edits/deletes, the reviewed-items batch
   (`POST /logs/batch`), repeat-day and the other nutrition writes still need a
   connection.
-- **[P3] Meal templates / "save this meal".** Recipes are heavyweight for "my usual
-  breakfast". A lightweight save-a-group-of-entries-as-a-template would speed up the
-  most common logging path.
+- **[DONE] Meal templates / "save this meal".** Building a recipe by hand used to
+  be the only way to keep "my usual breakfast". A meal with two or more entries now
+  has a **Save as recipe** action (`MealSection` → `onSaveAsRecipe` in
+  `Nutrition.tsx`) that opens `RecipeBuilderDialog` prefilled with the meal's
+  entries, repeats of a food merged, under the meal's name. An empty meal offers
+  **Copy yesterday's** (`POST /logs/repeat` with a `mealType`), and each entry has
+  **Log again today** (`useQuickLog`). _Remaining:_ the saved meal is a recipe,
+  logged as one food, not a group of entries re-logged as they were.
 - **[P3] Weekly & trend views.** Intake is only visible per-day (Nutrition) and as a
   block series (Analytics). A 7-day average, adherence streak, and macro-trend view
   would aid behaviour change — and the push-notification infra already exists to nudge
-  logging streaks.
+  logging streaks (an evening logging reminder already ships, see
+  [Phase 5](#phase-5--insights--coaching)).
 - **[DONE] Remember last-used quantity per food.** Quick-add used to re-open at a
   default quantity. `GET /foods/recent` and `GET /favorites` now return each food's
   last-logged `lastQuantityG` / `lastMealType` (`FoodWithPortionMemory`), which
@@ -896,7 +913,7 @@ Hyrox athlete.
 | Cronometer capability | Our status today | Opportunity |
 |-----------------------|------------------|-------------|
 | Energy balance: TDEE = BMR + activity/exercise − intake, with a daily calorie budget | Daily in-vs-out balance on the Nutrition page (`EnergyBalanceCard`); the block view is still intake vs. load | Chart the **energy balance** across the block |
-| 84 nutrients incl. amino acids, fatty acids, omega-3:6 | **13 micros**; no amino acids / fat breakdown | **Expand the nutrient panel** |
+| 84 nutrients incl. amino acids, fatty acids, omega-3:6 | **14 micros**; no amino acids / fat breakdown | **Expand the nutrient panel** |
 | Nutrition *completeness scores* (grouped) | Per-micro `%RDI` only | Add an aggregate **day score** |
 | **Oracle** — suggest foods to fill unmet targets | None | AI-driven **gap-filling suggestions** |
 | Net carbs (carbs − fibre) | Fibre tracked, net carbs not surfaced | Trivial display add |
@@ -913,8 +930,8 @@ Concrete additions worth putting on the roadmap:
   expenditure*. `GET /summary` now returns the day's `energy`
   (`computeEnergyBalance`, `shared/energyBalance.ts`), shown by `EnergyBalanceCard`
   on the Nutrition page. Energy out is **BMR (Mifflin–St Jeor from the profile) ×
-  the sedentary multiplier + the day's measured workout calories** (Strava/Garmin
-  or manual); without them it falls back to a typical-day TDEE estimate, or to daily
+  the sedentary multiplier + the day's measured workout calories** (`workout_logs.calories`:
+  a Strava, Garmin or Health Connect import, or a manual figure); without them it falls back to a typical-day TDEE estimate, or to daily
   living alone when no session was logged. Intake − out is the balance, and the
   block is omitted when the profile lacks bodyweight, height or age. _Remaining:_
   the Analytics block view is still "intake vs. load" rather than an energy-balance
@@ -933,8 +950,9 @@ Concrete additions worth putting on the roadmap:
   leucine/EAAs — relevant to recovery) and **fatty-acid / omega-3:6** breakdowns,
   plus the remaining vitamins/minerals. USDA Foundation & SR Legacy foods already
   carry these profiles and our `foods.micros` column is a generic JSONB map, so this
-  is largely an **importer + display** change, not a schema one (`micros.ts` is the
-  single place to extend the curated set).
+  is largely an **importer + display** change, not a schema one (the curated set
+  is `MICRO_DEFS` in `server/services/nutrition/micros.ts`, mirrored for display by
+  `MICRO_DISPLAY_DEFS` in `shared/schema/micros.ts`).
 - **[P3] Daily nutrition completeness score.** Roll the per-micro `%RDI` into one or
   two grouped scores (e.g. "vitamins" / "minerals" completeness) so the athlete gets
   an at-a-glance "how complete was today" signal instead of scanning rows.
@@ -965,6 +983,18 @@ shared/schema/
                                 nutrition_targets, meal_targets, food_favorites,
                                 recipes, recipe_ingredients
   nutrition.ts                  Zod request schemas + response contracts
+  enums.ts                      MEAL_TYPES
+  micros.ts                     MICRO_DISPLAY_DEFS (the 14 micros' labels, units, RDIs)
+
+shared/
+  nutritionScaling.ts           scaleNutrition (THE scaling rule), totals, Atwater factors
+  nutritionTargets.ts           profile → target calculator; training-aware effective target
+  mealFuelling.ts               per-meal fuel targets and overrides
+  sessionFuellingTargets.ts     a session's pre/post fuelling target
+  energyBalance.ts              the day's energy in vs. out
+  fuellingCorrelation.ts        carb-target hit days vs. missed days (RPE, compliance)
+  nutritionRange.ts             NUTRITION_RANGE_MAX_DAYS, clampNutritionRange
+  plannedSessionEstimate.ts     a planned session's duration / RPE / UTSS estimate
 
 server/services/nutrition/
   types.ts                      MappedFood (source → per-100g shape)
@@ -972,6 +1002,11 @@ server/services/nutrition/
   offClient.ts                  Open Food Facts client (search + barcode)
   edamamClient.ts               Edamam Food Database client (search + barcode)
   foodSearch.ts                 Edamam + USDA + OFF + local merge, degradation flag
+  relevance.ts                  relevance gate + ranking, query tokenising, synonym expansion
+  synonyms.ts                   curated single-word food synonyms
+  semanticSearch.ts             flag-, consent- and budget-gated vector fallback for thin results
+  foodEmbeddings.ts             food_embeddings backfill, prune and vector lookup
+  utils.ts                      provider helpers + the per-request provider deadline
   foodDetail.ts                 food + lazily-enriched named servings (and USDA micros)
   barcode.ts                    cache-first barcode resolution
   refresh.ts                    lazy background re-fetch of stale cache rows
@@ -980,15 +1015,21 @@ server/services/nutrition/
   labelParser.ts                nutrition-label photo → per-100g macros (Gemini vision)
   visionParsing.ts              the Gemini vision call both photo parsers share
   energy.ts                     the day's energy balance for /summary
-  rollup.ts                     THE scaling site; daily summary math
-  recipe.ts                     ingredient list → per-100g macros
-  micros.ts                     13-micro definitions, RDIs, unit conversion
+  rollup.ts                     daily summary math over joined entries (re-exports the
+                                shared scaling rule)
+  recipe.ts                     ingredient list → per-100g macros and micros
+  micros.ts                     14-micro definitions, RDIs, unit conversion
   blockView.ts                  intake macros ⋈ training UTSS
   dailyLoad.ts                  per-day training load (UTSS) for the summary, block and range routes
   fuellingRange.ts              the target version in effect on each date of a range
   sessionFuelling.ts            pre/post-session windowing
+  nutritionSummary.ts           the 14-day summary the insights and the AI coach share
   nutritionInsightsService.ts   14-day context → reasoning model
   reminders.ts                  push-only refuel and evening-log reminders (hourly cron)
+
+server/services/sessionEstimate/
+  plannedSessionEstimate.ts     /planned-session-estimate: deterministic + run-pace + AI nudge
+  runPace.ts                    the athlete's run-pace ratio from logged runs
 
 server/routes/nutrition/
   index.ts                      feature-flag gate (404 when disabled), then
@@ -1016,12 +1057,18 @@ server/storage/nutrition.ts     NutritionStorage: the facade, binding each metho
   nutritionTargets.ts           daily targets and per-meal overrides
 server/prompts.ts               PARSE_MEAL_PROMPT, MEAL_IMAGE_PREAMBLE,
                                 PARSE_LABEL_PROMPT, NUTRITION_INSIGHTS_PROMPT
+server/prompts/nutritionContext.ts  the AI coach's fuelling section + the micro caveats
 
 client/src/pages/Nutrition.tsx  the page
 client/src/pages/nutrition/*    28 components + useQuickLog / useAiConsentGate / useLogTimezoneSync
-                                (the UI map below names the top-level surfaces)
+                                (§6 names the top-level surfaces)
 client/src/hooks/useNutrition.ts  query + mutation hooks
 client/src/lib/api/nutrition.ts   typed API client
+client/src/lib/nutritionInvalidation.ts  the query keys a food-log write refreshes
 client/src/components/workout-detail/FuellingAroundSessionPanel.tsx
+client/src/components/workout-detail/FuellingPlanPanel.tsx
 client/src/components/analytics/FuellingTab.tsx
+client/src/components/analytics/IntakeVsTrainingChart.tsx
+client/src/components/analytics/FuellingCorrelationCard.tsx
+client/src/components/timeline/FuellingDayChip.tsx
 ```

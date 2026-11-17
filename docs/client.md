@@ -138,7 +138,7 @@ A per-week retrospective at `/review`, deep-linkable through `?week=<any date in
 
 ### Nutrition (`client/src/pages/Nutrition.tsx`)
 
-Food logging and fuelling at `/nutrition`, mounted only when `featureFlags.nutritionEnabled` is on. A date navigator drives one day at a time: `DailyTotalsHeader` → `EnergyBalanceCard` (shown when the profile supports a BMR) → `FoodSearch` + `QuickAddBar` → a single `LogFoodActions` sheet (describe / snap / scan label / barcode, plus custom food, recipe and targets entry points) → one `MealSection` per meal → `MicronutrientPanel` → `MyFoodsSection` → `NutritionInsightsPanel`. Data access is centralised in `client/src/hooks/useNutrition.ts`. The component-by-component map, the AI parse flows, and the per-meal fuel targets live in [Nutrition & Fuelling § Client UI map](nutrition.md#6-client-ui-map).
+Food logging and fuelling at `/nutrition`, mounted only when `featureFlags.nutritionEnabled` is on. A date navigator drives one day at a time: `DailyTotalsHeader` → `EnergyBalanceCard` (shown when the profile supports a BMR) → `FoodSearch` + `QuickAddBar` → a single `LogFoodActions` sheet (describe / snap / scan label / barcode, plus custom food, recipe and targets entry points) → one `MealSection` for each meal that has a target or an entry → `MicronutrientPanel` → `MyFoodsSection` → `NutritionInsightsPanel`. Data access is centralised in `client/src/hooks/useNutrition.ts`. The component-by-component map, the AI parse flows, and the per-meal fuel targets live in [Nutrition & Fuelling § Client UI map](nutrition.md#6-client-ui-map).
 
 ### Settings (`client/src/pages/Settings.tsx`)
 
