@@ -49,7 +49,9 @@ provider carries on.
 The text provider layer (`config.ts`, `index.ts`, `types.ts`, `http.ts`,
 `gemini.ts`, `anthropic.ts`, `openaiCompatible.ts`) exposes a canonical
 `TextAiProvider` interface (`generateText` + `streamText`) plus the
-`generateText`/`generateJsonText`/`streamText` entry points in `index.ts`.
+`generateText`/`generateJsonText`/`streamText`/`streamTextEvents` entry points
+in `index.ts` (`streamTextEvents` also yields the model's tool calls, for
+[Chat Tools](#chat-tools)).
 The active provider is chosen by `AI_TEXT_PROVIDER`, and `getTextAiProvider()`
 builds and caches a single instance. Each request resolves a per-role model
 (`fast` vs `reasoning`) via `resolveTextAiModel()`. The shared pieces live in
@@ -99,15 +101,19 @@ Transforms free-text, voice, or photo input into structured exercise data.
 1. User submits text (e.g., "3 sets bench 225lbs x 8, then 3 miles in 24 min")
 2. The parser builds a prompt with:
    - `PARSE_EXERCISES_PROMPT` system instruction
-   - Unit awareness (kg/lbs based on user preference, with conversion rules)
-   - Custom exercise names (if any saved by the user)
-3. The selected text provider returns JSON through the provider facade's JSON mode
-4. Response is validated with `parsedExerciseSchema` (Zod)
-5. Exercises are post-processed:
-   - Known exercises get 95% confidence; unknown get 50%
-   - Unknown exercise names are mapped to `"custom"` with the original name as `customLabel`
+   - Unit awareness (kg/lbs and km/miles based on user preference, with conversion rules)
+   - Custom exercise names (if any saved by the user), escaped and fenced as data
+3. The selected text provider returns JSON through the provider facade's JSON mode (fast model, `reasoningEffort: "none"`)
+4. Each row is validated with `parsedExerciseSchema` (Zod); a malformed row is dropped with a warning, not the whole parse
+5. Exercises are post-processed (`mapValidatedExercise()` in `mapping.ts`):
+   - The model's own confidence (0-100) is kept; a row without one gets 95 when the exercise is known and 50 when it is not
+   - Unknown exercise names are mapped to `"custom"`, with the model's `customLabel`, else the original name, else a label built from the source text. A custom row the model left unlabelled is capped at 40 confidence and gets `Name` in `missingFields`
    - Invalid categories fall back to `"conditioning"`
-   - All text is HTML-sanitized
+   - Weights and distances are converted to the athlete's units from the unit the model stamped on each value
+   - `&` is rewritten to `and` in names, labels, categories and `missingFields`. The text is not HTML-encoded
+6. If no row survives validation, `heuristicFallbackRowsFromText()` (`fallback.ts`) reads rows out of the source text itself. A reply that is not JSON fails with 502 `AI_ERROR` only when that recovery also finds nothing
+
+Photo parsing (`image.ts`) sends the image to the Gemini vision model (`GEMINI_VISION_MODEL`) through `visionBreaker` under the same prompt plus an image preamble, and validates and maps the reply the same way. It has no text to fall back on.
 
 ### ParsedExercise Output
 
@@ -130,7 +136,7 @@ Transforms free-text, voice, or photo input into structured exercise data.
 
 ### API Endpoint
 
-`POST /api/v1/parse-exercises` -- Rate limited to 5/min.
+`POST /api/v1/parse-exercises` -- Rate limited to 5/min. The limit is one bucket shared with its three siblings in `server/routes/ai.ts`: `POST /api/v1/parse-workout-structure` (the same parse, returned with its `structureBlocks`, warnings and confidence), and the photo versions `POST /api/v1/parse-exercises-from-image` and `POST /api/v1/parse-workout-structure-from-image`.
 
 See also: [API Reference -- AI Routes](api-reference.md#ai-and-chat-routes)
 
@@ -186,10 +192,17 @@ A message can also carry one photo, a watch screenshot or a workout board for ex
 ```
 data: {"ragInfo": {"source": "rag", "chunkCount": 3}}   // First event
 data: {"safetyNotice": {"level": "urgent", ...}}         // Only on a safety match (see Safety)
+data: {"status": "drafting_plan"}                         // What the coach is doing, when it changes
 data: {"text": "Based on your recent..."}                 // Text chunks
 data: {"text": " training data, I recommend..."}
+data: {"planProposal": {...}}                             // Only on a proposal reply (see Plan Editing From Chat)
+data: {"factProposal": {...}}                             // Only when a fact is offered (see The Athlete Card)
 data: {"done": true}                                      // Stream complete
 ```
+
+`status` is one of `CHAT_STATUS_STEPS` (`shared/chat.ts`): `drafting_plan` while a proposal is drafted, and with [Chat Tools](#chat-tools) a lookup step (`looking_up_workouts`, `looking_up_exercises`, `looking_up_records`, `searching_notes`) followed by `thinking` once the lookup is in.
+
+A stream that does not complete ends with an error event in place of `done`: `{"error": "timeout", "reason": "…"}` when the reply passes the 5-minute cap (`SSE_MAX_DURATION_MS` in `server/routes/ai.ts`), or `{"error": "Stream error"}` when the provider call fails or a shutdown drains the stream. A client that has already disconnected is sent nothing. `consumeSSEStream()` (`client/src/lib/sseStream.ts`) throws an `SSEStreamError` on any `error` event.
 
 The server propagates an `AbortSignal` to the provider adapter when the SSE client disconnects. This cancels in-flight token generation promptly where the upstream API supports aborts. The signal is aborted from the response's `close` event when the response had not finished (the request's own `close` fires as soon as its body is read) and is passed through the streaming pipeline, plan-change drafting included.
 
@@ -209,7 +222,7 @@ data: {"text":" reducing your squat volume this week."}
 data: {"done":true}
 ```
 
-Each SSE event is separated by a double newline (`\n\n`). The first event always carries `ragInfo` metadata so the client knows which retrieval method was used. Subsequent events stream text chunks as they arrive from the selected provider. The final event carries `{"done":true}` to signal stream completion.
+Each SSE event is separated by a double newline (`\n\n`). The first event always carries `ragInfo` metadata so the client knows which retrieval method was used. Subsequent events stream text chunks as they arrive from the selected provider. The final event carries `{"done":true}` to signal stream completion, or an `error` event when the stream was cut short (see above).
 
 On the client side, text chunks are buffered and rendered via `requestAnimationFrame` to avoid layout thrashing during rapid chunk delivery. On the server side, the route handler propagates an `AbortSignal` to cancel the provider stream when the client disconnects, preventing unnecessary token generation and API costs where supported.
 
@@ -224,7 +237,7 @@ The server owns the conversation. Each send carries two client-made UUIDs, `user
 - **A retry** resends under the same `userMessageId`, which is saved once (`saveChatMessageOnce` is an insert that does nothing on a conflict), and names the failed reply as `replaceAssistantId`. The server deletes it, if any of it was saved, before reading the history.
 - The non-streaming route saves both turns only once the reply exists.
 
-A request without the ids (a tab opened before the deploy) keeps the old path: its own `history`, which the server sanitises, and saves through `POST /api/v1/chat/message`. The Coach panel still saves its own messages that way (a suggestions request, an apply confirmation), and the coach now reads them too.
+A request without the ids (a tab opened before the deploy) keeps the old path: its own `history` (the last 20 turns, which the server sanitises and fits to the same 30,000-character window as a saved conversation, `fitHistoryWindow()`), and saves through `POST /api/v1/chat/message`. The Coach panel still saves its own messages that way (a suggestions request, an apply confirmation), and the coach now reads them too.
 
 **Threads.** Each workout has its own conversation. A message from the workout-detail chat is saved with that workout's plan day and log (`focus_plan_day_id`, `focus_workout_log_id`), and the coach reads only the rows for that workout: a row matches either id, so a planned day's thread carries on once the day is logged. The Coach panel's general conversation is every row with neither. The workout chat loads its own thread (`GET /api/v1/chat/history?focusPlanDayId=…&focusWorkoutLogId=…`), and its header names the session and its day. Before this, the workout chat showed and sent the whole global history, so a question about Tuesday's session came with unrelated conversations. A session's handover note is saved into the thread it summarises. Clearing the chat history clears every thread.
 
@@ -235,7 +248,7 @@ A request without the ids (a tab opened before the deploy) keeps the old path: i
 
 **A new session.** The first message after a break starts a new session. The coach gets a short handover note instead of the earlier turns: a fast-model call (`CHAT_SESSION_SUMMARY_PROMPT`, no thinking, feature `chat_summary`) over the previous session and the note that session started with, so older context carries forward. The note is saved as a `kind: "summary"` row, which every later message in the session reuses, and goes into the system prompt as an EARLIER CONVERSATION block, marked as data. The call runs alongside the context build rather than in front of it. If it fails, the note falls back to the athlete's last three messages plus the earlier note.
 
-**What each row keeps** (migration `0111_chat_message_metadata`): `kind` (`text`, `proposal` or `summary`), the `proposal_id` a proposal reply carried (set to null if the proposal is deleted), the `safety_notice` shown above the reply, its `rag_info` (source, excerpt count and material titles, never the excerpts) and the workout the athlete was chatting from (`focus_plan_day_id`, `focus_workout_log_id`). A reload therefore shows the safety notice and the "From your coaching notes" chip again.
+**What each row keeps** (migration `0111_chat_message_metadata`): `kind` (`text`, `proposal` or `summary`; `rolling` since `0113_chat_message_rolling_note`), the `proposal_id` a proposal reply carried (set to null if the proposal is deleted), the `safety_notice` shown above the reply, its `rag_info` (source, excerpt count and material titles, never the excerpts) and the workout the athlete was chatting from (`focus_plan_day_id`, `focus_workout_log_id`). A reload therefore shows the safety notice and the "From your coaching notes" chip again. Later migrations added `feedback` (the thumbs), `fact_proposal` (a fact offered for the athlete card) and `attachment` (what a photo showed).
 
 **The client** (`useChatSession`) sends the ids and no history, saves nothing itself, and refreshes the saved-history query after each send so the next surface that mounts sees the turns. `GET /api/v1/chat/history` returns each proposal reply with its proposal and current status, so its card renders at that turn: Apply and Dismiss while pending, a list of the changes once applied, and folded away once dismissed, replaced or out of date (`useLiveProposal` re-reads one after an apply, a dismiss or a newer proposal). The pending card trails the chat only when its turn isn't loaded. A surface loads the newest 50 rows of its thread; while the server returns an older-page cursor, "Load older messages" above the oldest one reads the page before it (`useOlderChatHistory`, CL56). Day separators ("Today", "Yesterday", "Tue, 29 Sep") mark where the date changes, since bubbles show only the time, and a summary row renders as a "New conversation" divider whose note the athlete can open.
 
@@ -268,8 +281,8 @@ In production, `chunks` and `fallbackReason` are stripped by `sanitizeRagInfo()`
 
 On the streaming route (`POST /api/v1/chat/stream`), a message asking for a plan change gets a structured proposal instead of a prose reply:
 
-1. **Intent gate.** A free check (`mayRequestPlanEdit()`) decides whether to classify at all: a keyword scan (`hasPlanEditKeywords()`: day names, "move", "skip", "easier", "travel", taking a change back ("undo", "revert", "put it back", "change it back", "back to how it was"), and so on), or a short confirmation ("yes please", "go ahead") when the coach's last turn offered a change ("Want me to move your long run to Saturday?"). `classifyPlanEditIntent()` then asks the fast model, with the last two user turns as context, plus the coach's offer for a confirmation. The proposal generator already sees the recent conversation, so it makes the change that was offered. It needs nothing from the training context, so the route starts it alongside `buildAIContext()` rather than after. Only `plan_modification` at confidence ≥ 0.7 proceeds. A request can opt out with `planEditing: false`, a red-flag safety match skips the gate entirely (see [Safety](#safety)), and any error in this branch falls back to the normal chat stream.
-2. **Proposal.** `createPlanAdjustmentProposal()` shows the reasoning model (`PLAN_ADJUSTMENT_PROMPT`) up to 28 upcoming planned days, each date with its weekday and how far it is from today ("2026-10-04 (Sunday, in 2 days)"), and the RECENT PLAN CHANGES block (see step 6). Changes to days outside that set are dropped, as are `focus`/`mainWorkout`/`accessory` edits to structure-block (EMOM/AMRAP) days. A red-flag safety signal answers with the safety escalation note instead; no upcoming days, or no change surviving the checks, answers in plain text; a failed generation falls back to the normal chat stream. Otherwise the proposal is stored as `pending` in `plan_adjustment_proposals` (superseding any earlier pending one) and the stream sends its summary text plus a `planProposal` event.
+1. **Intent gate.** A free check (`mayRequestPlanEdit()`) decides whether to classify at all: a keyword scan (`hasPlanEditKeywords()`: day names, "move", "skip", "easier", "travel", taking a change back ("undo", "revert", "put it back", "change it back", "back to how it was"), and so on), or a short confirmation ("yes please", "go ahead") when the coach's last turn offered a change ("Want me to move your long run to Saturday?"). `classifyPlanEditIntent()` then asks the fast model, with the last two user turns as context, plus the coach's offer for a confirmation. The proposal generator already sees the recent conversation, so it makes the change that was offered. It needs nothing from the training context, so the route starts it alongside `buildAIContext()` rather than after. Only `plan_modification` at confidence ≥ 0.7 proceeds. A request can opt out with `planEditing: false`, a red-flag safety match skips the gate entirely (see [Safety](#safety)), and an error in this branch falls back to the normal chat stream unless part of a proposal's summary is already on screen (step 2).
+2. **Proposal.** `createPlanAdjustmentProposal()` shows the reasoning model (`PLAN_ADJUSTMENT_PROMPT`) up to 28 upcoming planned days, each date with its weekday and how far it is from today ("2026-10-04 (Sunday, in 2 days)"), and the RECENT PLAN CHANGES block (see step 6). Changes to days outside that set are dropped, as are `focus`/`mainWorkout`/`accessory` edits to structure-block (EMOM/AMRAP) days. A red-flag safety signal answers with the safety escalation note instead; no upcoming days, or no change surviving the checks, answers in plain text; a failed generation falls back to the normal chat stream. The stream sends a `drafting_plan` status, then the summary as the model writes it (`streamPlanAdjustment()` in `server/gemini/planAdjustmentService.ts`), so a draft that fails once some of the summary is on screen ends the reply with a fixed "I couldn't draft that change just now" line rather than a second answer. Otherwise the proposal is stored as `pending` in `plan_adjustment_proposals` (superseding any earlier pending one) and the stream sends a `planProposal` event after the summary. A draft cut off by a Stop, a disconnect or the stream deadline stores no proposal; a reply cut off just after its proposal was stored leaves it `pending`, never auto-applied.
 3. **Apply or dismiss.** The athlete decides via `POST /api/v1/plan-proposals/:id/apply` or `/dismiss` (see [API Reference → Plan Proposal Routes](api-reference.md#plan-proposal-routes)). A proposal holds at most one change per day, and with more than one change the card has an Include toggle on each, so the athlete can apply only some (`planDayIds`). Apply re-checks every day it will write first: if any is no longer `planned`, has changed since the proposal was built, or would be left on a date before the athlete's today, the whole proposal is marked `invalidated` (409 `stale`); `GET /api/v1/plan-proposals/pending` expires a proposal the same way once one of its days has passed. Otherwise table-backed days whose `mainWorkout`/`accessory` text changes are re-parsed into structured rows, the changes are written in one transaction, and the proposal becomes `applied`, with a record of what each day's write replaced (`apply_undo`).
 4. **Undo.** For a week after an apply, the card offers Undo (`POST /api/v1/plan-proposals/:id/undo`). Each day's fields, coach note and exercise table go back to what they were, but only where they still read what the apply wrote: a field the athlete has edited since, a newer coach note, an exercise table changed since, or a day that is no longer planned stays as it is, and the reply names those days. The proposal becomes `reverted`. This is the rule missed-session recovery's undo follows (`server/services/missedRecovery/undo.ts`); the proposal's version is `server/services/planProposalUndo.ts`.
 5. **Auto-apply.** With the `coachAutoApplyPlanChanges` preference on (Settings → "Auto-Apply Chat Plan Changes", default off), the proposal is applied as soon as it is created; if applying declines or throws, the reply still carries the card with its status (pending, or invalidated) for the athlete to retry or dismiss. An auto-applied proposal arrives with its Undo, since it changed the plan without a click.
@@ -301,7 +314,7 @@ Behind `AI_CHAT_TOOLS` (default `false`, see [Environment Reference](env-referen
 
 `ai_usage_logs` records what each chat call cost. Three things record whether it helped (AI coach chat review, I23):
 
-- **The `[chat] turn` log line.** Every streamed reply logs one info line when it ends, with no message text: `mode` (`classic` or `tools`), `outcome` (`prose`, `proposal`, `error` or `aborted`), `regenerate` (a retry of a failed reply), `ttftMs` (request to first reply text, or to the proposal summary), `contextMs` (request to the training context and retrieval being ready), `totalMs`, `planEditGate` (`closed`, or `open` with `planEditIntent` and `planEditConfidence`: the classifier's verdict), `toolCalls`, `proposal` (what drafting returned: `proposal`, `chat_fallback`, `generation_failed` or `error`) with `proposalId`, `replyChars`, `retrieval`, `safetyNotice` and `factOffered` (the category of a fact offered for the [athlete card](#the-athlete-card), never its words). The classifier's hit rate is the share of open gates it called a plan edit; its false positives show as `chat_fallback` drafts and as proposals later dismissed.
+- **The `[chat] turn` log line.** Every streamed reply logs one info line when it ends, with no message text: `mode` (`classic` or `tools`), `outcome` (`prose`, `proposal`, `error` or `aborted`), `regenerate` (a retry of a failed reply), `ttftMs` (request to first reply text, or to the proposal summary), `contextMs` (request to the training context and retrieval being ready), `totalMs`, `planEditGate` (`closed`, or `open` with `planEditIntent` and `planEditConfidence`: the classifier's verdict), `toolCalls`, `proposal` (what drafting returned: `proposal`, `chat_fallback`, `generation_failed`, `aborted` or `error`) with `proposalId`, `replyChars`, `retrieval`, `safetyNotice` and `factOffered` (the category of a fact offered for the [athlete card](#the-athlete-card), never its words). The classifier's hit rate is the share of open gates it called a plan edit; its false positives show as `chat_fallback` drafts and as proposals later dismissed.
 - **Thumbs.** A coach reply the server saved, loaded from the history or finished in this session, shows Helpful and Not helpful buttons; pressing the chosen one again clears it. `PATCH /api/v1/chat/messages/:id` stores it in `chat_messages.feedback` (migration `0114`); the UI updates at once and puts the old rating back with a toast if the save fails.
 - **The report.** `pnpm tsx script/chat-quality-report.ts [--days N]` (default 30) prints, for proposals drafted in the window, how many were applied (and how many only partly, and how many undone), dismissed, went out of date or were replaced, and, for coach replies, how many were rated and how. Read-only and aggregate.
 
@@ -315,21 +328,24 @@ Automatically adjusts upcoming plan days after a workout is completed.
 
 ### Flow
 
-1. **Trigger:** Five events queue an `auto-coach` pg-boss job through `server/services/autoCoachQueue.ts`: a workout created, a logged workout moved to another date, sets edited on an existing workout log, a plan day completed, and a plan day rescheduled (see [What Triggers A Pass](ai-coach-auto-regulation-flow.md#what-triggers-a-pass)). Every producer shares the singleton key `auto-coach:<userId>` with a 60-second window, so a burst of edits collapses into one pass per athlete. Only workout creation (`POST /api/v1/workouts`, via `createWorkoutAndScheduleCoaching()`) also sets `isAutoCoaching = true`, in the same transaction as the insert and only when `aiCoachEnabled`.
+1. **Trigger:** Five events queue an `auto-coach` pg-boss job through `server/services/autoCoachQueue.ts`: a workout created, a logged workout moved to another date, sets edited on an existing workout log, a plan day completed, and a plan day rescheduled (see [What Triggers A Pass](ai-coach-auto-regulation-flow.md#what-triggers-a-pass)). Every producer shares the singleton key `auto-coach:<userId>` with a 60-second debounce (`queue.sendDebounced`), so a burst of edits collapses into one pass per athlete, and a trigger that lands after that pass has started queues one more pass in the next window rather than being dropped. Only workout creation (`POST /api/v1/workouts`, via `createWorkoutAndScheduleCoaching()`) also sets `isAutoCoaching = true` up front, in the same transaction as the insert and only when `aiCoachEnabled`; for the other triggers the flag goes up when the worker starts the pass (step 3).
 2. **Client polling:** The `useAuth` hook polls `isAutoCoaching` every 2 seconds (max 5 minutes) to show a loading indicator.
 3. **`triggerAutoCoach(userId)`:**
    - Checks if AI coach is enabled; if not, returns `{ adjusted: 0 }` (the `finally` block still clears the flag).
    - Checks the rolling 24h AI budget. The budget gates the model's pass only: over budget, the two rule-based stages below still run.
+   - Sets `isAutoCoaching = true`.
    - Calls `buildTrainingContext()`, which already fetches the active plan, upcoming planned days, and recent timeline (no duplicate `getActivePlan` / `getTimeline` calls).
    - Maps upcoming planned workouts (those with a `planDayId`) into the suggestion-generator shape.
-   - Runs the rule-based stages: the load governor's fatigue and workload edits, then the [workout engine's plan adaptation](#adapting-the-plan-to-logged-sessions) to the athlete's latest logs (skipping any day the governor rewrote). The days either stage changes are kept out of the model's suggestions and review notes. Over budget, with no text provider configured for the reasoning model both of the model's calls run on (a missing API key, no reasoning model, or `AI_FEATURES_ENABLED=false`; `isTextAiProviderConfigured("reasoning")`), or with nothing planned this week, only these stages are applied and the job completes: a configuration error fails every call the same way, so a retry could not help.
+   - Runs the rule-based stages: the load governor's fatigue and workload edits, then the [workout engine's plan adaptation](#adapting-the-plan-to-logged-sessions) to the athlete's latest logs (skipping any day the governor rewrote). The days either stage changes are kept out of the model's suggestions and review notes. Over budget, with no text provider configured for the reasoning model both of the model's calls run on (a missing API key, no reasoning model, or `AI_FEATURES_ENABLED=false`; `isTextAiProviderConfigured("reasoning")`), or with no upcoming planned day, only these stages are applied and the job completes: a configuration error fails every call the same way, so a retry could not help.
    - Retrieves coaching materials via RAG (or legacy fallback).
-   - Calls `generateWorkoutSuggestions()` with the training context, upcoming workouts, plan goal, and coaching materials, then `generateReviewNotes()` for the days the model left alone. Either call throws on a provider, breaker, timeout or unreadable-reply failure; `[]` only ever means the model looked and found nothing to change.
-   - Runs each suggestion through the safety layer (`applySafetyLayerToSuggestions`) and the modification guard (`shouldSuppressRepeatedFatigueReduction`) before applying.
-   - Applies surviving modifications and review notes atomically inside a single `db.transaction()`.
+   - Calls `generateWorkoutSuggestions()` with the training context, upcoming workouts, plan goal, and coaching materials. The call throws on a provider, breaker, timeout or unreadable-reply failure; `[]` only ever means the model looked and found nothing to change.
+   - Runs each suggestion through the safety layer (`applySafetyLayerToSuggestions`) and the modification guard (`shouldSuppressRepeatedFatigueReduction`).
+   - Also drops: a suggestion for a day a rule-based stage already changed; one for a race-derived day (the race, its shakeout, the recovery after it), which no stage writes and which gets no review note either; an accessory-only `replace` on a table-backed day, because the exercise table cannot be scoped to its accessory rows; and a `mainWorkout`/`accessory` suggestion for a table-backed day that does not parse into exercise rows (`parseStructuredPlanDaySuggestionRows()`). The last two leave their day to the review-note pass.
+   - Calls `generateReviewNotes()` for the days nothing changed, which throws on the same failures as the suggestions call. When the safety scan found a red-flag symptom or heart-rate medication, those days get the fixed safety note (`buildSafetyReviewNote()`) and the model is not asked.
+   - Applies surviving modifications and review notes atomically inside a single `db.transaction()`. The transaction first serializes the athlete's passes with an advisory lock and locks the days it will write (`lockAutoCoachWriteTargets()` in `server/services/autoCoachWriteGuard.ts`): a day whose prescription changed since the pass read it is left alone, and the plan adaptation is dropped whole if any of its days or the plan's engine state changed.
    - **A failed model call** (AI8, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)). When the suggestions call fails, the pass still writes the rule-based stages and any safety note (which needs no model), writes no review notes (nothing was weighed, so no "the plan still fits" note), and then fails the job so pg-boss retries it, unless the call failed for want of configuration: the suggestion service passes an `AiConfigurationError` through unwrapped, and the job completes as it would had the pre-check caught it. When the suggestions call succeeds and only the review-note call fails, the model's changes are kept, the days it left alone get no note this pass, and the job completes: a retry would re-run the suggestions on days they already changed. A manual request (timeline suggestions, a coach-note refresh) reports a configuration error as the AI kill switch's `503 AI_FEATURES_DISABLED` (`rethrowCoachCallFailure` in `server/gemini/suggestionService.ts`) and any other failure as its classified AI error.
    - Resets `isAutoCoaching = false` in a `finally` block.
-4. **Suggestion application:** Suggestions specify a `targetField` (`mainWorkout`, `accessory`, or `notes`) and an `action` (`replace` or `append`). A text append written by the auto-coach goes on a new line prefixed with `[AI Coach]` (`buildUpdateValue()` in `coachService.ts`). A suggestion the athlete applies by hand (`POST /api/v1/timeline/ai-suggestions/apply` → `applyTimelineAiSuggestion()` in `server/services/aiSuggestionService.ts`) is appended after a blank line, prefixed with `AI suggestion:`.
+4. **Suggestion application:** Suggestions specify a `targetField` (`mainWorkout`, `accessory`, or `notes`) and an `action` (`replace` or `append`). An append goes through `shared/coachNotes.ts` (`buildUpdateValue()` in `coachService.ts`): a `notes` cue becomes one `[AI Coach]` line after the athlete's own text (`appendCoachCue()`), and appended `mainWorkout`/`accessory` work becomes an `[AI Coach]` block on a new line (`appendCoachBlock()`). Neither adds text that is already there, and a newer load-governor cue replaces the older one. On a table-backed day a `mainWorkout` or `accessory` suggestion is written to the exercise table as rows; a `replace` there also rewrites `mainWorkout` from the recommendation and clears `accessory` and `notes`, which described the rows it replaced. A suggestion the athlete applies by hand (`POST /api/v1/timeline/ai-suggestions/apply` → `applyTimelineAiSuggestion()` in `server/services/aiSuggestionService.ts`) appends through the same two helpers; `parseCoachNotes()` still reads the `AI suggestion:` prefix that path used to write.
 
 ### Repeated-Modification Guard
 
@@ -373,9 +389,10 @@ For a sequence diagram of the full upload → chunk → embed → persist path, 
 2. **Chunking:** `chunkText(text)` splits content into overlapping chunks:
    - **Chunk size:** Configurable via `RAG_CHUNK_SIZE` (default 600 chars).
    - **Overlap:** Configurable via `RAG_CHUNK_OVERLAP` (default 100 chars).
-   - **Boundary detection:** Prefers breaking at paragraph boundaries (`\n\n`), then sentence boundaries (`. `), falling back to raw character limit.
-   - The material title is prepended to the first chunk for semantic context.
-3. **Embedding:** Each chunk is embedded via `generateEmbeddings()` (Gemini `gemini-embedding-001`, 3072 dimensions). Processed in batches of 5 with 200ms delay.
+   - **Boundary detection:** Prefers breaking at paragraph boundaries (`\n\n`), then sentence boundaries (`. `), when one falls in the second half of the chunk, falling back to raw character limit.
+   - The material title is prepended to the first chunk's text for embedding only, for semantic context; the stored chunk is the text as chunked.
+   - A material that would produce more than 3,000 chunks (`MAX_CHUNKS_PER_MATERIAL`) fails with an error instead of being embedded.
+3. **Embedding:** Each chunk is embedded via `generateEmbeddings()` (Gemini `gemini-embedding-001`, 3072 dimensions). Processed in batches of 5 with 200ms delay. Identical chunk texts are embedded once.
 4. **Storage:** Chunks and embeddings are stored in the `document_chunks` table. Old chunks are replaced transactionally via `storage.coaching.replaceChunks()`.
 
 ### Embedding Trigger
@@ -383,6 +400,8 @@ For a sequence diagram of the full upload → chunk → embed → persist path, 
 Embedding is triggered asynchronously via pg-boss queue (`embed-coaching-material` job) when:
 - A coaching material is created
 - A coaching material's content or title is updated
+
+The worker (`processEmbedCoachingMaterialJob()` in `server/queue.ts`) skips the job when the material has since been deleted or the athlete has turned AI processing off.
 
 ### Retrieval
 
@@ -392,9 +411,9 @@ Embedding is triggered asynchronously via pg-boss queue (`embed-coaching-materia
 
 1. Check if the user has any document chunks (`storage.coaching.hasChunksForUser()`).
 2. If chunks exist, verify embedding dimensions match (detects model changes).
-3. Generate a query embedding and search via `storage.coaching.searchChunksByEmbedding()` (cosine distance, top-6 by default). The search is exact over the athlete's own chunks: it does not use the HNSW index, which every athlete shares and which could return fewer than six of theirs once other athletes' chunks were filtered out. Semantic results further than `RAG_MAX_COSINE_DISTANCE` (default 0.6) from the query are dropped; pinned principles never are.
+3. Generate a query embedding and search via `storage.coaching.searchChunksByEmbedding()` (cosine distance, top-6 by default). The search is exact over the athlete's own chunks: it does not use the HNSW index, which every athlete shares and which could return fewer than six of theirs once other athletes' chunks were filtered out. Semantic results further than `RAG_MAX_COSINE_DISTANCE` (default 0.6) from the query are dropped; pinned principles never are. Those are chunks of the athlete's `principles` materials: up to 3 of the 6 slots (`MAX_PINNED_PRINCIPLE_CHUNKS`) go to them first, ahead of the semantic results and out of the same budget. A chunk whose material no longer exists on the main DB is left out.
 4. If RAG succeeds, return chunks with `ragInfo.source = "rag"`. Each excerpt opens with the title of the material it came from (`Source: …`), the prompt asks the coach to name it when its advice rests on one, and `ragInfo.sources` lists the titles.
-5. If RAG fails (no chunks, dimension mismatch, retrieval error), fall back to legacy full-text coaching materials with `ragInfo.source = "legacy"`.
+5. If RAG fails (no chunks, no kept results, dimension mismatch, retrieval error), fall back to legacy full-text coaching materials with `ragInfo.source = "legacy"`. `buildCoachingMaterialsSection()` puts their text in the prompt, cut off at 8,000 characters in total.
 6. If no coaching materials exist at all, return `ragInfo.source = "none"`.
 
 Chat decides the query first (`chatRetrievalQuery()`, `server/services/chatRetrievalQuery.ts`). A message that is only thanks, acknowledgement or emoji retrieves nothing (`ragInfo.source = "none"`), and a short or pronoun-led follow-up ("what about for the sled?") searches with the previous athlete turn in front of it. Anything else searches with the message itself.
@@ -409,37 +428,39 @@ flowchart TD
     B -- no --> F[listCoachingMaterials]
     B -- yes --> C{storedDim == EMBEDDING_DIMENSIONS?}
     C -- "no (dimension_mismatch)" --> F
-    C -- "null (no_embeddings)" --> D[vectorSearch top-6]
+    C -- "null (no stored dimension)" --> D[vectorSearch top-6]
     C -- yes --> D
     D --> E{results > 0?}
     E -- yes --> G["return RAG\nsource='rag'"]
-    E -- "no (no_matching_chunks)" --> F
+    E -- "no (no_matching_chunks, or no_embeddings when storedDim is null)" --> F
     F --> H{materials.length > 0?}
     H -- yes --> I["return legacy\nsource='legacy'"]
     H -- no --> J["return none\nsource='none'"]
     A -. "catch (retrieval_error)" .-> F
 ```
 
-**fallbackReason values:**
+The tree starts once there is a query: a chat turn with nothing to retrieve for (`chatRetrievalQuery()` returned null) never calls `retrieveCoachingContext()`, and `buildAIContext()` reports `source='none'` without reading the materials.
+
+**fallbackReason values** (each is the start of the string; a detail follows the colon):
 
 | Value | Trigger |
 |-------|---------|
 | `dimension_mismatch` | Stored embedding dimension differs from `EMBEDDING_DIMENSIONS` (model changed). Fix by re-embedding via settings. |
-| `no_embeddings` | Chunks exist in the database but none have embedding vectors yet. |
-| `no_matching_chunks` | Vector search executed successfully but returned 0 results for the query. |
+| `no_embeddings` | The search returned 0 results and no stored embedding dimension could be read: chunks exist in the database but none have embedding vectors yet. |
+| `no_matching_chunks` | Vector search executed successfully but kept 0 results for the query: nothing within `RAG_MAX_COSINE_DISTANCE`, and no pinned principles. |
 | `retrieval_error` | An exception was thrown during the retrieval attempt (network, database, etc.). |
 
 ### RAG Status
 
 `GET /api/v1/coaching-materials/rag-status` returns diagnostic info:
 - Per-material chunk counts and embedding status
-- Embedding API health (probes with a test embedding)
+- Embedding API health (probes with a test embedding; the result is cached for 5 minutes)
 - Dimension mismatch detection (stored vs. expected)
 - Total chunk count
 
 ### Re-embedding
 
-`POST /api/v1/coaching-materials/re-embed` re-chunks and re-embeds all materials. Uses `Promise.allSettled()` for resilience -- individual failures don't block others.
+`POST /api/v1/coaching-materials/re-embed` re-chunks and re-embeds all materials, at most 3 at a time (`REEMBED_CONCURRENCY`). Uses `Promise.allSettled()` for resilience -- individual failures don't block others.
 
 See also: [Database -- documentChunks table](database.md#schema-tables)
 
@@ -468,14 +489,14 @@ Generates structured multi-week training plans via the configured text provider.
 
 ### Flow
 
-Generation is asynchronous. `POST /api/v1/plans/generate` refuses a second in-flight generation for the same athlete (409 `PLAN_GENERATION_IN_PROGRESS`), creates the plan row with `generationStatus: "pending"` (`createPendingPlan()`), enqueues a `plan-generation` pg-boss job (no retries; see [Integrations → Job Types](integrations.md#job-types)), and returns `202` with that stub. The client polls `GET /api/v1/plans/:id/generation-status` every 3 s (`useGeneratePlan`). It stops after 20 minutes, or after 30 s of failed reads, and says so; the generate dialog can be closed while it polls, and the generation carries on. The worker runs `executePlanGeneration()`:
+Generation is asynchronous. `POST /api/v1/plans/generate` refuses a second in-flight generation for the same athlete (409 `PLAN_GENERATION_IN_PROGRESS`), creates the plan row with `generationStatus: "pending"` (`createPendingPlan()`), enqueues a `plan-generation` pg-boss job (no retries; see [Integrations → Job Types](integrations.md#job-types)), and returns `202` with that stub. The client polls `GET /api/v1/plans/:id/generation-status` every 3 s (`useGeneratePlan`). It stops after 20 minutes, or after 30 s of failed reads, and says so; the generate dialog can be closed while it polls, and the generation carries on. The worker (`processPlanGenerationJob()` in `server/queue.ts`) marks the plan `failed` without generating if the athlete has turned AI processing off since queueing, and otherwise runs `executePlanGeneration()`:
 
 1. Marks the plan `generating` and gathers calibration (`server/services/planGenerationCalibration.ts`) from one read of the last 70 days: the athlete's current training-load posture (for the opening week), per-exercise load anchors, and the [exercise selection brief](#exercise-selection-brief) (goal lens, familiar exercises, ranked needs with candidate exercises, constraint substitutes, race standards, primary lifts), plus declared absences inside the plan window, and the [workout engine](#workout-engine)'s plan: weekly rhythm, primary-lift targets for every week, run paces and volume, and station doses. Each piece degrades on its own: an unreadable history drops the posture and anchors, but the brief is still built from the goal, focus areas, constraints and experience level, and the engine still lays out the rhythm, effort-based lift targets and station doses.
-2. Splits the plan into 2-week chunks (`PLAN_GENERATION_CHUNK_WEEKS`) and generates them in parallel, at most 3 at a time (`pLimit(PLAN_CHUNK_CONCURRENCY)`). Each chunk is one JSON-mode request to the reasoning model with the prompt from `buildGenerationPrompt()` for its week range, and a 5-minute timeout (`PLAN_GENERATION_AI_TIMEOUT_MS`). Because the chunks cannot see each other, every chunk receives the same shared state: the load anchors, the exercise selection brief, and a **program blueprint** (`server/services/planBlueprint.ts`) — the primary lifts for the whole plan, the training blocks, the deload weeks (one at ~50% for plans of 6-11 weeks, every 4th week for longer plans, never in the final three weeks), and each week's phase from `computePlanPhase()`, the same rule the auto-coach later reviews those weeks by. Each chunk also gets its slice of the **WORKOUT ENGINE TARGETS** (`server/prompts/workoutEngine.ts`): the weekly rhythm, the primary lifts' estimated 1RMs, and for each of its weeks every session's content with the lifts' exact sets, reps, loads, effort and rest, the run sessions at the athlete's paces, and the station doses for the phase.
+2. Splits the plan into 2-week chunks (`PLAN_GENERATION_CHUNK_WEEKS`) and generates them in parallel, at most 3 at a time (`mapLimitedUntilFailure()` with `PLAN_CHUNK_CONCURRENCY`); the first chunk to fail cancels the calls still running and the chunks not yet started. Each chunk is one JSON-mode request to the reasoning model with the prompt from `buildGenerationPrompt()` for its week range, and a 5-minute timeout (`PLAN_GENERATION_AI_TIMEOUT_MS`). Because the chunks cannot see each other, every chunk receives the same shared state: the load anchors, the exercise selection brief, and a **program blueprint** (`server/services/planBlueprint.ts`) — the primary lifts for the whole plan, the training blocks, the deload weeks (one at the plan's midpoint for plans of 6-11 weeks, every 4th week for longer plans, never in the final three weeks), and each week's phase from `computePlanPhase()`, the same rule the auto-coach later reviews those weeks by. Each chunk also gets its slice of the **WORKOUT ENGINE TARGETS** (`server/prompts/workoutEngine.ts`): the weekly rhythm, the primary lifts' estimated 1RMs, and for each of its weeks every session's content with the lifts' exact sets, reps, loads, effort and rest, the run sessions at the athlete's paces, and the station doses for the phase.
 3. Each response is validated against `generatedDaySchema` (Zod); invalid days and exercises are dropped with a warning, and `&` is rewritten to `and` in day text and exercise labels.
 4. The combined days must cover every week with all seven days exactly once, and every non-rest day must carry exercise-table rows, or the generation fails (502 `AI_ERROR`). The race day itself is the one exception: the prompt calls it the event, not a training session, so it may come back with no rows. Primary-lift sets (and the text line describing each: the lift's own line, never a variant whose name contains it) are then snapped back to the engine's week targets (`server/services/workoutEngine/planRepair.ts`; race week is left as written). Last, an exercise (each custom lift by its label) whose heaviest weight rises more than 8% week over week (`MAX_WEEKLY_WEIGHT_INCREASE_PCT`), or one real plate step where that is larger, is clamped to that ceiling. The week after a blueprint deload is measured against the loading week before the deload, not the deload itself.
-5. Plan days and their exercise sets are written in one transaction, and the plan is scheduled from `startDate` (week 1 aligned to that week's Monday; no session is placed before `startDate`). For a midweek start, the prompt for the chunk holding week 1 carries a `PLAN START` block naming the week-1 days before the start, so the model keeps them as rest instead of losing sessions to them.
-6. A final transaction records the plan's engine state (`training_plans.engine_state`: the run fitness its paces were written against, and the recent logs its numbers already reflect), retires the plans in `supersedePlanIds` and marks this one `ready`. Any error marks it `failed` with a client-safe `generationError`.
+5. One transaction then writes everything: the plan days (each with the priority tier the engine gave its session) and their exercise sets, and the schedule from `startDate` (week 1 aligned to that week's Monday; no session is placed before `startDate`). For a midweek start, the prompt for the chunk holding week 1 carries a `PLAN START` block naming the week-1 days before the start, so the model keeps them as rest instead of losing sessions to them.
+6. The same transaction (`scheduleAndPublishPlan()`) retires the plans in `supersedePlanIds`, effective from the later of the new plan's start and the athlete's today, records the plan's engine state (`training_plans.engine_state`: the run fitness its paces were written against, and the recent logs its numbers already reflect), and marks this one `ready`. Any error marks it `failed` with a client-safe `generationError`; nothing of a failed plan is committed, so it has no days on the calendar and the plans it would have replaced stay active.
 
 ### API Endpoint
 
@@ -485,14 +506,16 @@ Generation is asynchronous. `POST /api/v1/plans/generate` refuses a second in-fl
 
 ## Prompt Templates
 
-**Files:** `server/prompts.ts` (prompt strings + `buildSystemPrompt`), `server/prompts/` (`coachingContext.ts` for training-data sections, `materialsBuilder.ts` for coaching-material/RAG-chunk sections, `exerciseSetFormatter.ts` for structured exercise-set formatting, `exerciseSelection.ts` for the exercise selection brief and the plan generator's grouped exercise menu, `coachingAnalysis.ts` for the COACHING ANALYSIS block, `mafContext.ts` for the MAF METHOD block, `nutritionContext.ts` for the Fuelling and Recovery block). The last three are each one renderer shared by the chat system prompt (`server/prompts.ts`) and the auto-coach prompts (`server/gemini/suggestionService.ts`), so the two paths cannot drift apart.
+**Files:** `server/prompts.ts` (prompt strings + `buildSystemPrompt`), `server/prompts/` (`coachingContext.ts` for training-data sections, `materialsBuilder.ts` for coaching-material/RAG-chunk sections, `exerciseSetFormatter.ts` for structured exercise-set formatting, `exerciseSelection.ts` for the exercise selection brief and the plan generator's grouped exercise menu, `coachingAnalysis.ts` for the COACHING ANALYSIS block, `mafContext.ts` for the MAF METHOD block, `nutritionContext.ts` for the Fuelling and Recovery block). The last three are each one renderer shared by the chat system prompt (`server/prompts.ts`) and the auto-coach prompts (`server/gemini/suggestionService.ts`), so the two paths cannot drift apart. The directory also holds `athleteConstraints.ts` and `athleteFacts.ts` (the ATHLETE CONSTRAINTS block and the athlete card inside it), `workoutEngine.ts` (TRAINING TARGETS and the plan generator's WORKOUT ENGINE TARGETS), `focusedWorkoutContext.ts` (FOCUSED WORKOUT), `recentPlanChanges.ts` (RECENT PLAN CHANGES), `priorAiContext.ts` (the coach's earlier notes on a day) and `chatPhoto.ts` (a chat photo's reading).
 
 ### BASE_SYSTEM_PROMPT
 
 The core coaching persona. Covers:
-- Multi-goal coaching (Hyrox, endurance, strength, weight loss, general fitness)
+- Multi-goal coaching (Hyrox, endurance, strength, weight loss, general fitness), with a rule to match the athlete's stated goal and not assume Hyrox unless they, their plan or their profile mention it
 - Hyrox-specific knowledge (8 stations, distances, race format)
 - Instructions for using training data context
+- How to read the COACHING ANALYSIS (load governor, training state, race readiness, RPE trend, station and coverage gaps, personal records, plan compliance), the EXERCISE SELECTION BRIEF and the Fuelling and Recovery section when the training data carries them
+- PLAN CHANGES and MEDICAL SAFETY rules (see [Safety](#safety))
 - Security instruction: refuses to reveal system prompts
 
 ### SUGGESTIONS_PROMPT
@@ -517,23 +540,28 @@ Instructions for parsing free-text into structured exercise data. Defines valid 
 **BASE_SYSTEM_PROMPT -- Persona and Hyrox knowledge:**
 
 ```text
-You are an expert AI fitness coach. You help athletes plan, track, and optimize
-their training for any fitness goal -- from running races and functional fitness
-competitions (like Hyrox) to strength building, weight loss, and general health.
+You are an expert AI fitness coach for fitai.coach — an AI-native training app
+for functional-fitness athletes. You help athletes plan, track, and optimize
+their training for any fitness goal — running races, functional-fitness
+competitions (hyrox-style racing being one common format), strength building,
+weight loss, and general health.
+
+Match the user's stated goal. Do NOT assume hyrox unless the user, their plan,
+or their profile explicitly references it.
 
 You adapt your coaching based on the athlete's goal:
-- Functional fitness / Hyrox: Hyrox is a fitness race with 8x 1km runs between
-  8 functional stations (SkiErg 1000m, Sled Push 50m, Sled Pull 50m,
-  Burpee Broad Jumps 80m, Rowing 1000m, Farmers Carry 200m,
-  Sandbag Lunges 100m, Wall Balls 75-100 reps). Focus on station practice,
-  running endurance, grip management, and race-day pacing.
-- Endurance / Running: Focus on periodization, pacing, mileage progression,
+- **Functional fitness / hyrox-style racing**: Hyrox is a representative
+  fitness race with 8x 1km runs between 8 functional stations (SkiErg 1000m,
+  Sled Push 50m, Sled Pull 50m, Burpee Broad Jumps 80m, Rowing 1000m,
+  Farmers Carry 200m, Sandbag Lunges 100m, Wall Balls 75-100 reps). Focus on
+  station practice, running endurance, grip management, and race-day pacing.
+- **Endurance / Running**: Focus on periodization, pacing, mileage progression,
   easy/tempo/interval balance, and race-specific preparation.
-- Strength: Focus on progressive overload, compound lifts, programming
+- **Strength**: Focus on progressive overload, compound lifts, programming
   periodization, and recovery.
-- Weight loss: Balanced training with sustainable intensity, caloric awareness,
-  and habit building.
-- General fitness: Well-rounded approach across running, strength, and
+- **Weight loss**: Balanced training with sustainable intensity, caloric
+  awareness, and habit building.
+- **General fitness**: Well-rounded approach across running, strength, and
   conditioning.
 ```
 
@@ -544,7 +572,7 @@ PHASE-BASED COACHING:
 - EARLY (first 25% of plan): Build aerobic base, establish movement patterns.
   Moderate volume, low-moderate intensity. Add form cues in notes. Don't push
   heavy loads yet.
-- BUILD (25-60%): Progressive overload -- increase weights/reps/distance in
+- BUILD (25-60%): Progressive overload — increase weights/reps/distance in
   small increments (2.5-5% per week). For functional fitness goals, ensure all
   functional exercises get practice at least once every 10 days. Build running
   volume.
@@ -553,25 +581,38 @@ PHASE-BASED COACHING:
   Maintain strength, don't add new exercises.
 - TAPER (85-100%): Reduce volume 30-40% but maintain intensity. Shorter
   sessions, focus on sharpness and confidence. No new exercises or heavy loads.
-  Do NOT add accessory work -- remove or simplify existing accessory instead.
-  Station gaps are NOT urgent during taper.
+  Do NOT add accessory work — remove or simplify existing accessory instead.
+  Station gaps are NOT urgent during taper — the athlete has already built
+  their base.
 - RACE WEEK: Light movement ONLY. Max 20-30 minutes per session. Short easy
-  jogs, activation drills, light mobility. Do NOT add any station practice,
-  running intervals, or strength work.
+  jogs, activation drills, light mobility. The ONLY acceptable modification is
+  reducing existing work or adding mental prep cues in notes. Do NOT add any
+  station practice, running intervals, or strength work. An athlete who rests
+  smartly will outperform one who trains through race week.
 ```
+
+The bands in this prompt text are prose for the model. The phase it is told the athlete is in comes from `computePlanPhase()`, whose week-based rules differ at the edges (see [Plan Phase](#plan-phase)).
 
 **PARSE_EXERCISES_PROMPT -- Exercise categories and confidence scoring:**
 
 ```text
 Available exercises and their keys:
 FUNCTIONAL: skierg, sled_push, sled_pull, burpee_broad_jump, rowing,
-            farmers_carry, sandbag_lunges, wall_balls
-RUNNING:    easy_run, tempo_run, interval_run, long_run
+            farmers_carry, sandbag_lunges, wall_balls, shuttle_run,
+            med_ball_slams, step_ups
+RUNNING:    run_1k, easy_run, recovery_run, tempo_run, interval_run,
+            hill_repeats, fartlek_run, long_run, treadmill_run
 STRENGTH:   back_squat, front_squat, deadlift, romanian_deadlift, bench_press,
-            overhead_press, pull_up, bent_over_row, lunges, hip_thrust
-CONDITIONING: burpees, box_jumps, assault_bike, kettlebell_swings, battle_ropes
+            incline_bench_press, overhead_press, push_press, pull_up,
+            lat_pulldown, bent_over_row, single_arm_dumbbell_row, lunges,
+            bulgarian_split_squat, hip_thrust, single_leg_rdl,
+            barbell_thruster, goblet_squat, dumbbell_snatch
+CONDITIONING: burpees, box_jumps, assault_bike, kettlebell_swings,
+            battle_ropes, walking_lunges, echo_bike, ski_erg_intervals
 
 Categories: functional, running, strength, conditioning
+
+[... custom-exercise rules and the JSON contract ...]
 
 CONFIDENCE SCORING:
 - 95-100: Exact match to a known exercise (e.g. "back squat" -> back_squat)
@@ -593,7 +634,7 @@ Instructions for generating multi-week training plans with day-by-day structure.
 
 ### Helper Functions
 
-- `buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks)` -- Assembles the full system prompt with training stats and coaching materials. When `retrievedChunks` is provided it takes priority over `coachingMaterials` (`server/prompts.ts`).
+- `buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks, options)` -- Assembles the full system prompt with training stats and coaching materials. When `retrievedChunks` is provided it takes priority over `coachingMaterials`. `options` (`SystemPromptOptions`) carries the per-message parts: the FOCUSED WORKOUT block, RECENT PLAN CHANGES, the earlier-conversation notes, the chat safety signals and whether the coach has tools (`server/prompts.ts`).
 - `buildCoachingMaterialsSection(materials)` -- Formats legacy coaching materials (`server/prompts/materialsBuilder.ts`).
 - `buildRetrievedChunksSection(chunks)` -- Formats RAG-retrieved chunks (`server/prompts/materialsBuilder.ts`).
 - `buildOverallStats` / `buildExerciseFocus` / `buildStructuredPerformance` / `buildRecentWorkouts` / `buildUpcomingWorkouts` -- Format the training-data sections of the system prompt (`server/prompts/coachingContext.ts`).
