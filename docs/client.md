@@ -152,7 +152,7 @@ Most tab sections are their own lazy chunks, loaded through `lazyWithReload` lik
 
 - **Account** (`?tab=account`, default) -- **ProfileSection** (user name and avatar), **UnitsPreferencesCard** (weight unit kg/lb, distance unit km/mi), a "Getting Started" card to re-run onboarding, and the account **DangerZone** (`AccountDangerZone`: delete account → a confirm dialog whose button stays disabled until the athlete types `DELETE` → `DELETE /api/v1/account` → `clearUserLocalData()`, then a full-page redirect to `/` 1.5 s later).
 - **Training** (`?tab=training`) -- **AthleteProfileCard** (division/gender/age), **BodyCompositionCard** (bodyweight, height, activity level, weight goal), **HealthMetricsCard** (optional resting HR, max HR and FTP that sharpen hrTSS/TSS training load; left blank, max HR is estimated from age), **NutritionPreferencesCard** (meals per day — 3, 4 or 5 — that the per-meal fuel targets are spread across), **TrainingGoalsCard** (weekly workout goal), **AthleteCardSection** (the athlete card: facts that are true every week, each in the athlete's words with a category; add, edit, retire, restore and delete, "Still true?" on a fact past its review date, a 20-fact cap, and the older free-text injuries note with "Add to card" and "Remove note" while the athlete has one; its own requests, outside the Save bar), **TrainingStyleSection** (Balanced vs. MAF Method selection, MAF setup gating, style-transition messaging, and a local audit trail of style changes), **WorkoutReviewCard** (adherence insights), **AiCoachCard** (the **consent gate** for AI provider calls -- defaults off for new users; AI features stay hidden/disabled until enabled -- plus the auto-apply-chat-plan-changes toggle), and **CoachingSection** (AI coaching configuration and materials management).
-- **Integrations** (`?tab=integrations`) -- **StravaSection** (connect/disconnect, sync status; handles the `?strava=connected`/`?strava=error` OAuth callback and lands the user on this tab) and **GarminSection** (Garmin Connect credential form, status/last-sync badge, manual "Sync now"; surfaces the `lastError` banner with a "Reconnect needed" badge. The sync button is disabled only while a sync is running: the client has no circuit-breaker state, so a sync the server refuses with `GARMIN_CIRCUIT_OPEN` shows as a failed-sync toast).
+- **Integrations** (`?tab=integrations`) -- **StravaSection** (connect/disconnect, sync status; handles the `?strava=connected`/`?strava=error` OAuth callback and lands the user on this tab) and **GarminSection** (Garmin Connect credential form, status/last-sync badge, manual "Sync" button; surfaces the `lastError` banner with a "Reconnect needed" badge. The sync button is disabled only while a sync is running: the client has no circuit-breaker state, so a sync the server refuses with `GARMIN_CIRCUIT_OPEN` shows as a failed-sync toast).
 - **Notifications** (`?tab=notifications`) -- **EmailNotificationsCard** (master `emailNotifications` switch; nested under it, a default send hour (`notifyHour`, 07:00 unless changed) and per-type toggles for the weekly summary, missed-workout reminder, weekly review reminder, session brief and analysis digest. The nested group is grayed and the per-type toggles disabled while the master is off. Each type that is switched on shows its own "Send at" hour override, which defaults to following the default send hour — except the weekly review reminder, whose fallback is 17:00, Sunday evening) and **PushNotificationSection** (Web Push opt-in, unsubscribe, denied-permission messaging, and a test notification when the browser + server VAPID config support push).
 - **Data & Privacy** (`?tab=data`) -- **DataToolsSection** (`StructureOldWorkoutsCard`, `ExportDataCard`, and the error-reporting consent card).
 - **Recycle bin** (`?tab=recycle-bin`) -- **RecycleBinCard** (deleted workouts, plan days and training plans, restorable for 90 days, with per-item _Delete forever_ and _Empty bin_ behind confirm dialogs).
@@ -401,7 +401,7 @@ A user flow introduced in April 2026 that lets athletes snap a photo of a whiteb
 ### Component Communication Patterns
 
 - **Props drilling**: Parent pages pass data to child components (e.g., Timeline passes `entries` to TimelineWorkoutCard)
-- **Shared hooks**: Multiple components use the same React Query hook (e.g., `useTimelineData` consumed by both timeline and coach panel)
+- **Shared hooks**: Multiple components use the same React Query hook (e.g., `useUnitPreferences`, read by `TimelineWorkoutCard`, `LogSheet`, `ReviewSurface` and the Log Workout form). The coach panel does not call `useTimelineData`: the Timeline page passes it the loaded timeline as a prop
 - **Query invalidation**: After mutations, hooks call `queryClient.invalidateQueries()` to trigger refetches (e.g., `useWorkoutActions` invalidates timeline after creating a workout)
 - **Event-driven updates**: `useAutoCoachWatcher` detects when `isAutoCoaching` transitions from true to false, then invalidates the timeline query
 
@@ -584,7 +584,8 @@ within the app.
 
 Workbox applies `NetworkFirst` to programmatic `/api/` requests (cache
 `api-cache`, 50 entries, 5-minute TTL); a top-level navigation to an `/api/` URL
-(`request.destination === "document"`) is not matched. There is deliberately no network timeout: the cache answers only
+(`request.destination === "document"`) is not matched. There is deliberately
+no network timeout: the cache answers only
 when the network fails outright, because a timeout fallback served a slow
 refetch after a save the pre-save response (C53). Two things follow from Cache
 Storage being keyed by URL with **no per-user partition**:
@@ -641,7 +642,7 @@ A full-page error screen with:
 
 ### FeatureErrorBoundaryWrapper (`client/src/components/FeatureErrorBoundaryWrapper.tsx`)
 
-A per-feature error boundary that wraps the six authenticated routes (not `/privacy`, `/delete-account` or the 404), the Coach panel and the onboarding wizard. Uses `Sentry.ErrorBoundary` internally so errors are reported to Sentry; the `featureName` prop is not sent with them, it only names the feature in the fallback. Falls back to `FeatureErrorBoundary`, a scoped error UI (the feature's name and "couldn't load", with a "Try again" that resets the boundary, or reloads the page for a failed code chunk) that only affects the broken feature, not the entire app.
+A per-feature error boundary that wraps each authenticated feature route (not `/privacy`, `/delete-account` or the 404), the Coach panel and the onboarding wizard. Uses `Sentry.ErrorBoundary` internally so errors are reported to Sentry; the `featureName` prop is not sent with them, it only names the feature in the fallback. Falls back to `FeatureErrorBoundary`, a scoped error UI (the feature's name and "couldn't load", with a "Try again" that resets the boundary, or reloads the page for a failed code chunk) that only affects the broken feature, not the entire app.
 
 ---
 
