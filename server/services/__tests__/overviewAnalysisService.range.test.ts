@@ -158,6 +158,14 @@ describe("generateOverviewAnalysis — the selected range", () => {
         result: { rangeDays: 90 },
       });
     });
+
+    it("throws without calling the model when the budget cannot be confirmed, so the job retries", async () => {
+      // It used to log the failed lookup and make the call.
+      vi.mocked(checkAiBudget).mockRejectedValue(new Error("db down"));
+
+      await expect(generateOverviewAnalysisIfAllowed("user-1")).rejects.toThrow("db down");
+      expect(generateJsonText).not.toHaveBeenCalled();
+    });
   });
 });
 

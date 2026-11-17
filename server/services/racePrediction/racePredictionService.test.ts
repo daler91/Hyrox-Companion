@@ -134,6 +134,19 @@ describe("generateRacePrediction — graceful degradation", () => {
     expect(result.aiUnavailableReason).toBe("ai_budget_exceeded");
   });
 
+  it("returns the deterministic prediction, flagged ai_error, when the budget cannot be confirmed", async () => {
+    // It used to log the failed lookup and make the AI call anyway.
+    mockUser();
+    mockBudget.mockRejectedValue(new Error("db down"));
+
+    const result = await generateRacePrediction("u1");
+
+    expect(mockGenerate).not.toHaveBeenCalled();
+    expect(result.aiUsed).toBe(false);
+    expect(result.aiUnavailableReason).toBe("ai_error");
+    expect(result.segments).toHaveLength(16);
+  });
+
   it("propagates the stored gender and genderAssumed flag", async () => {
     mockUser({ gender: null });
 

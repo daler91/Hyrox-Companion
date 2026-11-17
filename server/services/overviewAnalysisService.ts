@@ -423,7 +423,8 @@ async function storedOverviewRangeDays(userId: string): Promise<OverviewRangeDay
 /**
  * Self-gating variant for the midnight cron. Returns the reason the analysis was
  * skipped (so the caller can preserve the previously stored result) rather than
- * throwing. Mirrors generateCoachInsightsIfAllowed.
+ * throwing. Mirrors generateCoachInsightsIfAllowed, including its one throw: a
+ * budget lookup that fails is not answered with an unconfirmed AI call.
  */
 export async function generateOverviewAnalysisIfAllowed(
   userId: string,
@@ -434,18 +435,8 @@ export async function generateOverviewAnalysisIfAllowed(
   const user = await storage.users.getUser(userId);
   if (user?.aiCoachEnabled !== true) return { ok: false, reason: "ai_consent_off" };
 
-  try {
-    const budget = await checkAiBudget(userId);
-    if (!budget.allowed) return { ok: false, reason: "ai_budget_exceeded" };
-  } catch (err) {
-    // Budget lookup failure shouldn't hard-block the feature — log and allow,
-    // matching coach-insights / the race-predictor's resolveAiBlocker behavior.
-    // err is the budget-lookup
-    // failure; userId is the internal Clerk id used for correlation (same as
-    // the race-predictor / coach-insights paths).
-    // bearer:disable javascript_lang_logger_leak
-    log.warn({ err, userId }, "[overview-analysis] AI budget check failed; allowing AI call");
-  }
+  const budget = await checkAiBudget(userId);
+  if (!budget.allowed) return { ok: false, reason: "ai_budget_exceeded" };
 
   const rangeDays = await storedOverviewRangeDays(userId);
   return { ok: true, result: await generateOverviewAnalysis(userId, log, rangeDays) };

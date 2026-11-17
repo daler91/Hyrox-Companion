@@ -430,9 +430,11 @@ async function resolveAiBlocker(
     const budget = await checkAiBudget(userId);
     if (!budget.allowed) return "ai_budget_exceeded";
   } catch (err) {
-    // Budget lookup failure shouldn't hard-block the feature — log and allow,
-    // matching the timeline-suggestion behavior.
-    log.warn({ err, userId }, "[race-predictor] AI budget check failed; allowing AI call");
+    // A budget that can't be confirmed is not spent: the athlete gets the
+    // deterministic prediction, flagged as an AI error, as when the provider
+    // fails. It used to log the failure and make the call.
+    log.warn({ err, userId }, "[race-predictor] AI budget check failed; returning the deterministic prediction");
+    return "ai_error";
   }
   return null;
 }

@@ -743,6 +743,10 @@ function registerProposalRoutes({ op, common, notFound, aiConsent }: Context, s:
         content: json(s.PlanProposalApplyFailure),
       },
       ...common.authenticatedResponses(),
+      ...common.error(
+        503,
+        "AI_BUDGET_UNAVAILABLE: a picked change needs a structured re-parse and the AI budget could not be confirmed; nothing was written and the proposal stays pending",
+      ),
     },
   });
 

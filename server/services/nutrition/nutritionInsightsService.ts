@@ -123,7 +123,9 @@ export async function generateNutritionInsights(
 /**
  * Self-gating variant for the midnight recompute cron. Returns the reason the
  * analysis was skipped (so the caller can preserve the previously stored
- * result) rather than throwing. Mirrors generateCoachInsightsIfAllowed.
+ * result) rather than throwing. Mirrors generateCoachInsightsIfAllowed,
+ * including its one throw: a budget lookup that fails is not answered with an
+ * unconfirmed AI call.
  */
 export async function generateNutritionInsightsIfAllowed(
   userId: string,
@@ -134,16 +136,8 @@ export async function generateNutritionInsightsIfAllowed(
   const user = await storage.users.getUser(userId);
   if (user?.aiCoachEnabled !== true) return { ok: false, reason: "ai_consent_off" };
 
-  try {
-    const budget = await checkAiBudget(userId);
-    if (!budget.allowed) return { ok: false, reason: "ai_budget_exceeded" };
-  } catch (err) {
-    // Budget lookup failure shouldn't hard-block the feature — log and allow,
-    // matching generateCoachInsightsIfAllowed.
-    // userId is the app-wide correlation id and err is a DB error; no secrets
-    // bearer:disable javascript_lang_logger_leak
-    log.warn({ err, userId }, "[nutrition-insights] AI budget check failed; allowing AI call");
-  }
+  const budget = await checkAiBudget(userId);
+  if (!budget.allowed) return { ok: false, reason: "ai_budget_exceeded" };
 
   return { ok: true, result: await generateNutritionInsights(userId, log) };
 }
