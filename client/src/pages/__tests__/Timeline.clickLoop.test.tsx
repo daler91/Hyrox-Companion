@@ -59,20 +59,22 @@ function openCompletedWorkout(getByTestId: (id: string) => HTMLElement) {
 }
 
 describe("Timeline click does not loop", () => {
-  it("opens a completed workout exactly once and stays open", () => {
-    const { getByTestId } = renderClickLoopTimeline();
+  // The sheets are a lazy chunk, and both tests tap before it has loaded: the
+  // surface has to show once it arrives, not drop the tap.
+  it("opens a completed workout exactly once and stays open", async () => {
+    const { getByTestId, findByTestId } = renderClickLoopTimeline();
 
     openCompletedWorkout(getByTestId);
-    expect(getByTestId("review-surface")).toBeTruthy();
+    expect(await findByTestId("review-surface")).toBeTruthy();
     expect(liveWorkoutId).toBe(completedEntry.planDayId);
     expect(mountCount).toBeLessThan(5);
   });
 
   it("closes from the exit control without route navigation side effects", async () => {
-    const { getByTestId } = renderClickLoopTimeline();
+    const { getByTestId, findByTestId } = renderClickLoopTimeline();
 
     openCompletedWorkout(getByTestId);
-    expect(getByTestId("review-surface")).toBeTruthy();
+    expect(await findByTestId("review-surface")).toBeTruthy();
     expect(globalThis.window.location.pathname).toBe("/");
     expect(globalThis.window.location.search).toBe("?workout=plan-day-42");
 
