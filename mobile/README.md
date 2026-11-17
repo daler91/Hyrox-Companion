@@ -162,10 +162,10 @@ maestro test maestro -e TEST_EMAIL=you+clerk_test@example.com -e TEST_CODE=42424
 
 ## Performance
 
-Release builds are shrunk and optimised by R8, and ship the Baseline Profile
-committed under `androidApp/src/release/generated/baselineProfiles`, which
-compiles the code startup and the main screens run ahead of time. No profile is
-committed there yet, so a release build has none until a generated one is.
+Release builds are shrunk and optimised by R8, and read a Baseline Profile from
+`androidApp/src/release/generated/baselineProfiles` when one is committed there;
+it compiles the code startup and the main screens run ahead of time. No profile
+is committed yet, so a release build ships without one until a generated one is.
 `baselineprofile/` generates it and benchmarks cold startup and browsing the
 tabs with Macrobenchmark, on a Gradle Managed Device (Pixel 6, API 34); both
 need a machine that can run an emulator, so CI runs them on demand

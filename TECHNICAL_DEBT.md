@@ -247,9 +247,9 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
 - **63. The unit-stamp ports are unused** — Reported. The set editor edits in the row's
   stored unit (`ui/workout/ExerciseGroups.kt:215,220`) instead of the preference unit with
   `restampSetPatch`, as the web does.
-- **64. No Baseline Profile is committed** — Confirmed. `mobile/README.md` says release
-  builds ship the profile committed under `androidApp/src/release/generated/baselineProfiles`;
-  that directory does not exist.
+- **64. No Baseline Profile is committed** — Confirmed. Release builds read the profile
+  from `androidApp/src/release/generated/baselineProfiles` (`mobile/androidApp/build.gradle.kts`);
+  that directory does not exist, so they ship without one.
 
 ### CI and tooling
 
