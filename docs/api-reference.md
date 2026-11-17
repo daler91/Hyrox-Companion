@@ -1965,6 +1965,7 @@ Generate a Strava OAuth authorization URL with CSRF-protected signed state.
 - **Response:** `{ authUrl: string }` — Strava consent URL to open
 - **State parameter:** HMAC-SHA256 signed with `userId:timestamp:nonce:signature`, max age enforced, single-use (atomically claimed on callback). The authorize URL also sets `approval_prompt=force`
 - **Cookie:** sets the `HttpOnly`, `Secure`, `SameSite=Lax` browser-binding cookie (`__Host-fitai.strava-oauth` in production, `fitai.strava-oauth` elsewhere) holding the SHA-256 of the state, valid for the state's max age; the callback requires it ([Integrations → CSRF State Verification](integrations.md#csrf-state-verification))
+- **Errors:** `500` when `STRAVA_CLIENT_ID` is not configured
 - **Native app:** with `?codeChallenge=<base64url(SHA-256(verifier))>` (43 characters, else `400 VALIDATION_ERROR`) it returns `{ authUrl }` for Strava's mobile consent page with `redirect_uri` = `<APP_URL>/strava/mobile-callback` and a state carrying the challenge, and sets no cookie. The app finishes with `POST /api/v1/strava/native/complete` ([Integrations → Native App Connect](integrations.md#native-app-connect))
 
 ### GET /api/v1/strava/callback
@@ -1975,8 +1976,8 @@ OAuth callback handler. Exchanges authorization code for tokens, encrypts and st
 - **Rate limit:** `stravaAuth` category, 20 per 15 minutes (shared with `/auth`) — keyed by userId when the request carries a Clerk session, otherwise by IP
 - **Query:** `code`, `state` (CSRF-verified, single-use — replays redirect to `/settings?strava=error`), `scope`
 - **Cookie:** the browser-binding cookie `/auth` set must match the state, so only the browser that started the flow can complete it; a missing or mismatched cookie redirects to `/settings?strava=error` before the code is exchanged. The cookie is cleared on every outcome
-- **Side effects:** Creates `stravaConnections` record with AES-256-GCM encrypted tokens; clears any `requires_reauth` tombstone on reconnect
-- **Response:** Redirect to `/settings`
+- **Side effects:** Creates `stravaConnections` record with AES-256-GCM encrypted tokens; clears any `requires_reauth` tombstone on reconnect; queues the first import (a `strava-sync` job), whose failure to enqueue does not fail the connect
+- **Response:** Redirect to `/settings?strava=connected`, or `/settings?strava=error` on any failure (including Strava refusing the code)
 
 ### POST /api/v1/strava/native/complete
 
@@ -1990,7 +1991,7 @@ The native app finishing a Strava connect with the `code` and `state` Strava's A
 
 ### GET /strava/mobile-callback
 
-Strava's `redirect_uri` for the native app: an Android App Link, so normally the app opens instead of this page. When it does not, the server answers a static HTML page with an "Open fitai" link to itself (following it is a user gesture, which Android routes to a verified app). `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex`; nothing from the query is echoed.
+Strava's `redirect_uri` for the native app: an Android App Link, so normally the app opens instead of this page. Rate-limited by the `stravaAuth` bucket (20 per 15 minutes). When it does not, the server answers a static HTML page with an "Open fitai" link to itself (following it is a user gesture, which Android routes to a verified app). `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex`; nothing from the query is echoed.
 
 ### POST /api/v1/strava/sync
 
@@ -1998,13 +1999,13 @@ Incrementally sync Strava activities into workout logs (since `lastSyncedAt` wit
 
 - **Auth:** Required
 - **Rate limit:** `stravaSync` category, 5 per 15 minutes, per user
-- **Side effects:** Fetches activities from Strava API, maps to WorkoutLog format, deduplicates by `stravaActivityId`, auto-refreshes expired tokens (serialized under a per-user advisory lock), enriches calories for the newest ≤25 imports from the activity-detail endpoint, then reconciles each new activity against that day's logged workouts and open plan days — attaching the recording to the workout the athlete already logged (filling only NULL metrics), completing the open plan day with a log that carries the day's prescription text but only what the recording measured (one set built from a distance/cardio recording, none from a "Weight Training" one, no compliance; nothing prescribed is copied in as an actual), or importing standalone (with a suggested match when one was plausible but not certain; see [Integrations → Activity Sync](integrations.md#activity-sync)) — and advances the `lastSyncedAt` cursor.
+- **Side effects:** Fetches activities from Strava API, maps to WorkoutLog format, deduplicates by `stravaActivityId` (and drops an activity the athlete's Garmin sync already imported), auto-refreshes expired tokens (serialized under a per-user advisory lock), enriches calories for the newest ≤25 imports from the activity-detail endpoint, then reconciles each new activity against that day's logged workouts and open plan days — attaching the recording to the workout the athlete already logged (filling only NULL metrics), completing the open plan day with a log that carries the day's prescription text but only what the recording measured (one set built from a distance/cardio recording, none from a "Weight Training" one, no compliance; nothing prescribed is copied in as an actual), or importing standalone (with a suggested match when one was plausible but not certain; see [Integrations → Activity Sync](integrations.md#activity-sync)) — and advances the `lastSyncedAt` cursor. When a recording landed on a plan day it queues a `session-streams` fetch; a Strava 401 mid-sync tombstones the connection (`requiresReauth`).
 - **Response:** `{ success: true, imported: number, enriched: number, completedPlanDays: number, suggested: number, standalone: number, skipped: number, total: number, hasMore: boolean }` — `imported` is the sum of the four landing counts; `hasMore: true` means the page cap was hit and another sync will continue where this one stopped.
-- **Errors:** `401 { code: "STRAVA_REAUTH_REQUIRED" }` (revoked — reconnect needed), `401 { code: "UNAUTHORIZED" }` (not connected), `429 { code: "RATE_LIMITED", retryAfterSeconds }` (Strava rate limit, after retries), `502 { code: "EXTERNAL_API_ERROR" }` (transient upstream failure).
+- **Errors:** `401 { code: "STRAVA_REAUTH_REQUIRED" }` (revoked — reconnect needed), `401 { code: "UNAUTHORIZED" }` (not connected), `429 { code: "RATE_LIMITED", retryAfterSeconds }` with a matching `Retry-After` header (Strava rate limit, after retries), `502 { code: "EXTERNAL_API_ERROR" }` (transient upstream failure), `500 INTERNAL_SERVER_ERROR` for anything else.
 
 ### DELETE /api/v1/strava/disconnect
 
-Disconnect the Strava integration. Performs a best-effort upstream `POST /oauth/deauthorize` (non-fatal on failure) before deleting the local connection.
+Disconnect the Strava integration. Performs a best-effort upstream `POST /oauth/deauthorize` (non-fatal on failure) before deleting the local connection, then deletes the athlete's stored session streams (the HR/pace streams fetched from Strava). Imported workouts and their summary metrics stay.
 
 - **Auth:** Required
 - **Rate limit:** `stravaDisconnect` category, 10 per 15 minutes
@@ -2019,7 +2020,7 @@ Strava's subscription-validation challenge, sent once (synchronously) while the 
 - **Auth:** Not required (the request comes from Strava)
 - **Rate limit:** IP-based, 300 per minute (shared with the POST below)
 - **Query:** `hub.mode=subscribe`, `hub.verify_token`, `hub.challenge`
-- **Response:** `200 { "hub.challenge": string }` when `hub.verify_token` matches this deployment's token (`STRAVA_WEBHOOK_VERIFY_TOKEN`, or the value derived from `STRAVA_CLIENT_SECRET`); `403` otherwise
+- **Response:** `200 { "hub.challenge": string }` when `hub.verify_token` matches this deployment's token (`STRAVA_WEBHOOK_VERIFY_TOKEN`, or the value derived from `STRAVA_CLIENT_SECRET`); `403 FORBIDDEN` otherwise
 
 ### POST /api/v1/strava/webhook
 
@@ -2028,7 +2029,7 @@ Strava webhook event receiver — the push half of [automatic sync](integrations
 - **Auth:** Not required and unsigned — the payload is treated as a hint only. An event never writes anything itself: it enqueues a debounced `strava-sync` job for the connected account(s) behind `owner_id`, and that job fetches from Strava with the athlete's own token and dedups like any other sync.
 - **Rate limit:** IP-based, 300 per minute
 - **Body:** `{ object_type: "activity" | "athlete", object_id: number, aspect_type: "create" | "update" | "delete", owner_id: number, subscription_id: number, event_time?: number, updates?: object }`
-- **Response:** `200 { received: true }` immediately, for well-formed and malformed bodies alike (Strava retries non-2xx responses up to three times). Processing happens after the acknowledgement: `delete` events, unknown athletes, tombstoned connections and events for a `subscription_id` other than the verified one are ignored; an athlete deauthorization enqueues a sync whose 401 handling tombstones the connection.
+- **Response:** `200 { received: true }` immediately, for well-formed and malformed bodies alike (Strava retries non-2xx responses up to three times). Processing happens after the acknowledgement: everything is ignored while automatic sync or webhooks are switched off for the deployment (or it lacks the Strava credentials or a public `APP_URL`), and activity `delete` events, unknown athletes, tombstoned connections and events for a `subscription_id` other than the verified one are ignored; an athlete deauthorization enqueues a sync whose 401 handling tombstones the connection.
 
 ## Garmin Routes
 
@@ -2080,9 +2081,9 @@ Imports the most recent activities from Garmin into `workout_logs`.
   - `429 { code: "GARMIN_SYNC_TOO_SOON" }` — less than 5 minutes since `lastSyncedAt`
   - `401 { code: "GARMIN_RECONNECT_REQUIRED" }` — prior `lastError` is set; user must disconnect + reconnect
   - `503 { code: "GARMIN_CIRCUIT_OPEN" }` — global 429 breaker tripped
-- **Behavior:** Calls `client.getActivities(start, 20)` a page at a time until a short page, a page reaching back past the last sync less 7 days (90 days back on a first sync), or 5 pages, whichever comes first; a failed page fails the whole sync. Dedupes against the partial unique index `(user_id, garmin_activity_id) WHERE garmin_activity_id IS NOT NULL`, and inserts the new rows via `onConflictDoNothing`, each with its one synthesised exercise set (a distance-and-time set for runs, rides, swims, rows and walks; none for strength or generic sessions) in the same transaction (C26).
-- **Success response:** `{ success: true, imported: number, skipped: number, total: number }` — `imported` is the true insert count; anything caught by the partial index is rolled into `skipped`.
-- **Error responses:** `401 GARMIN_AUTH_FAILED`, `502 GARMIN_API_ERROR` (with `lastError` persisted), `409 GARMIN_BUSY`.
+- **Behavior:** Calls `client.getActivities(start, 20)` a page at a time until a short page, a page reaching back past the last sync less 7 days (90 days back on a first sync), or 5 pages, whichever comes first; a failed page fails the whole sync. Skips activities already imported (on a live workout or one in the recycle bin) and recordings the athlete's Strava sync already brought in, dedupes against the partial unique index `(user_id, garmin_activity_id) WHERE garmin_activity_id IS NOT NULL`, and inserts the new rows via `onConflictDoNothing`, each with its one synthesised exercise set (a distance-and-time set for runs, rides, swims, rows and walks; none for strength or generic sessions) in the same transaction (C26).
+- **Success response:** `{ success: true, imported: number, skipped: number, total: number }` — `imported` is the true insert count; already-imported activities, Strava duplicates and anything caught by the partial index are rolled into `skipped`. `lastSyncedAt` is advanced, and the analytics caches are invalidated when anything was imported.
+- **Error responses:** `401 GARMIN_AUTH_FAILED` (the stored session could not be restored), `502 GARMIN_API_ERROR` (a token refresh or activity fetch failed; `lastError` is persisted, so later syncs answer `GARMIN_RECONNECT_REQUIRED`, only when Garmin rejected the credentials), `409 GARMIN_BUSY`.
 
 ---
 
@@ -2115,13 +2116,15 @@ Get merged timeline of planned and logged workouts.
 
 - **Auth:** Required
 - **Rate limit:** `timeline` category, 60/min
-- **Query:** `planId?` (filter by plan), `limit?` (past entries per page, default 200, max 500), `before?` (`YYYY-MM-DD`, exclusive: the previous page's cursor), `offset?` (legacy flat window; no cursor is returned when it is sent)
+- **Query:** `planId?` (filter by plan), `limit?` (past entries per page, default 200; a larger value is clamped to 500), `before?` (`YYYY-MM-DD`, exclusive: the previous page's cursor), `offset?` (legacy flat window; no cursor is returned when it is sent). A `limit` below 1 or not a number, a negative `offset`, or a malformed `before` is `400 BAD_REQUEST`
 - **Response:** `TimelineEntry[]` — merged planned + logged workouts sorted by date, newest first
 - **Headers:** `X-Next-Cursor: YYYY-MM-DD` when older entries exist; echo it back as `before` for the next page
 
-The first page (no `before`) is anchored on the athlete's today: it holds every entry dated today or later plus the most recent `limit` past entries, so the upcoming schedule is always complete. Pages never split a calendar date. Every entry is paged by its own `date`, which for a logged plan day is the log's date rather than the day's scheduled slot, so a session logged or dragged off its slot appears on exactly one page (C43).
+The first page (no `before`) is anchored on the athlete's today: it holds every entry dated today or later plus up to the `limit` most recent past entries, so the upcoming schedule is always complete. Pages never split a calendar date. Every entry is paged by its own `date`, which for a logged plan day is the log's date rather than the day's scheduled slot, so a session logged or dragged off its slot appears on exactly one page (C43).
 
 Plan-day entries also carry `priority` (the session's tier, absent on rest days), `recovery` and `missedOn` (what became of a missed session — see [missed-session recovery](#get-apiv1plansdaysdayidrecovery)), `recoverable` (`true` on a missed session the timeline should ask about: undecided, a real session, not a race-week day, before its plan was retired, and missed no more than seven days ago in the athlete's timezone), `recoveryUndoable` (`true` on a folded or shortened session whose move can still be taken back: upcoming, not yet done, and missed recently enough that the card would ask about it again) and `raceDerived` (`true` when the session shown is the race, the shakeout before it or recovery after it, set by the plan's race date). Each is omitted when it doesn't apply. `dayName` is the weekday the entry sits on, read from its `date` — not the plan day's stored `dayName`, which names the slot the session was written for — so a session moved from Tuesday to Thursday reads "Thursday".
+
+A past or `missed` plan day inside one of the athlete's [timeline annotations](#timeline-annotation-routes) (any type) carries `excused: true` and is not counted as missed; a completed or skipped day keeps its own status. Every page is also enriched before it is sent: upcoming planned entries carry `sessionEstimate`, entries with notes `coachNotes`, and every entry its `dayKind`, with `avgCadenceUnit` and `mafCompliance` where they apply.
 
 **Response example:**
 
@@ -2200,7 +2203,7 @@ Export all training data as CSV or JSON.
 
 - **Auth:** Required
 - **Rate limit:** `export` category, 5/min
-- **Query:** `format` — `"csv"` (default) or `"json"`
+- **Query:** `format` — `"csv"` (default) or `"json"`; any other value returns the CSV
 - **Response:** File download with appropriate Content-Type and Content-Disposition headers. The CSV holds workout and exercise-set rows only, and leaves out records sitting in the [recycle bin](#recycle-bin-routes). The JSON is the full data-subject export (P7, CODEBASE_ANALYSIS_2026-10-03): plans with every day and its prescription, nutrition, reviews, consents, MAF data, analytics results and the recycle bin's contents among them. Secrets (OAuth tokens, Garmin credentials, push keys) and server-internal caches are left out.
 
 ---
@@ -2209,7 +2212,7 @@ Export all training data as CSV or JSON.
 
 **Base path:** `/api/v1/nutrition` (paths in the table are relative to it). **Files:** `server/routes/nutrition/*`.
 
-The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag — when it is not `"true"`, every route below returns `404`. The AI-backed routes (`/parse/*`, `POST /insights`) additionally require AI consent and budget. Their request and response schemas are in [`docs/openapi.json`](openapi.json) (registered in `shared/openapiRoutes/nutrition.ts`); [Nutrition & Fuelling § API surface](nutrition.md#5-api-surface) covers the behaviour behind them.
+The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag (default `"true"`) — when it is not `"true"`, every route below returns `404 NOT_FOUND`. The AI-backed routes (`/parse/*`, `POST /insights`) additionally require AI consent and budget. Their request and response schemas are in [`docs/openapi.json`](openapi.json) (registered in `shared/openapiRoutes/nutrition.ts`); [Nutrition & Fuelling § API surface](nutrition.md#5-api-surface) covers the behaviour behind them.
 
 | Method | Path                                   | Purpose                                                                                                          | Rate limit (per min)                 |
 | ------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
@@ -2219,7 +2222,7 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | POST   | `/foods/barcode`                       | Barcode → food (Open Food Facts)                                                                                 | `nutritionBarcode` (30)              |
 | POST   | `/foods`                               | Create a custom food (+ servings)                                                                                | `nutritionWrite` (30)                |
 | GET    | `/foods/:id`                           | Food + named servings                                                                                            | `nutritionRead` (60)                 |
-| PATCH  | `/foods/:id`                           | Edit a custom food (`409` when another athlete has logged it and the name or macros change)                      | `nutritionWrite` (30)                |
+| PATCH  | `/foods/:id`                           | Edit a custom food (`409` when another athlete logged it or uses it in a recipe and the name or macros change)   | `nutritionWrite` (30)                |
 | DELETE | `/foods/:id`                           | Delete a custom food (`409` if a log or recipe uses it, or it is a recipe's own food)                            | `nutritionWrite` (30)                |
 | POST   | `/foods/:id/servings`                  | Add a named serving                                                                                              | `nutritionWrite` (30)                |
 | DELETE | `/foods/:id/servings/:servingId`       | Delete a serving                                                                                                 | `nutritionWrite` (30)                |
@@ -2249,14 +2252,14 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | GET    | `/recipes`                             | List recipes                                                                                                     | `nutritionRead` (60)                 |
 | POST   | `/recipes`                             | Create a recipe                                                                                                  | `nutritionWrite` (30)                |
 | GET    | `/recipes/:id`                         | Recipe + ingredients + per-serving macros                                                                        | `nutritionRead` (60)                 |
-| PATCH  | `/recipes/:id`                         | Edit a recipe (`409` when another athlete has logged it)                                                         | `nutritionWrite` (30)                |
+| PATCH  | `/recipes/:id`                         | Edit a recipe (`409` when another athlete logged it or uses it in a recipe and the name or macros change)        | `nutritionWrite` (30)                |
 | DELETE | `/recipes/:id`                         | Delete a recipe (`409` while another of your recipes uses it)                                                    | `nutritionWrite` (30)                |
 
 `/planned-session-estimate/:planDayId` is intentionally **not** an AI route: its
 deterministic and pace-personalized layers must work for every athlete, so it
 carries no `aiConsentCheck` middleware. The optional AI refinement on top is
-gated inline instead — it is skipped unless `users.aiCoachEnabled` is true, and
-the consent flag is part of the result's cache key so opting out immediately
+gated inline instead — it is skipped unless `users.aiCoachEnabled` is true and
+the AI budget allows it, and the consent flag is part of the result's cache key so opting out immediately
 stops a previously refined value being replayed. The same inline pattern is used
 by nutrition semantic search.
 
