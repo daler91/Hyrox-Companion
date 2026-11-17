@@ -421,8 +421,8 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `VECTOR_DATABASE_URL` | No | Separate Neon PostgreSQL URL for vector storage; falls back to `DATABASE_URL` |
 | `ALLOW_DEV_AUTH_BYPASS` | No | Set to `"true"` to bypass auth in development (fatal in production) |
 | `LOG_LEVEL` | No | Pino log level (default: `"info"`) |
-| `RAG_CHUNK_SIZE` | No | Character count per RAG chunk (default: `600`) |
-| `RAG_CHUNK_OVERLAP` | No | Overlap characters between RAG chunks (default: `100`) |
+| `RAG_CHUNK_SIZE` | No | Character count per RAG chunk (default: `600`; a positive whole number) |
+| `RAG_CHUNK_OVERLAP` | No | Overlap characters between RAG chunks (default: `100`; `0` up to `RAG_CHUNK_SIZE` minus one) |
 | `ENCRYPTION_KEY_V2` | No | Rotation key for `ENCRYPTION_KEY`. When set, new ciphertext is tagged `v2`; the v1 key stays available to decrypt existing rows. Must differ from `ENCRYPTION_KEY` and `CSRF_SECRET`. |
 | `ENCRYPTION_REENCRYPT_ON_BOOT` | No | `"true"` (with `ENCRYPTION_KEY_V2` set) re-encrypts stored Strava/Garmin credentials to the active key version on boot. Default `"false"`. |
 | `CSRF_SECRET` | Yes (production) | Minimum 32 characters, used for CSRF token HMAC. It is **required** in production, and whenever it is set it **must differ** from `ENCRYPTION_KEY` (in every environment). Auto-generated per process in dev/test if unset. |

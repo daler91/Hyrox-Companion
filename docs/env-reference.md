@@ -62,6 +62,7 @@ Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`)
 - **Rotation-key separation**: when `ENCRYPTION_KEY_V2` is set it must differ from both `ENCRYPTION_KEY` (an identical rotation key is a no-op that tags ciphertext `v2` with no new material) and `CSRF_SECRET`. If it matches either, the server refuses to boot.
 - **Dev bypass lockout**: `ALLOW_DEV_AUTH_BYPASS=true` combined with `NODE_ENV=production` is a hard fatal — the server refuses to boot. `server/index.ts` repeats the check and exits, and `server/clerkAuth.ts` ignores the flag in production as a third guard.
 - **Paired variables**: `ANDROID_APP_PACKAGE` / `ANDROID_APP_CERT_SHA256` and `EDAMAM_APP_ID` / `EDAMAM_APP_KEY` must each be set together or not at all; a half-configured pair is fatal.
+- **RAG chunking**: `RAG_CHUNK_SIZE` must be a positive whole number and `RAG_CHUNK_OVERLAP` a whole number from `0` up to one less than it. A size of `0` or less never advanced the chunker, so an embed job looped forever.
 - **SSRF guard on `AI_TEXT_BASE_URL`**: a URL whose host is a loopback alias such as `localhost`, or a loopback, private or link-local IP literal, fails validation. A hostname is resolved at startup (`assertResolvedHostIsPublic()` in `server/index.ts`); if any address is private the startup tasks abort and the server stays not-ready (health `503`). DNS errors are ignored.
 - **Format checks**: `FCM_SERVICE_ACCOUNT_JSON` must parse as a service account key with `project_id`, `client_email` and `private_key`; the URL, email, enum, regex and numeric-range rules in the tables on this page also fail startup when violated.
 - **Live-key / env mismatch**: a `CLERK_PUBLISHABLE_KEY` starting with `pk_live_` while `NODE_ENV` is not `production` is a hard fatal — it catches a deploy that provisioned live Clerk keys but forgot to set `NODE_ENV=production`.
@@ -122,8 +123,8 @@ Text AI defaults to Gemini for backwards compatibility. Operators can route chat
 | `GEMINI_MODEL` | Optional | `gemini-2.5-flash-lite` | Legacy Gemini fast text model. |
 | `GEMINI_SUGGESTIONS_MODEL` | Optional | `gemini-3.1-pro-preview` | Legacy Gemini reasoning text model. |
 | `GEMINI_VISION_MODEL` | Optional | `gemini-2.5-flash` | Photo-to-workout parsing (`POST /api/v1/parse-exercises-from-image`), and nutrition meal-photo parsing (`POST /api/v1/nutrition/parse/photo`) and label scans (`POST /api/v1/nutrition/parse/label`) via `server/services/nutrition/visionParsing.ts`. |
-| `RAG_CHUNK_SIZE` | Optional | `600` | Characters per chunk during coaching-material embedding. |
-| `RAG_CHUNK_OVERLAP` | Optional | `100` | Character overlap between adjacent chunks. |
+| `RAG_CHUNK_SIZE` | Optional | `600` | Characters per chunk during coaching-material embedding. A positive whole number; anything else is fatal at startup. |
+| `RAG_CHUNK_OVERLAP` | Optional | `100` | Character overlap between adjacent chunks. A whole number from `0` to one less than `RAG_CHUNK_SIZE`; anything else is fatal at startup. |
 | `RAG_MAX_COSINE_DISTANCE` | Optional | `0.6` | Semantic search results further than this cosine distance from the query (0 to 2) are dropped; pinned principles always stay. The default only cuts chunks unrelated to the question. The `[rag] Search returned chunks` log line records the best distance and how many were kept, to tune it against. |
 
 ---
@@ -235,7 +236,7 @@ Rollout toggles, all parsed as the literal strings `"true"` / `"false"` in `serv
 | Variable | Default | Notes |
 |---|---|---|
 | `EMOM_BUILDER_ENABLED` | `false` | Server-side gate for the EMOM workout builder: when not `"true"`, a plan-day structure write that carries `structureBlocks` gets `403 EMOM_BUILDER_DISABLED` (`server/routes/plans.ts`). Keep aligned with the client `VITE_EMOM_BUILDER_ENABLED` flag for each deployment tier; the startup log compares the two, reading `VITE_EMOM_BUILDER_ENABLED` from the server's own environment. |
-| `STRUCTURED_BLOCKS_ENABLED` | `true` | Enables the structured-blocks write guard (`server/routes/structuredWriteGuard.ts`): `POST`/`PATCH /api/v1/workouts` with workout text but no exercise rows or structure blocks (and no linked plan day) is rejected with `422 STRUCTURED_ROWS_REQUIRED`. When off, such text-only writes are accepted and logged as a legacy fallback. |
+| `STRUCTURED_BLOCKS_ENABLED` | `true` | Enables the structured-blocks write guard (`server/routes/structuredWriteGuard.ts`): `POST`/`PATCH /api/v1/workouts` with workout text but no exercise rows or structure blocks (and no link to a plan day of the athlete's own) is rejected with `422 STRUCTURED_ROWS_REQUIRED`. When off, such text-only writes are accepted and logged as a legacy fallback. |
 | `STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY` | `false` | Escape hatch: when `true`, forces the legacy write path (text-only writes accepted) even if `STRUCTURED_BLOCKS_ENABLED` is `true`. |
 | `NUTRITION_ENABLED` | `true` | Server gate for the nutrition module. When not `"true"`, the whole `/api/v1/nutrition` tree returns `404`, the nutrition reminder cron skips, and nutrition is left out of the AI coach context. Keep aligned with the client `VITE_NUTRITION_ENABLED` flag per tier. |
 | `NUTRITION_FUZZY_ENABLED` | `true` | `pg_trgm` trigram (typo / mid-word) arm of local food search; needs migration `0074`. `"false"` falls back to exact substring (kill switch / pre-migration). Synonyms and diacritic-insensitivity are unaffected. |
