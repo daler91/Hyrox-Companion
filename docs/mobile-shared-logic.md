@@ -3,13 +3,14 @@
 # Mobile App: Shared Logic Inventory
 
 **Status:** inventory for Phase 2, step 2 of [mobile-app-plan.md](mobile-app-plan.md), taken
-2026-11-07 against the web client as it stands. **Every module in the port list is now ported**
+2026-11-07 against the web client as it stands; its counts (modules, lines, importing files) were
+taken again on 2026-11-16. **Every module in the port list is now ported**
 (`schema/micros` last, with the Log Food preview), each pinned to its TypeScript original by
 golden fixtures; see [Ports done](#ports-done) below.
 
 ## What this is
 
-The web client imports 37 distinct `@shared/*` modules:
+The web client imports 38 distinct `@shared/*` modules:
 
 ```sh
 grep -rhoE 'from "@shared/[^"]+"' client/src --include=*.ts --include=*.tsx | sort | uniq -c | sort -rn
@@ -27,13 +28,17 @@ imported:
 - **api.** The client computes something the server could return. Add the field, and the app
   renders it.
 
-`@shared/schema` and its subpaths count as one entry, which leaves 33 entries:
+`@shared/schema` and its subpaths count as one entry, which leaves 34 entries:
 
-| Bucket | Entries (33) | Modules counted separately (37) |
+| Bucket | Entries (34) | Modules counted separately (38) |
 | --- | --- | --- |
-| port | 10 | 12 (`schema/exercises`, `schema/structureLint` and `schema/micros` count individually) |
+| port | 11 | 13 (`schema/exercises`, `schema/structureLint` and `schema/micros` count individually) |
 | api | 11 | 11 |
 | render | 12 | 14 (the `schema` barrel and `schema/enums` count individually) |
+
+`nutritionTargets` was first put in the api bucket and is now a port (see API field 2).
+`workoutSummary` is the 38th module: commit 4717867 moved the summary text out of the web client
+into `shared/` when API field 11 shipped.
 
 How this feeds the rest of Phase 2:
 
@@ -64,31 +69,32 @@ How it was checked:
 | `sessionFuellingTargets` | 126 | port | `computeSessionFuellingTarget` | The fuelling panel recomputes on every duration or RPE stepper tap. The server returns the same calculation from `/session-fuelling/{workoutId}` |
 | `nutritionTargets` | 756 | port | `calculateNutritionTarget`, `defaultPeriodizationConfig`, `nextPeriodizationSettings`, `carryPeriodizationForward` | The targets editor fills its goals from the profile and saves the periodisation columns the web saves; onboarding's fuelling step suggests targets from the same function. The server stores whatever it is sent, so both clients must compute the same version; a port pinned by fixtures does that without a server change |
 | `progression` | 304 | port | `suggestNextTarget`, `unmetPrescription`, `epley` | The "Next" chip appears while logging, often offline at the gym. It must equal the target the workout engine writes into the plan |
-| `exerciseEquipment` | 172 | port (dependency) | `implementFor`, `loadIncrement` | The client imports it only in a test, but `progression` needs it at runtime |
+| `exerciseEquipment` | 176 | port (dependency) | `implementFor`, `loadIncrement` | The client imports it only in a test, but `progression` needs it at runtime |
 | `planPhase` | 141 | port | `computeCurrentWeek`, `computePlanPhase`, `PLAN_PHASE_ORDER` | "Week 6 of 12 · Build" depends on the device's today, so it must work offline. The coach's prompts use the same function |
 | `notifyHours` | 75 | port | `resolveNotifyHour`, `fallbackNotifyHour`, `isValidNotifyHour`, `DEFAULT_NOTIFY_HOUR`, `BRIEF_TOMORROW_FROM_HOUR`, `NOTIFY_HOUR_FIELD` | Settings copy changes as the athlete picks an hour, and it must agree with the email scheduler |
-| `schema*` | ~10.5k (dir) | port (mixed) | `schema/exercises`: `EXERCISE_DEFINITIONS`, `EXERCISE_NAME_ALIASES`, `normalizeExerciseName`, `isRunningExerciseName`, `knownExerciseLabel`. `schema/structureLint`: `lintWorkoutStructure`. `schema/micros`: `MICRO_DISPLAY_DEFS` (data). The barrel and `schema/enums`: render | The composer needs the exercise catalogue offline, and the outbox must not queue a structure the server will reject with a 400. The barrel is type-only in client code |
-| `plannedSessionEstimate` | 519 | api | `GET /api/v1/timeline`: `sessionEstimate` on planned entries | The server already computes it per day, personalised by run pace. A port would also need the exercise catalogue and the athlete's run history |
-| `maf` | 224 | api | `PATCH /api/v1/preferences` derives `mafHr`. `mafCompliance` on timeline and workout entries | The server already runs `calculateMafHr` on every preferences save, but stores the client's number |
-| `fuellingCorrelation` | 152 | api | `GET /api/v1/nutrition/block`: `correlation` | Pure analytics over the response's own points. No server file imports it |
-| `bodySystemLoad` | 163 | api | `GET /api/v1/training-overview`: `bodySystemLoad.divergence` | The server already builds the sentence for the AI analysis. Labels are render |
-| `coachNotes` | 149 | api | `GET /api/v1/timeline`: parsed `coachNotes` | It parses a format the server writes, and its regexes depend on JS `\s` semantics |
-| `deviceSportTypes` | 178 | api | `GET /api/v1/timeline`, `GET /api/v1/workouts/{id}`: `avgCadenceUnit` | The server owns the provider sport list, which Health Connect will extend |
-| `planDayKind` | 46 | api | `GET /api/v1/timeline`: `dayKind` | The server already runs `isRestLikePlanDay` |
-| `raceDay` | 10 | api | The same `dayKind` field | The server writes the race-day marker and already tests for it |
-| `ratio` | 76 | api | `GET /api/v1/training-overview/summary`: `completionRate` | The Coach panel's rate is computed on the client, and the server computes a different one for the coach |
-| `nutritionRange` | 13 | api | `GET /api/v1/nutrition/summary-range` clamps the range instead of rejecting it | The constant exists only so the client can narrow its own request. The response already echoes `from` and `to` |
+| `schema*` | ~10.7k (dir) | port (mixed) | `schema/exercises`: `EXERCISE_DEFINITIONS`, `EXERCISE_NAME_ALIASES`, `normalizeExerciseName`, `isRunningExerciseName`, `knownExerciseLabel`. `schema/structureLint`: `lintWorkoutStructure`. `schema/micros`: `MICRO_DISPLAY_DEFS` (data). The barrel and `schema/enums`: render | The composer needs the exercise catalogue offline, and the outbox must not queue a structure the server will reject with a 400. The barrel is type-only in client code |
+| `plannedSessionEstimate` | 519 | api | `GET /api/v1/timeline`: `sessionEstimate` on planned entries | The server already computes it per day, personalised by run pace. A port would also need the exercise catalogue and the athlete's run history. **Shipped** (field 1) |
+| `maf` | 224 | api | `PATCH /api/v1/preferences` derives `mafHr`. `mafCompliance` on timeline and workout entries | The server already ran `calculateMafHr` on every preferences save, but stored the client's number. **Shipped** (fields 3a and 3b): it stores its own |
+| `fuellingCorrelation` | 169 | api | `GET /api/v1/nutrition/block`: `correlation` | Pure analytics over the response's own points. No server file imported it. **Shipped** (field 4): the block route calls it |
+| `bodySystemLoad` | 163 | api | `GET /api/v1/training-overview`: `bodySystemLoad.divergence` | The server already builds the sentence for the AI analysis. Labels are render. **Shipped** (field 5) |
+| `coachNotes` | 149 | api | `GET /api/v1/timeline`: parsed `coachNotes` | It parses a format the server writes, and its regexes depend on JS `\s` semantics. **Shipped** (field 6) |
+| `deviceSportTypes` | 178 | api | `GET /api/v1/timeline`, `GET /api/v1/workouts/{id}`: `avgCadenceUnit` | The server owns the provider sport list, which the Health Connect import reads too (`server/services/healthConnectMapper.ts`). **Shipped** (field 7) |
+| `planDayKind` | 46 | api | `GET /api/v1/timeline`: `dayKind` | The server already runs `isRestLikePlanDay`. **Shipped** (field 8) |
+| `raceDay` | 10 | api | The same `dayKind` field | The server writes the race-day marker and already tests for it. **Shipped** (field 8) |
+| `ratio` | 76 | api | `GET /api/v1/training-overview/summary`: `completionRate` | The Coach panel's rate is computed on the client, and the server computes a different one for the coach. **Not added** (field 9): the app counts the rate from its own timeline, in `ui/coach/CoachStats.kt` |
+| `nutritionRange` | 29 | api | `GET /api/v1/nutrition/summary-range` clamps the range instead of rejecting it | The constant existed only so the client could narrow its own request. The response already echoes `from` and `to`. **Shipped** (field 10): the module now also holds `clampNutritionRange`, which the route and the web both call |
+| `workoutSummary` | 92 | api | `POST /api/v1/workouts` writes `mainWorkout` when it is left out | `generateSummary`, the text the web saves as `mainWorkout` when the athlete types none. It was client code in `hooks/workout-editor/blockHelpers.ts` when the inventory was taken. **Shipped** (field 11): the server calls it, and the app sends no summary |
 | `units` | 107 | render | none | Unit brands are no-ops at runtime. `formatMinutes` is display, and `METRES_PER_MILE` ships with the `unitConversion` port |
 | `formatClock` | 18 | render | none | `formatSecondsToClock` is display |
 | `chat` | 41 | render | none | `docs/openapi.json` carries the limits and the status enum. The default photo prompt is UI copy |
 | `weeklyReview` | 19 | render | none | `maxLength` 280 is in the contract. The Sunday 17:00 constant is for an after-launch prompt |
 | `preferenceBounds` | 30 | render | none | The bounds are in the `UpdateUserPreferences` schema of the contract |
-| `athleteFacts` | 151 | render | none | `maxLength` 140 is in the contract. `isAthleteFactDue` is `reviewOn <= today` |
+| `athleteFacts` | 154 | render | none | `maxLength` 140 is in the contract. `isAthleteFactDue` is `reviewOn <= today` |
 | `missedRecovery` | 26 | render | none | `formatSessionLength` is copy |
 | `sessionIntent` | 204 | render | none | A label switch plus types. Grading happens on the server |
 | `stationCoverage` | 219 | render | none | `stationLabel` is a catalogue label. The server computes coverage |
 | `inSequence` | 34 | render (n/a) | none | JS promise sequencing for the web offline queue. Kotlin uses coroutines |
-| `bodySystemLoadTestFixtures` | 102 | render (n/a) | none | Test-only |
+| `bodySystemLoadTestFixtures` | 104 | render (n/a) | none | Test-only |
 | `nutritionTestFixtures` | 33 | render (n/a) | none | Test-only |
 
 ## Port list
@@ -105,7 +111,7 @@ All in `mobile/core/src/commonMain/kotlin/com/fitai/coach/core/`, pure common Ko
 | `planPhase` | `plans` | `planPhase.*` (270) |
 | `notifyHours` | `notifications` | `notifyHours.*` (222) |
 | `nutritionScaling`, `mealFuelling.mergeMealOverride`, `sessionFuellingTargets` | `nutrition` | 8 suites (1,035) |
-| `nutritionTargets` (3 functions) | `nutrition` | `nutritionTargets.*` (501) |
+| `nutritionTargets` (4 functions) | `nutrition` | `nutritionTargets.*` (501), three suites; `carryPeriodizationForward` has no suite, `CarryPeriodizationTest` covers it |
 | `progression`, `exerciseEquipment`, `schema/exercises` | `exercises` | 8 suites (5,158) |
 | `schema/structureLint` | `structure` | `structureLint.lintWorkoutStructure` (184) |
 | `schema/micros` | `nutrition` | `micros.constants` (1) |
@@ -113,8 +119,17 @@ All in `mobile/core/src/commonMain/kotlin/com/fitai/coach/core/`, pure common Ko
 
 The exercise tables are generated Kotlin (`exercises/generated/ExerciseCatalogue.kt`,
 `pnpm mobile:catalogue`), checked for drift in the unit suite like the API models.
-`structureLint` lints the generated request models through adapters, so the app lints exactly
-the body it sends.
+`structureLint` reads its own input types (`structure/StructureLintInput.kt`).
+`structure/StructureLintAdapters.kt` fills them from the generated request models: the exercise
+rows of `CreateWorkoutRequest` and `UpdateWorkoutRequest`, and the blocks of
+`PatchPlansDaysByDayIdStructureRequest`. Nothing in the app calls `lintWorkoutStructure` yet; only
+`StructureLintFixtureTest` does. The log screen sends `structureBlocks` on
+`POST /api/v1/workouts` unlinted (`ui/log/LogWorkoutViewModel.kt`), and there is no adapter for
+that request's blocks.
+
+Three more ported functions have no caller in the app yet: `restampSetPatch`,
+`stampForPreferences` and `displayDistanceToStored`. The set editor edits a row in the row's own
+stamped unit (`ui/workout/ExerciseGroups.kt`).
 
 **TypeScript bugs found while porting, ported faithfully and pinned by fixtures** (fixing them
 means changing the TypeScript, regenerating the fixtures and simplifying the ports):
@@ -122,9 +137,11 @@ means changing the TypeScript, regenerating the fixtures and simplifying the por
 - The unit alias tables and `EXERCISE_DEFINITIONS` are plain objects, so lookups also find
   inherited `Object.prototype` members: `normalizeExerciseName("Constructor")` returns
   `"constructor"`, `convertWeight(100, "constructor", "lbs")` returns 100, and
-  `storedWeightToDisplay` with such a unit throws. The Kotlin ports reproduce this from a list of
-  the 12 prototype names (`exercises/JsPlainObject.kt`) or throw `UnitAliasException` where the TS
-  result is not a unit at all. Fix: `Object.hasOwn`, a `Map`, or `Object.create(null)`.
+  `storedWeightToDisplay` with such a unit throws. The exercise ports reproduce this from a list
+  of the 12 prototype names (`exercises/JsPlainObject.kt`). The unit port checks for the two a
+  lower-cased unit can spell, `constructor` and `__proto__` (`units/UnitConversion.kt`), and
+  throws `UnitAliasException` where the TS result is not a unit at all. Fix: `Object.hasOwn`, a
+  `Map`, or `Object.create(null)`.
 - `structureLint`: the AMRAP fixed-rounds check reads `rounds` where Zod checks `roundCount`;
   presence checks treat 0 as set where Zod treats it as missing; MISSING_STEP_TARGET fires on
   for_time rest steps, which Zod forbids targets on.
@@ -186,7 +203,8 @@ where the plan's `80-90kg` → `80-198 lbs` bug lived, so the app does not need 
   `storedDistanceToDisplay`, `restampSetPatch`, with the private `parsedDistanceToMeters` and
   `metersToStoredDistance`. The web wraps them in `lib/setDisplay.ts` (`toPreferenceScale`) and in
   the optimistic patch in `hooks/useExerciseSetsForOwner.ts:187`. The app needs both for Room rows
-  and outbox replays.
+  and outbox replays. Today it calls the two display functions (`ui/timeline/TimelineExtras.kt`)
+  and neither `stampForPreferences` nor `restampSetPatch` (see [Ports done](#ports-done)).
 - Set-editor distance: `getWorkoutDistanceDisplay` and `displayDistanceToStored`, with the private
   `cleanWholeKilometerTarget` and `formatCompactNumber`.
 - Constants: `KG_TO_LBS = 2.20462`, `M_TO_FT = 3.28084`, `FEET_PER_MILE = 5280`,
@@ -203,7 +221,7 @@ must print byte-identical text, they are cheap to add to the fixtures.
 - `standardize*`: `null`, `""`, `"KG"`, `" lbs "`, `"Pound"`, `"stone"`, `"mi"`, `"Miles"`,
   `"kilometre"`, `"m"`, `"ft"`, `"feet"`. `"kilometre"` is in the parsed table but not in
   `DISTANCE_UNIT_ALIASES`.
-- `getStoredDistanceUnit`: `"miles"`, `"mi"`, `"km"`, `null`, `"ft"`. `"ft"` returns `"m"`, because
+- `getStoredDistanceUnit`: `"Miles"`, `"mi"`, `"km"`, `null`, `"ft"`. `"ft"` returns `"m"`, because
   it is not a preference alias.
 - `convertWeight`: `(100,"kg","lbs")`, `(220.462,"lbs","kg")`, `(0,"kg","lbs")`, `(-5,"kg","lbs")`,
   `(100,"kg","stone")`, `(100,"KG","Pounds")`.
@@ -275,7 +293,9 @@ client.
 **Notes:**
 
 - All the math is UTC on `YYYY-MM-DD` strings, so it does not depend on the timezone.
-  kotlinx-datetime `LocalDate` maps onto it directly.
+  kotlinx-datetime `LocalDate` maps onto it directly. The port does not use `LocalDate`:
+  `dates/JsDate.kt` reproduces `Date.UTC` and `Number`, so it gives the TypeScript's answer for
+  every string, the two quirks below included.
 - JS has two quirks that `LocalDate` does not:
   - `Date.UTC` maps years 0–99 to 1900–1999, so `addDaysToISODate("0050-01-01", 0)` is
     `"1950-01-01"`.
@@ -308,7 +328,8 @@ client.
   - `"9999-12-31"`, `"20266-11-15"`, `"2026-1-5"`, `"2026-011-05"`.
   - `" 2026-11-15"`, `"2026-11-15 "`, `"2026-11-15T00:00"`, `""`, `"abcd-ef-gh"`.
 - `addDaysToISODate`: `("2026-12-31",1)`, `("2024-02-28",1)`, `("2026-03-29",-1)`, `(d,0)`,
-  `(d,3650)`, `(d,-400)`. Keep these inside 1900–2100 (see Open questions).
+  `(d,3650)`, `(d,-400)`. The suite also runs dates outside 1900–2100, from before year 0 to
+  `275760-09-13`, the last day a JS `Date` holds (see Open questions).
 - `weekdayIndex`, `weekdayName`, `planWeekOneMonday`, `nextPlanStartDate` and
   `weekOneDaysBeforeStart`:
   - Each day of the week starting `2026-11-09`, a Monday.
@@ -385,7 +406,8 @@ the constants.
 **Notes:** The inputs come from the athlete's saved `expectedDurationMin` / `expectedRpe`, or from
 the `sessionEstimate` API field (see API fields), plus `bodyweightKg` from preferences. If the
 fuelling panel is not in v1, a `fuellingTarget` field on planned timeline entries would do instead,
-and this port can wait.
+and this port can wait. The panel and the chip are in the app (`ui/fuelling/FuellingPlanPanel.kt`,
+`ui/fuelling/FuellingModel.kt`), both on this port, so no `fuellingTarget` field was added.
 
 **Fixture inputs:**
 
@@ -405,8 +427,10 @@ and this port can wait.
 
 ### `shared/nutritionTargets.ts`
 
-**Functions:** `calculateNutritionTarget` (with `calculateBmr`), `defaultPeriodizationConfig` and
-`nextPeriodizationSettings`. Not `effectiveTarget*`: the server applies load scaling and returns
+**Functions:** `calculateNutritionTarget` (with `calculateBmr`), `defaultPeriodizationConfig`,
+`nextPeriodizationSettings` and `carryPeriodizationForward`, which calls
+`nextPeriodizationSettings` with the current version's own choices (onboarding's fuelling step
+saves with it). Not `effectiveTarget*`: the server applies load scaling and returns
 the day's effective target in the summary.
 
 **Depends on:** the Atwater factors from `nutritionScaling`.
@@ -502,8 +526,9 @@ and `planWeekForDisplay` are render.
 
 **Notes:** The web passes the browser's local date as `today`
 (`components/timeline/TimelineSummaryCard.tsx:99`, via `lib/dateUtils.ts` `getTodayString`). The app
-should pass `Clock.System.todayIn(TimeZone.currentSystemDefault())`. The server uses the athlete's
-stored timezone (see Open questions).
+passes `todayIn(userTimezone)` (`dates/Today.kt`, called in `ui/timeline/TimelineViewModel.kt`):
+today in the athlete's stored timezone, which the server uses too, and in the device's zone when
+none is stored (see Open questions).
 
 **Fixture inputs:**
 
@@ -561,11 +586,12 @@ choice in `components/workout-detail/shared/WorkoutSummaryHeader.tsx:138`.
 
 **Notes:**
 
-- Have the fixture script emit `EXERCISE_DEFINITIONS` and `EXERCISE_NAME_ALIASES` as JSON, and
-  generate the Kotlin tables from that JSON instead of copying them by hand.
+- The Kotlin tables are not copied by hand. `script/kotlin-catalogue/generate.ts` writes them
+  straight from `EXERCISE_DEFINITIONS`, `EXERCISE_NAME_ALIASES` and the equipment tables of
+  `shared/exerciseEquipment.ts` (`pnpm mobile:catalogue`), with no JSON step in between.
 - `slugifyExerciseName` loops over characters with `trim()` and `toLowerCase()`. Kotlin's `trim()`
   also strips U+001C–U+001F, and JS's also strips U+FEFF. The slug algorithm absorbs both
-  differences, but the fixtures cover them anyway.
+  differences, but the fixtures cover them anyway, and the port trims with `jsTrim`.
 
 **Fixture inputs:**
 
@@ -586,15 +612,18 @@ choice in `components/workout-detail/shared/WorkoutSummaryHeader.tsx:138`.
 
 **Functions:** `lintWorkoutStructure`, with all its private helpers.
 
-**Depends on:** the types `ParsedExercise` and `StructureBlockInput`, which come from the generated
-models (both are registered in `shared/openapiRoutes/entities.ts`).
+**Depends on:** the types `ParsedExercise` and `StructureBlockInput`. `ParsedExercise` is
+registered in `shared/openapiRoutes/entities.ts`; `StructureBlockInput` is not a contract
+component (the registered block is `WorkoutStructureBlock`). The port takes neither generated
+model: it has its own input types, filled by adapters (see [Ports done](#ports-done)).
 
 **Notes:**
 
 - The server rejects any result with `schemaErrors` with a 400
-  (`server/services/workoutUseCases.ts:117`, `:177`).
+  (`server/services/workoutUseCases.ts:134`, `:195`).
 - The web lints before save (`hooks/workout-form/saveWorkoutPayload.ts:357`), so an offline save is
-  never queued only to fail on replay. The app outbox needs the same check.
+  never queued only to fail on replay. The app outbox needs the same check, and does not run it
+  yet (see [Ports done](#ports-done)).
 
 **Fixture inputs:**
 
@@ -631,18 +660,18 @@ fixture, so the app's %RDI matches the server's `GET /api/v1/nutrition/micros`.
 
 | # | Module | Endpoint | Field or change | Does the server already have the value? |
 | --- | --- | --- | --- | --- |
-| 1 | `plannedSessionEstimate` | `GET /api/v1/timeline`, planned entries | `sessionEstimate: {durationMin, rpe, source, clamped}` | **Yes**, one day at a time: `getPlannedSessionEstimate` (`server/services/sessionEstimate/plannedSessionEstimate.ts:196`) serves `GET /api/v1/nutrition/planned-session-estimate/{planDayId}`. For the batch, call `estimatePlannedSession` with `getRunPaceRatio` and leave out the per-day AI nudge |
-| 2 | `nutritionTargets` | `POST /api/v1/nutrition/targets` | **Not needed.** The app ports the three functions instead (see the summary table) | — |
-| 3a | `maf` | `PATCH /api/v1/preferences` | The server writes `users.mafHr` from `calculateMafHr` and returns it. The app stops sending `mafHr` | **Computed, not stored.** `server/storage/users.ts:336` computes it on every save for the `maf_profile` snapshot, but the column keeps the client's value (`hooks/useOnboardingWizard.ts:334`, `pages/settings/usePreferencesForm.tsx:344`). **Shipped:** `updateUserPreferences` writes the column from the saved answers (the category, else the legacy proxies, as the `maf_profile` snapshot does) in the same update, and drops a client-sent `mafHr`, which the contract now marks deprecated. The web and the app send the answers only, so undoing a change of answers puts the old ceiling back with them |
+| 1 | `plannedSessionEstimate` | `GET /api/v1/timeline`, planned entries | `sessionEstimate: {durationMin, rpe, source, clamped}` | **Yes**, one day at a time: `getPlannedSessionEstimate` (`server/services/sessionEstimate/plannedSessionEstimate.ts:196`) serves `GET /api/v1/nutrition/planned-session-estimate/{planDayId}`. For the batch, call `estimatePlannedSession` with `getRunPaceRatio` and leave out the per-day AI nudge. **Shipped** that way, on upcoming planned entries (`withSessionEstimates`, `server/services/sessionEstimate/timelineSessionEstimates.ts`). The app's fuelling chip and panel fall back on it when the athlete has set no expected duration or RPE (`ui/fuelling/FuellingModel.kt`) |
+| 2 | `nutritionTargets` | `POST /api/v1/nutrition/targets` | **Not needed.** The app ports the three functions the web calls, and `defaultPeriodizationConfig`, which they need (see the summary table) | — |
+| 3a | `maf` | `PATCH /api/v1/preferences` | The server writes `users.mafHr` from `calculateMafHr` and returns it. The app stops sending `mafHr` | **Computed, not stored.** `updateUserPreferences` in `server/storage/users.ts` computed it on every save for the `maf_profile` snapshot, but the column kept the client's value, sent by `hooks/useOnboardingWizard.ts` and `pages/settings/usePreferencesForm.tsx`. **Shipped:** `updateUserPreferences` writes the column from the saved answers (the category, else the legacy proxies, as the `maf_profile` snapshot does) in the same update, and drops a client-sent `mafHr`, which the contract now marks deprecated. The web and the app send the answers only, so undoing a change of answers puts the old ceiling back with them |
 | 3b | `maf` | `GET /api/v1/timeline`, `GET /api/v1/workouts/{id}` | `mafCompliance: {compliancePct, classification, nextAction, avgOverBy}` on completed sessions with an average HR, for MAF-method athletes | **Partly.** `computeMafCompliance` runs in `server/services/mafTestService.ts:71`, but only for tagged MAF tests. The web computes it for every session in `lib/mafFormat.ts:55`. **Shipped** on both, for completed sessions with running in them, the web's gate (`server/services/sessionDerivedFields.ts`). The app shows it on workout detail |
 | 4 | `fuellingCorrelation` | `GET /api/v1/nutrition/block` | `correlation: FuellingCorrelationResult` | **No.** No server file imports the module. Its inputs are the response's own `points` (`components/analytics/FuellingCorrelationCard.tsx:70`). **Shipped.** The web card maps the points with the same `correlationDayFromBlockPoint`; the app reads the field |
 | 5 | `bodySystemLoad` | `GET /api/v1/training-overview` | `bodySystemLoad.divergence: string \| null` | **Yes.** `describeBodySystemDivergence` runs in `server/services/overviewAnalysisService.ts:224` for the AI analysis, but not for this response. **Shipped**, computed in `calculateBodySystemLoad`, so the card and the coach's prompt get the same sentence |
 | 6 | `coachNotes` | `GET /api/v1/timeline`, and any workout or plan-day response that carries `notes` | `coachNotes: {athleteText, cues: [{label: string \| null, text}]}` | **No.** The server only writes the format, through `appendCoachCue` (`server/services/coachService.ts:80`, `server/services/aiSuggestionService.ts:120`). **Shipped on `GET /api/v1/timeline`** (`server/services/timelineCoachNotes.ts`), the only place the app shows cues |
 | 7 | `deviceSportTypes` | `GET /api/v1/timeline`, `GET /api/v1/workouts/{id}` | `avgCadenceUnit: "spm" \| "rpm"` | **No.** `cadenceUnitFor` exists in `shared/`, but only the client calls it. `server/services/stravaMapper.ts:86` says the UI labels cadence. **Shipped** on both, omitted without a cadence |
-| 8 | `planDayKind`, `raceDay` | `GET /api/v1/timeline` | `dayKind: "session" \| "rest" \| "race"` | **Yes.** `isRestLikePlanDay` runs in `server/storage/plans.ts:1037` and `server/emailScheduler.ts:463`. The race marker is written in `server/storage/raceDayView.ts:44` and tested in `server/storage/timeline.ts:188`. **Shipped** on every timeline entry. The app's own race check compared the focus with "race" rather than "Race Day", so it never matched; it reads `dayKind` now, and shows the web's "Rest day" badge on a missed rest day |
+| 8 | `planDayKind`, `raceDay` | `GET /api/v1/timeline` | `dayKind: "session" \| "rest" \| "race"` | **Yes.** `isRestLikePlanDay` runs in `server/storage/plans.ts:1037` and `server/emailScheduler.ts:463`. The race marker is written in `server/storage/raceDayView.ts:44` and tested in `server/storage/timeline.ts:187`. **Shipped** on every timeline entry. The app's own race check compared the focus with "race" rather than "Race Day", so it never matched; it reads `dayKind` now, and shows the web's "Rest day" badge on a missed rest day |
 | 9 | `ratio` | `GET /api/v1/training-overview/summary` | `completionRate: number \| null`: last 28 days, excluding today, excused days and `let_go` misses | **No, a different number.** The coach context rate (`server/services/ai/trainingStats.ts:36`) counts every loaded entry and returns 0 where the web returns `null` (`lib/statsUtils.ts:112`). **Not needed for the Coach panel:** the app counts it on the device from its timeline, as the web panel does (`ui/coach/CoachStats.kt`, a port of `calculateStats`) |
-| 10 | `nutritionRange` | `GET /api/v1/nutrition/summary-range` | Clamp a too-wide range to 731 days around the athlete's today, instead of a 400. The response's `from` and `to` already report the window served | **Yes**, the constant and the athlete's today. It rejects today (`shared/schema/nutrition.ts:330`). This makes `pages/timeline/fuellingWindow.ts`'s narrowing unnecessary. **Shipped** (`clampNutritionRange`, `shared/nutritionRange.ts`). The web still narrows with the same function, so its query key is the range served; the app sends its window as it is |
-| 11 | Found along the way, `units` / `unitConversion` | `POST /api/v1/workouts` | Generate `mainWorkout` on the server when it is omitted, from `exercises` | **No.** When the free text is empty, the client writes `generateSummary(…)` (`hooks/workout-editor/blockHelpers.ts:87`, used at `hooks/workout-form/saveWorkoutPayload.ts:376`). That summary is built from `getWorkoutDistanceDisplay` and `formatMinutes`, so the app would otherwise have to port it byte for byte. **Shipped.** The summary moved to `shared/workoutSummary.ts`; POST /api/v1/workouts writes it in the athlete's units when `mainWorkout` is left out or blank. The app leaves it out |
+| 10 | `nutritionRange` | `GET /api/v1/nutrition/summary-range` | Clamp a too-wide range to 731 days around the athlete's today, instead of a 400. The response's `from` and `to` already report the window served | **Yes**, the constant and the athlete's today. It rejected a wider range with a 400 (`checkRangeSpan` in `shared/schema/nutrition.ts`, which `/nutrition/block` still applies). The clamp was to make `pages/timeline/fuellingWindow.ts`'s narrowing unnecessary. **Shipped** (`clampNutritionRange`, `shared/nutritionRange.ts`). The web still narrows with the same function, so its query key is the range served; the app sends its window as it is |
+| 11 | Found along the way, `units` / `unitConversion` | `POST /api/v1/workouts` | Generate `mainWorkout` on the server when it is omitted, from `exercises` | **No.** When the free text is empty, the client writes `generateSummary(…)` (then defined in `hooks/workout-editor/blockHelpers.ts`, which now re-exports it; used at `hooks/workout-form/saveWorkoutPayload.ts:376`). That summary is built from `getWorkoutDistanceDisplay` and `formatMinutes`, so the app would otherwise have to port it byte for byte. **Shipped.** The summary moved to `shared/workoutSummary.ts`; POST /api/v1/workouts writes it in the athlete's units when `mainWorkout` is left out or blank. The app leaves it out |
 | 12 | Optional, `athleteFacts` | `GET /api/v1/athlete-facts` | `maxActive` (`MAX_ACTIVE_ATHLETE_FACTS`, 20) | Enforced in `server/storage/athleteFacts.ts:94`, but not in the contract. The fact `maxLength` (140) already is. **Shipped** as the `X-Max-Active-Facts` response header: the body is a bare array, so a field would have changed its shape. The app reads it, and until it has, only the server refuses one fact too many |
 
 ## Open questions
@@ -656,12 +685,21 @@ fixture, so the app's %RDI matches the server's `GET /api/v1/nutrition/micros`.
 
    `unitConversion`, `dateUtils`, `nutritionScaling`, `planPhase` and `schema/exercises` are needed
    for the v1 timeline, composer and food log whatever the answers.
+   **Answered:** all five are ported. Four have a caller in the app: the fuelling panel and chip
+   (`ui/fuelling/`), the meal-target editor (`ui/nutrition/TargetsModel.kt`), the "Next" chip
+   (`ui/workout/WorkoutDetailModel.kt`) and the notification settings
+   (`ui/settings/NotificationSettingsModel.kt`). `lintWorkoutStructure` has none yet.
 2. **How should the exercise catalogue reach the app?** No catalogue endpoint exists: there is only
    `/api/v1/exercises/{exerciseName}/history` and `/api/v1/custom-exercises`. The two options:
    - Generate Kotlin from the TS source at build time. The catalogue works offline and is versioned
      with the app.
    - Serve it from an endpoint. New exercises reach the app without a release, but old builds then
      meet unknown keys.
+
+   **Answered:** generated, by a script and not by the build. `pnpm mobile:catalogue`
+   (`script/kotlin-catalogue/`) writes `exercises/generated/ExerciseCatalogue.kt`, which is
+   committed; the unit suite fails while it differs from what the TypeScript tables generate
+   (`script/kotlin-catalogue/catalogue.test.ts`).
 3. **Whose "today"?** These read the device's today on the web:
    - `computeCurrentWeek`
    - `isAthleteFactDue`
@@ -670,20 +708,33 @@ fixture, so the app's %RDI matches the server's `GET /api/v1/nutrition/micros`.
 
    The server uses the athlete's stored timezone. The app should copy the web and use the device
    timezone, but the two will disagree when the device and the stored timezone differ.
+   **Answered:** the app does not copy the web. All four get their today from `todayIn`
+   (`dates/Today.kt`) with the athlete's `userTimezone` preference, the timezone the server uses,
+   and fall back to the device's zone only when none is stored or the name is unknown.
 4. **Date domain.** Should the Kotlin date port declare years outside 1900–2100 out of domain? That
    is the range the nutrition routes already enforce. Below the year 1000, JS output is unpadded,
    and years 0–99 become the 1900s. `isIsoCalendarDate` fixtures would still cover those edges.
+   **Answered:** no. The port reproduces the JS for every year (`dates/JsDate.kt`), unpadded
+   output and the 1900s mapping included, and the `dateUtils.*` suites run those years.
 5. **Which completion rate is canonical?** The web Coach panel (`lib/statsUtils.ts`) and the coach's
    prompt context (`server/services/ai/trainingStats.ts`) disagree. Decide before adding API field 9.
+   Field 9 was not added. The app's Coach panel counts the web panel's rate
+   (`ui/coach/CoachStats.kt`), and the prompt context still computes its own.
 6. **The web is already inconsistent here.** `FuellingTargetChip.tsx` uses the local, generic-pace
-   estimate. `FuellingPlanPanel.tsx:104` swaps in the server's personalised, possibly AI-refined
+   estimate. `FuellingPlanPanel.tsx:105` swaps in the server's personalised, possibly AI-refined
    estimate. So the chip and the panel can quote different targets for the same session. API field
-   1 would fix the web too.
+   1 would fix the web too. Field 1 has shipped, but no web file reads `sessionEstimate`, so the
+   web chip still estimates locally.
 7. **`mafHr` has two writers.** Should the server ignore a client-sent `mafHr` once field 3a ships?
    **Answered:** yes. The server drops it and writes its own (field 3a).
 8. **Notes edited offline.** With field 6, a note edited offline is unparsed until it syncs. Show the
    raw text until then, or port `parseCoachNotes`? A port would need JS-compatible `\s` (JVM `\s` is
    ASCII-only by default).
+   **Answered:** nothing is ported. An entry with notes and no `coachNotes` shows them as the
+   athlete's text (`coachNotesOf`, `ui/timeline/CoachNotes.kt`). An optimistic edit changes `notes`
+   and keeps the entry's old `coachNotes` (`TimelineEntry.edited`,
+   `core/data/TimelineRepository.kt`), so an entry that already had `coachNotes` shows the earlier
+   split until the next refresh.
 9. **The summary text is generated on the client** (field 11). Move it to the server, or accept that
    web and app may write different `mainWorkout` text for the same workout?
    **Answered:** moved. The server writes it when the text is left out (field 11), from the same
@@ -699,10 +750,10 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
 
 ### port
 
-- **`unitConversion`.** 1046 lines. The server uses it in 56 files.
+- **`unitConversion`.** 1046 lines. The server uses it in 58 files.
   - **Client use:** conversions in the set editor, the stamp-aware read path and optimistic patches,
     bodyweight, height and distance inputs, and display formatting.
-  - **Importing files (24):** `components/exercise-row/InlineSetEditor.tsx`,
+  - **Importing files (23):** `components/exercise-row/InlineSetEditor.tsx`,
     `components/timeline/timeline-workout-card/{WorkoutStravaStats,TimelineWorkoutCard}.tsx`,
     `components/timeline/timeline-workout-card/types.ts`,
     `components/settings/preferences/BodyCompositionCard.tsx`,
@@ -713,10 +764,14 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
     `components/analytics/training-overview/{OverviewStatsGrid,OverviewTrendCharts}.tsx`,
     `components/analytics/MafTrendTab.tsx`, `hooks/useExerciseSetsForOwner.ts`,
     `hooks/onboardingProfile.ts`, `hooks/useOnboardingWizard.ts`,
-    `hooks/workout-editor/blockHelpers.ts`, `lib/setDisplay.ts`, `lib/workoutStructureSummary.ts`,
+    `lib/setDisplay.ts`, `lib/workoutStructureSummary.ts`,
     `lib/manualMetrics.ts`, `lib/personalRecordFormat.ts`, `lib/exerciseUtils.ts`,
     `pages/log-workout/useDuplicateLastWorkout.ts`, `pages/settings/preferencesValidation.ts`.
-  - **Exports used:** the port list above, the six formatters left as render, and types.
+    `hooks/workout-editor/blockHelpers.ts` was the 24th until the summary moved to
+    `shared/workoutSummary.ts`.
+  - **Exports used:** 15 of the 19 functions in the port list (not `standardizeDistanceUnit`,
+    `standardizeParsedDistanceUnit`, `roundStoredWeight` or `roundStoredDistance`), five of the six
+    formatters left as render (not `formatNumberWithUnit`), and types.
 - **`dateUtils`.** 179 lines. The server uses it in 36 files, and it also feeds the Zod schemas.
   - **Client use:** plan length and its validation, start-date defaults and notes, the weekday on
     moved entries, and the windows for fuelling and drop targets.
@@ -724,7 +779,8 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
     `components/workout-detail/shared/WorkoutPlanDayPicker.tsx`,
     `components/onboarding/GoalStep.tsx`, `hooks/useMoveTimelineEntry.ts`, `lib/planStart.ts`,
     `lib/weekDates.ts`, `pages/timeline/dropTargets.ts`, `pages/timeline/fuellingWindow.ts`.
-  - **Exports used:** the 13 listed in the port list, plus `describeWeekdaySpan`.
+  - **Exports used:** 12 of the 13 listed in the port list (not `planWeekOneMonday`, which
+    `planSpanWeeks` calls), plus `describeWeekdaySpan`.
 - **`nutritionScaling`.** 170 lines. The server uses it in `server/services/nutrition/rollup.ts`.
   - **Client use:** the Log Food preview, meal totals and macro shares.
   - **Importing files:** `pages/nutrition/{LogFoodDialog.tsx,utils.ts,MealSection.tsx}`.
@@ -749,14 +805,15 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
   - **Importing files:** `components/workout-detail/exercise-table/nextTarget.ts`, which
     re-exports `suggestNextTarget` to `LastTimeRow.tsx:80`.
   - **Exports used:** `suggestNextTarget`, `NextTarget`.
-- **`exerciseEquipment`.** 172 lines. The server uses it in 4 files, including
+- **`exerciseEquipment`.** 176 lines. The server uses it in 4 files, including
   `server/services/workoutEngine` and `server/services/ai/exerciseSelection.ts`.
   - **Client use:** none at runtime directly. It is a runtime dependency of `progression`.
   - **Importing files:** only `components/workout-detail/exercise-table/__tests__/nextTarget.test.ts`.
   - **Exports used:** `loadIncrement` (in that test).
-- **`planPhase`.** 141 lines. The server uses it in 5 files: `server/services/ai/index.ts`,
-  `coachingInsights.ts`, `workoutEngine/adaptation.ts`, `sessionGrades/sessionGradeService.ts` and
-  `planBlueprint.ts`.
+- **`planPhase`.** 141 lines. The server uses it in 5 files: `server/prompts/workoutEngine.ts`
+  and, under `server/services/`, `ai/coachingInsights.ts`, `workoutEngine/adaptation.ts`,
+  `sessionGrades/sessionGradeService.ts` and `planBlueprint.ts`. `ai/index.ts` reaches it through
+  `coachingInsights.ts`, which re-exports `computeCurrentWeek` and `computePlanPhase`.
   - **Client use:** "Week N of M · Phase" and the coach note's phase text.
   - **Importing files:** `components/timeline/TimelineSummaryCard.tsx`,
     `components/timeline/timeline-workout-card/CoachNote.tsx`.
@@ -769,9 +826,9 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
     `pages/settings/preferencesSnapshot.ts`.
   - **Exports used:** `BRIEF_TOMORROW_FROM_HOUR`, `DEFAULT_NOTIFY_HOUR`, `fallbackNotifyHour`,
     `resolveNotifyHour`, `EmailNotifyKind`.
-- **`schema*`.** About 10.5k lines across `shared/schema/*.ts` and `types/`. The server uses it
-  everywhere.
-  - **The barrel:** 209 production client files import it, all with `import type`.
+- **`schema*`.** About 10.7k lines across `shared/schema/*.ts` and `types/`, tests included. The
+  server uses it everywhere.
+  - **The barrel:** 206 production client files import it, all with `import type`.
     `script/bundle-check.ts` enforces that no client file value-imports the barrel. Bucket: render,
     via generated models.
   - **`schema/enums`** (183 lines):
@@ -784,16 +841,18 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
       `hooks/chat/chatSessionModel.ts`.
     - Bucket: render.
   - **`schema/exercises`** (851 lines):
-    - Client use: `EXERCISE_DEFINITIONS` in 12 files, `normalizeExerciseName` in 4, and
+    - Client use: `EXERCISE_DEFINITIONS` in 11 files, `normalizeExerciseName` in 4, and
       `EXERCISE_NAME_ALIASES`, `isRunningExerciseName`, `knownExerciseLabel` and `ExerciseName`.
-    - Importing files (17): `components/ExerciseSelector.tsx`,
+    - Importing files (16): `components/ExerciseSelector.tsx`,
       `components/exercise-row/{fieldMeta.ts,InlineSetEditor.tsx}`,
       `components/workout-detail/{ExerciseTable.tsx,exercise-table/ExerciseRows.tsx,shared/WorkoutSummaryHeader.tsx}`,
       `components/workout-structure/StructureBlocksEditor.tsx`,
       `components/timeline/timeline-workout-card/{MafCeilingChip,CoachNote}.tsx`,
       `hooks/useExerciseHistory.ts`,
-      `hooks/workout-editor/{parseMerging,structureRows,blockHelpers}.ts`,
+      `hooks/workout-editor/{parseMerging,structureRows}.ts`,
       `hooks/useWorkoutEditor.ts`, `lib/{exerciseWarnings,exerciseUtils,structuredExercise}.ts`.
+      `hooks/workout-editor/blockHelpers.ts` was the 17th until the summary moved to
+      `shared/workoutSummary.ts`.
     - Server: 13 files. Bucket: port.
   - **`schema/structureLint`** (222 lines):
     - Client use: `lintWorkoutStructure` in `hooks/workout-form/saveWorkoutPayload.ts`.
@@ -804,8 +863,9 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
 
 ### api
 
-- **`plannedSessionEstimate`.** 519 lines. The server uses it in 6 files, including
-  `server/services/sessionEstimate/plannedSessionEstimate.ts` and
+- **`plannedSessionEstimate`.** 519 lines. The server uses it in 7 files, including
+  `server/services/sessionEstimate/plannedSessionEstimate.ts`,
+  `server/services/sessionEstimate/timelineSessionEstimates.ts` (API field 1) and
   `server/services/missedRecovery/index.ts`.
   - **Client use:** the instant estimate behind the fuel chip and the panel's seed value.
   - **Importing files:** `components/timeline/timeline-workout-card/FuellingTargetChip.tsx`,
@@ -813,8 +873,9 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
   - **Exports used:** `estimatePlannedSession`.
   - **Dependencies a port would need:** `schema/exercises` and
     `unitConversion.storedDistanceToMetersStamped`.
-- **`nutritionTargets`.** 756 lines. The server uses it in 12 files, for `effectiveTarget*` and
-  `defaultPeriodizationConfig`. It never calls the three functions the client uses.
+- **`nutritionTargets`.** 756 lines. The server uses it in 12 files, for `effectiveTargetWindowed`,
+  `singleDayWindow` and types (eight of the twelve import only the `TrainingPhase` type). It never
+  calls `defaultPeriodizationConfig` or the three functions the client uses.
   - **Client use:** the suggested target and the periodisation columns of the save payload.
   - **Importing files:** `components/onboarding/FuellingStep.tsx`, `hooks/onboardingProfile.ts`,
     `hooks/useOnboardingWizard.ts`, `pages/nutrition/TargetsDialog.tsx`.
@@ -823,38 +884,46 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
   - **Now a port:** the app's targets editor needs the same three numbers the web computes, so
     they are ported rather than moved to the server. See `shared/nutritionTargets.ts` above.
 - **`maf`.** 224 lines. The server uses it in `server/storage/users.ts`,
-  `server/services/mafTestService.ts` and `server/storage/mafTests.ts`.
-  - **Client use:** computes `mafHr` before save, the MAF tile on workout detail, and speed in the
-    MAF trend.
-  - **Importing files:** `hooks/useOnboardingWizard.ts`, `pages/settings/usePreferencesForm.tsx`,
-    `lib/mafFormat.ts`, `components/analytics/{MafTrendTab.tsx,mafTrend.helpers.ts}`,
-    `components/workout-detail/MafTestTagSection.tsx`.
-  - **Exports used:** `calculateMafHr`, `computeMafCompliance`, `metersPerSecond`, and types.
-    `metersPerSecond` is a guarded division and counts as render.
-- **`fuellingCorrelation`.** 152 lines. No server file uses it.
+  `server/services/mafTestService.ts`, `server/storage/mafTests.ts` and, since API field 3b,
+  `server/services/sessionDerivedFields.ts`.
+  - **Client use:** the MAF tile on workout detail, and speed in the MAF trend. Until API field 3a
+    shipped it also computed `mafHr` before save, in `hooks/useOnboardingWizard.ts` and
+    `pages/settings/usePreferencesForm.tsx`.
+  - **Importing files:** `lib/mafFormat.ts`,
+    `components/analytics/{MafTrendTab.tsx,mafTrend.helpers.ts}`,
+    `components/workout-detail/MafTestTagSection.tsx` (type only), and
+    `components/settings/TrainingStyleSection.tsx` (the `MafCategory` type, through an
+    `import("@shared/maf")` type).
+  - **Exports used:** `computeMafCompliance`, `metersPerSecond`, and types. `calculateMafHr` no
+    longer. `metersPerSecond` is a guarded division and counts as render.
+- **`fuellingCorrelation`.** 169 lines. No server file used it. Since API field 4,
+  `server/routes/nutrition/nutritionSummary.routes.ts` does.
   - **Client use:** the Analytics Fuelling tab card.
   - **Importing files:** `components/analytics/FuellingCorrelationCard.tsx`.
-  - **Exports used:** `analyzeFuellingCorrelation`, `FuellingMetricComparison`.
+  - **Exports used:** `analyzeFuellingCorrelation`, `correlationDayFromBlockPoint`,
+    `FuellingMetricComparison`.
 - **`bodySystemLoad`.** 163 lines. The server uses it in 4 files.
   - **Client use:** the overview card.
   - **Importing files:** `components/analytics/training-overview/BodySystemLoadCard.tsx`.
   - **Exports used:** `describeBodySystemDivergence` (api), and `BODY_SYSTEM_META`,
     `formatLoadChange` and `hasBodySystemLoadData` (render).
-- **`coachNotes`.** 149 lines. The server uses it in 3 files, to write cues.
+- **`coachNotes`.** 149 lines. The server uses it in 4 files: three write cues, and
+  `server/services/timelineCoachNotes.ts` parses them (API field 6).
   - **Client use:** splits a day's notes into the athlete's text and coach cues.
   - **Importing files:** `components/timeline/timeline-workout-card/WorkoutNotes.tsx`.
   - **Exports used:** `parseCoachNotes`, `splitCoachCueLabel`.
-- **`deviceSportTypes`.** 178 lines. The server uses it in 6 files, for `countsAsTraining`,
-  `heartRateReflectsEffort` and `isRunSportType`.
+- **`deviceSportTypes`.** 178 lines. The server uses it in 8 files, for `countsAsTraining`,
+  `heartRateReflectsEffort` and `isRunSportType`, and for `cadenceUnitFor` in
+  `server/services/sessionDerivedFields.ts` (API field 7).
   - **Client use:** the cadence label.
   - **Importing files:** `components/timeline/timeline-workout-card/WorkoutStravaStats.tsx`,
     `components/workout-detail/shared/WorkoutSummaryHeader.tsx`.
   - **Exports used:** `cadenceUnitFor`.
-- **`planDayKind`.** 46 lines. The server uses it in 2 files.
+- **`planDayKind`.** 46 lines. The server uses it in 3 files.
   - **Client use:** the rest-day card.
   - **Importing files:** `components/timeline/timeline-workout-card/TimelineWorkoutCard.tsx`.
   - **Exports used:** `isRestLikePlanDay`.
-- **`raceDay`.** 10 lines. The server uses it in 2 files.
+- **`raceDay`.** 10 lines. The server uses it in 3 files.
   - **Client use:** the race-day card.
   - **Importing files:** `components/timeline/timeline-workout-card/utils.tsx`.
   - **Exports used:** `RACE_DAY_FOCUS`.
@@ -862,18 +931,27 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
   - **Client use:** the Coach panel's completion rate.
   - **Importing files:** `lib/statsUtils.ts`, consumed by `components/CoachPanel.tsx:69`.
   - **Exports used:** `pooledPercentage`, `roundOrNull`.
-- **`nutritionRange`.** 13 lines. The server uses it through `nutritionRangeSchema`.
+- **`nutritionRange`.** 29 lines. The server uses `NUTRITION_RANGE_MAX_DAYS` through the range
+  schemas of `shared/schema/nutrition.ts`, and `clampNutritionRange` in
+  `server/routes/nutrition/nutritionSummary.routes.ts`.
   - **Client use:** narrows the Timeline's summary-range request.
   - **Importing files:** `pages/timeline/fuellingWindow.ts`.
   - **Exports used:** `clampNutritionRange`.
+- **`workoutSummary`.** 92 lines. The server uses it in `server/services/workoutUseCases.ts`,
+  which writes `mainWorkout` when a create leaves it out or blank (API field 11).
+  - **Client use:** the summary saved as `mainWorkout` when the athlete's free text is empty.
+  - **Importing files:** `hooks/workout-editor/blockHelpers.ts`, which re-exports it;
+    `hooks/workout-form/saveWorkoutPayload.ts` calls it.
+  - **Exports used:** `generateSummary`.
+  - **Dependencies:** `EXERCISE_DEFINITIONS`, `getWorkoutDistanceDisplay` and `formatMinutes`.
 
 ### render
 
 - **`units`.** 107 lines. The server uses it in 11 files.
   - **Client use:** unit brands, the minutes-to-seconds conversion for display, and `formatMinutes`.
-    `formatMinutes` also feeds the persisted summary (API field 11).
+    `formatMinutes` also feeds the persisted summary (API field 11), now from
+    `shared/workoutSummary.ts`.
   - **Importing files:** `components/workout-detail/MafTestTagSection.tsx`,
-    `hooks/workout-editor/blockHelpers.ts`,
     `lib/{workoutStructureSummary,personalRecordFormat,exerciseUtils}.ts`.
   - **Exports used:** `minutes`, `minutesToSeconds`, `unitless`, `formatMinutes`.
 - **`formatClock`.** 18 lines. The server uses it in its email templates and scheduler.
@@ -892,7 +970,7 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
   - **Client use:** the pre-save range check.
   - **Importing files:** `pages/settings/preferencesValidation.ts`.
   - **Exports used:** `PREFERENCE_NUMBER_BOUNDS`, `NumberBound`.
-- **`athleteFacts`.** 151 lines. The server uses it in 9 files.
+- **`athleteFacts`.** 154 lines. The server uses it in 9 files.
   - **Client use:** the athlete card limits and due ordering.
   - **Importing files:**
     `components/settings/athlete-card/{AthleteCardSection,AthleteFactRow,AddAthleteFactForm}.tsx`,
@@ -912,7 +990,7 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
   - **Importing files:** `lib/offlineQueue.ts`,
     `components/settings/coaching/useCoachingUpload.ts`.
   - **Exports used:** `inSequence`.
-- **`bodySystemLoadTestFixtures`.** 102 lines. Test-only.
+- **`bodySystemLoadTestFixtures`.** 104 lines. Test-only.
   - **Importing files:** `components/analytics/training-overview/__tests__/BodySystemLoadCard.test.tsx`.
 - **`nutritionTestFixtures`.** 33 lines. Test-only.
   - **Importing files:** `pages/nutrition/LogFoodActions.test.tsx`.

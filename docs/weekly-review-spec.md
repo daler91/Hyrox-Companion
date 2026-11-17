@@ -1,13 +1,15 @@
 # In-app Weekly Review — scope
 
-**Status.** All five PRs landed (§7). The feature is complete as scoped. Register entry: recommendation #10 in
+**Status.** All five PRs landed (§7). The feature is complete as scoped, except for three
+things §2 lists that the page does not show: the streak, the coldest station and a
+training-load delta. Register entry: recommendation #10 in
 [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md).
 
 **One-line pitch.** A Sunday-night page: what you planned, what you did, what changed, and
 one thing to carry into next week.
 
 **Why it is cheap.** Almost every number is already computed. `processWeeklySummary`
-(`server/emailScheduler.ts:68-177`) assembles the whole thing today and then posts it to an
+(`server/emailScheduler.ts:74-183`) assembles the whole thing today and then posts it to an
 email address. This is largely a surfacing job, in the same "built-but-unwired" pattern as
 Wave 0.
 
@@ -19,7 +21,7 @@ Wave 0.
 
 | Definition             | Where                                                           | Used by                                                                      |
 | ---------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| UTC, Monday-anchored   | `getMondayWeekBoundaries` (`server/services/weeklyProgress.ts`) | `buildWeeklySummaries` → training overview charts |
+| Monday of each log's stored date | `getMonday` (`server/services/analyticsService.ts`) | `buildWeeklySummaries` → training overview charts |
 | Local, Monday-anchored | `getMondayWeekBoundaries` called with `userTimezone` (audit H11) | `weeklyCompletedWorkouts`, `computeWeeklyVolume`, new-PRs-this-week |
 | Local, Monday-anchored | `getLocalMondayWeekBoundaries` (same file, added in PR1)        | The weekly summary email, and the weekly review                              |
 
@@ -40,8 +42,9 @@ because every athlete-facing date in the product already is (`server/timezone.ts
 1. Added `getDayOfWeekForDateStr(dateStr)` to `server/timezone.ts` — the date-only counterpart
    of `getLocalDayOfWeek`, since a calendar date falls on the same weekday in every timezone.
 2. Added `getWeekRangeForDate(dateStr)` and `getLocalMondayWeekBoundaries(now, tz)` to
-   `server/services/weeklyProgress.ts`, returning `{ weekStart, weekEnd }` (Monday, Sunday,
-   both inclusive). Pure calendar-string math, so DST-proof by construction. An unusable
+   `server/services/weeklyProgress.ts`. The first returns `{ weekStart, weekEnd }` (Monday,
+   Sunday, both inclusive); the second returns that range twice, as `current` and `previous`.
+   Pure calendar-string math, so DST-proof by construction. An unusable
    `users.userTimezone` degrades to UTC via `getLocalDateStrSafe` rather than throwing.
 3. Refactored `processWeeklySummary` onto the shared helper — behaviour-preserving, with the
    equivalence pinned by a test that reconstructs the old inline arithmetic and asserts it
@@ -50,7 +53,12 @@ because every athlete-facing date in the product already is (`server/timezone.ts
 4. **Left `buildWeeklySummaries` on UTC weeks.** Migrating the overview charts changes every
    historical bar for non-UTC athletes and deserves its own PR and its own decision. A chart
    binned by UTC weeks next to a review binned by local weeks is a defensible inconsistency;
-   an email and a page that disagree would not have been.
+   an email and a page that disagree would not have been. As the code stands the two do not
+   disagree about which week a log belongs to: `buildWeeklySummaries` bins each log by the
+   Monday of its stored `date` (`getMonday`, date-only arithmetic with no clock or timezone
+   in it), and the review selects logs whose `date` falls between the week's Monday and
+   Sunday. Every caller of `getMondayWeekBoundaries` now passes the athlete's timezone, so no
+   weekly surface resolves "this week" in UTC.
 
 ---
 
@@ -59,33 +67,37 @@ because every athlete-facing date in the product already is (`server/timezone.ts
 Ordered by how it should read top to bottom. Every row below is backed by data that exists
 today unless marked **new**.
 
-**Header.** Week of Mon 4 Aug – Sun 10 Aug, with prev/next week navigation and a
-"this week so far" state when the requested week is the current one.
+**Header.** The week's range ("Aug 4–10, 2025"), with prev/next week navigation and an
+"In progress" badge when the requested week is the current one.
 
-**The verdict line.** Sessions logged vs weekly goal (`users.weeklyGoal`, `tables.ts:55`), and
+**The verdict line.** Sessions logged vs weekly goal (`users.weeklyGoal`, `tables.ts:115`), and
 — separately — plan days completed out of plan days scheduled. Both come from
 `WeeklyReviewCounts`; see §6.1 for why they are two numbers rather than one rate. Streak is
 not in the payload: it is a full-history read the client already holds from
-`/api/v1/training-overview`.
+`/api/v1/training-overview`. The page as shipped shows no streak.
 
 **Deltas vs the previous week.** Sessions, total duration, average RPE, training load.
 `OverviewStats`/`WeeklySummary` (`shared/schema/types/analytics.ts`) already carry these
-shapes, and `DeltaIndicator.tsx` already renders the up/down affordance.
+shapes, and `DeltaIndicator.tsx` already renders the up/down affordance. Training load did not
+ship: `WeeklyReviewDeltas` carries sessions, duration and RPE only, and the page has no load
+tile.
 
 **The sessions themselves.** One row per logged session: date, focus, duration, RPE, and
 adherence. `workout_logs` already stores `compliancePct`, `matchedSetCount`, `addedSetCount`,
-`removedSetCount` — so rendering the add/drop detail here also delivers **register quick win
-#14** for free, in a place where the athlete has time to read it.
+`removedSetCount` — so rendering the add/drop detail here also delivers the added and removed
+counts of **register quick win #14**, in a place where the athlete has time to read it. The
+row shows the percentage and the two counts; `matchedSetCount` is in the payload and not
+rendered.
 
 **Did each run do its job?** *(added with session grading.)* A plan-linked easy or threshold
 run carries a verdict chip — "Stayed easy", "Crept up", "Too hard", "Held threshold",
-"Drifted harder", "Under threshold", "Can't tell" — with the headline as its tooltip, and the
-"What you did" card opens with one line: "Runs that did their job: 3 of 4 · 1 threshold run
-drifted harder". Both come from the same grader as `GET /api/v1/session-grades`
-(`sessions[].grade`, `gradeSummary`), computed only for the page — the weekly email builds the
-review without them. The review keeps its calendar week; the Analytics "Session Quality" tab
-rolls the same grades up by **plan** week, so a session moved into another week by
-missed-session recovery can sit in different weeks on the two surfaces. A closed week is
+"Drifted harder", "Under threshold", "Can't tell", "Not graded" — with the headline as its
+tooltip, and the "What you did" card opens with one line: "Runs that did their job: 3 of 4 ·
+1 threshold run drifted harder". Both come from the same grader as `GET /api/v1/session-grades`
+(`sessions[].grade`, `gradeSummary`), computed only for the page — the Sunday reminder email
+builds the review without them. The review keeps its calendar week; the Analytics "Session
+Quality" tab rolls the same grades up by **plan** week, so a session moved into another week
+by missed-session recovery can sit in different weeks on the two surfaces. A closed week is
 normally cached forever; while any of its grades is still waiting on its Strava stream the
 page treats it as a 60-second-stale week instead, and saving new heart-rate settings
 invalidates every week.
@@ -93,7 +105,9 @@ invalidates every week.
 **What did not happen, and why.** Missed and skipped days, with the skip reason.
 `plan_days.skip_reason` is captured today (`SkipConfirmDialog.tsx`) and **read by nothing** —
 this page would be its first consumer, which is the argument for building it here rather than
-in a chart.
+in a chart. The page reads it now, and so does the coach (`collectRecentSkips`,
+`server/services/ai/trainingStats.ts`). The card also lists days still `planned`, as "Still
+to do".
 
 **Context, before conclusions.** Any `timeline_annotations` overlapping the week (injury,
 illness, travel, rest). A week with a logged injury must not be framed as failure. This is
@@ -106,7 +120,8 @@ untouched and still serves the email.
 
 **Coldest station.** Rendered client-side from `buildStationCoverage`, which the client
 already holds from `/api/v1/training-overview` and already renders in `StationRadar.tsx`. It
-is deliberately absent from the weekly-review payload — see §3.
+is deliberately absent from the weekly-review payload — see §3. The page as shipped does not
+render it: nothing under `components/review/` or in `pages/Review.tsx` reads station coverage.
 
 **Next week's intent.** One free-text line, plus the previous week's intent shown back.
 This is the half that makes it a ritual rather than a report. See §5.
@@ -136,12 +151,12 @@ schema and the nutrition routes' dates use the same check (CL9, C49,
 CODEBASE_ANALYSIS_2026-10-03).
 
 **Not persisted.** `analytics_results.feature` is constrained to four literals
-(`shared/schema/tables.ts:205-206`), so a stored `weekly_review` feature would need a
+(`shared/schema/tables.ts:349-352`), so a stored `weekly_review` feature would need a
 constraint migration plus a recompute path plus staleness handling — for a payload that is
 four bounded queries.
 
 **Service.** `server/services/weeklyReviewService.ts` → `buildWeeklyReview(storage, userId,
-{ now, week })`, reading:
+{ now, week, includeSessionGrades })`, reading:
 
 - `storage.analytics.getWorkoutLogsByDateRange` ×2 — this week and the week before
 - `storage.analytics.getPlanDaysByDateRange` ×2 — **new**, see below. It applies the
@@ -154,14 +169,20 @@ four bounded queries.
 - `storage.analytics.getExerciseSetsForPersonalRecords(userId)` — full history, because a PR
   means an all-time best; a week-scoped fetch would call every heaviest lift of the week a record
 - `storage.timelineAnnotations.list` — filtered by overlap, not containment
+- `storage.weeklyReviews.getIntents` — this week's intent and the week before's, in one read
+  (added in PR5, §5)
+
+Both log reads and the PR read pass `onlyTraining: true`, so a log whose `countsAsTraining`
+is false is in none of the review's numbers.
 
 **Two changes from the draft.** `getTimeline(userId)` is not used: unbounded, it hydrates
 exercise sets for the athlete's entire history, and it does not expose `plan_days.skip_reason`
-at all. A purpose-built `getPlanDaysByDateRange` replaces it and `getWeeklyStats` together —
+at all (timeline entries have since gained `skipReason`). A purpose-built
+`getPlanDaysByDateRange` replaces it and `getWeeklyStats` together —
 one indexed range query returning every status plus the skip reason, so the counts all come
 from one source. And **streak and coldest station are not in the payload**: both need
 full-history reads, and the client already holds them from `/api/v1/training-overview`. They
-belong to the page (PR3), not to this endpoint.
+belong to the page (PR3), not to this endpoint. PR3 shipped the page without either (§2).
 
 **Wire type.** `WeeklyReview` in `shared/schema/types/analytics.ts`, beside `TrainingOverview`.
 
@@ -193,7 +214,8 @@ a week whenever the athlete's stored timezone differs from the browser's.
 **Components.** `pages/Review.tsx` composes three pieces under
 `components/review/`: `WeeklyReviewSummary` (the four tiles, reusing `DeltaIndicator`),
 `WeeklyReviewHighlights` (annotations and named PRs), `WeeklyReviewSessions` (what happened
-and what didn't). The adherence tile is suppressed entirely when `hasPlan` is false, and the
+and what didn't). PR5 added a fourth, `WeeklyReviewIntent` (§5), between the highlights and
+the sessions. The adherence tile is suppressed entirely when `hasPlan` is false, and the
 RPE delta is suppressed when either week has no RPE.
 
 **Entry points — shipped in PR4**, in order of expected traffic.
@@ -211,11 +233,17 @@ RPE delta is suppressed when either week has no RPE.
    midnight: on Sunday evening that is the week closing tonight, from Monday it is the week
    that closed. Both resolve to the **same Monday**, which is what makes one dismissal hold
    across the whole window and then lapse for the next week — no extra bookkeeping, and the
-   dismissal key is just `(userId, weekStart)`.
+   dismissal is one `localStorage` entry per user holding the dismissed `weekStart`.
 
 3. **A link from the Analytics header.** A link, not a tab: the review is week-scoped while
    Analytics is range-scoped (`?range=90`), and putting a fixed-window surface inside a
    variable-window page invites exactly the "why do these disagree" confusion §1 is about.
+
+A fourth has been added since: an opt-in Sunday reminder, by email and push
+(`processWeeklyReviewReminder`, `server/emailScheduler.ts`). It goes out on the athlete's local
+Sunday at the hour the Timeline prompt opens (`WEEKLY_REVIEW_SUNDAY_EVENING_HOUR`, 17) unless
+they set it its own hour, links to `/review?week=<weekStart>` for the week closing that night,
+and is skipped when that week already has a `weekly_reviews` row.
 
 ---
 
@@ -233,16 +261,19 @@ builder/compliance test only know post/patch/delete. The handler anchors `week` 
 exactly as the GET does, because the unique index is on the Monday and a mid-week date taken
 at face value would open a second row for a week that must hold one. Storage uses
 `onConflictDoUpdate` on that index, so two tabs saving at once resolve to one row rather than
-racing into a duplicate-key error.
+racing into a duplicate-key error. Two things differ from the GET: `intent` is capped at 280
+characters (`WEEKLY_REVIEW_INTENT_MAX_LENGTH`, `shared/weeklyReview.ts`), and `week` is checked
+by shape only (`dateStringSchema`), not by `isWeekParamValid`, so an impossible date such as
+`2026-02-31` is accepted here and anchored to the week it rolls forward into.
 
 A blank intent clears the row's text rather than deleting the row: "I wrote nothing" and "I
 cleared what I wrote" are the same thing to the athlete, and keeping the row keeps `updatedAt`
 meaningful.
 
-**Behaviour.** One line, optional, editable all week. Shown back at the top of the _next_
-review ("Last week you said: get three runs in"). No scoring, no self-assessment against it —
-the value is the recall, and grading an athlete against their own aspiration is how a ritual
-becomes a chore.
+**Behaviour.** One line, optional, editable all week. Shown back in the _next_ review, at the
+top of its "Next week" card ("Last week you said: get three runs in"). No scoring, no
+self-assessment against it — the value is the recall, and grading an athlete against their own
+aspiration is how a ritual becomes a chore.
 
 **Client.** `WeeklyReviewIntent` is keyed on the week by its caller, so paging remounts it and
 re-seeds the draft from that week's saved intent — the same remount-instead-of-effect pattern
@@ -251,7 +282,8 @@ clearing a saved line is a real edit.
 
 **Reaches the coach for free.** If item #8 (coach memory) ships, the current intent is a
 natural durable fact with a one-week lifetime. Do not wire it into prompts before that
-mechanism exists.
+mechanism exists. #8 has since shipped as the athlete card (`athlete_facts`); the intent is
+still read by no prompt, only by the review, the Sunday reminder email and the data export.
 
 ---
 
@@ -260,22 +292,34 @@ mechanism exists.
 1. **Completion rate can exceed 100% — settled in PR2.** `getWeeklyStats` counts
    `completedCount` from `workout_logs` but `planned`/`missed`/`skipped` from `plan_days`, so
    ad-hoc sessions with no plan day inflate the numerator against a denominator that never saw
-   them (`total = completed + missed + skipped`, `analytics.ts:131-180`). The email has carried
+   them (`total = completed + missed + skipped`). The email has carried
    this quietly; a page with a progress bar would not. **Resolved as two numbers, not a rate**:
    `WeeklyReviewCounts` ships `sessionsLogged` (from `workout_logs`) beside `sessionsPlanned` /
    `plannedCompleted` / `missed` / `skipped` / `outstanding` (all from `plan_days`), and
    `plannedCompleted` can never exceed `sessionsPlanned`. The API returns no rate at all; if the
    page wants one, it computes it from the plan-day pair alone. `getWeeklyStats` itself is
    untouched — the email reports its counts rather than a rate, so it was never affected.
+   **Both halves of that last sentence have since been corrected in code** (audit H6): the
+   email did turn the counts into a rate, so `getWeeklyStats` (`server/storage/analytics.ts:415`)
+   now also returns `planCompletedCount`, and `processWeeklySummary` builds the email's
+   completion rate from plan days alone, `null` when nothing was due. The counts have also
+   gained `excused` (days inside a declared absence) and `letGo` (missed days the athlete let
+   go), both held out of `missed` in the review and in the email.
 2. **The planless athlete.** No plan → `planned`/`missed`/`skipped` are all zero and
    completion rate is meaningless. The page must lead with what was logged, not with a 0%.
 3. **The annotated week.** Injury or illness overlapping the week suppresses the
-   missed-session framing entirely. Same predicate as recommendation #2.
+   missed-session framing entirely. Same predicate as recommendation #2. As shipped the rule
+   is per day and covers all four annotation types: a `missed` day, or a past `planned` one,
+   inside a declared absence reads "Not counted" and leaves `missed`
+   (`isExcusedFromMissed`, `shared/absence.ts`); a missed day outside the range still reads
+   "Missed".
 4. **The empty first week.** A new athlete's first review must read as a starting point, not
    a report card. No red, no zero-percent hero number.
 5. **The in-progress week.** "So far" framing, no completion verdict, no delta against a week
-   that has not finished.
-6. **Missing or invalid timezone.** `getLocalDateStrSafe` (`server/timezone.ts:154`) already
+   that has not finished. As shipped the tiles relabel to "Sessions so far" and the header
+   shows "In progress", but `WeeklyReviewSummary` still renders the session and duration deltas
+   against the previous week while the week is running.
+6. **Missing or invalid timezone.** `getLocalDateStrSafe` (`server/timezone.ts:208`) already
    handles this; use it rather than assuming `userTimezone` is populated.
 7. **Deleted plans.** `workout_logs.planId` is `ON DELETE SET NULL` — a week whose plan was
    deleted still has logged sessions and must still render.
@@ -288,13 +332,13 @@ mechanism exists.
 | --- | ------------------------------------------------------------------------------------------------------------------------ | ---- | ------ |
 | 1   | `getDayOfWeekForDateStr`, `getWeekRangeForDate`, `getLocalMondayWeekBoundaries` + unit tests; email refactored onto them | S    | landed |
 | 2   | `weeklyReviewService` + `GET /api/v1/weekly-review` + `getPlanDaysByDateRange` + tests + `WeeklyReview` wire type        | M    | landed |
-| 3   | `/review` page, hook, API client, empty/edge states + component tests                                                    | M    |        |
-| 4   | Entry points: email CTA, push deep link, Timeline banner, Analytics link                                                 | S    |        |
-| 5   | v1.1 — `weekly_reviews` table, intent capture, carry-forward                                                             | S–M  |        |
+| 3   | `/review` page, hook, API client, empty/edge states + component tests                                                    | M    | landed |
+| 4   | Entry points: email CTA, push deep link, Timeline banner, Analytics link                                                 | S    | landed |
+| 5   | v1.1 — `weekly_reviews` table, intent capture, carry-forward                                                             | S–M  | landed |
 
 **Total: M.** PR1 stood alone: the week helpers are the vocabulary every later PR is written
-in, and the email now shares one definition of "last week" with the page that does not exist
-yet.
+in, and the email shared one definition of "last week" with the page before the page
+existed.
 
 **Testing notes.** The week math needs unit tests across DST transitions in both hemispheres,
 year boundaries, and the Sunday `getUTCDay() === 0` case the existing function special-cases.

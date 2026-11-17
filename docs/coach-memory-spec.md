@@ -5,12 +5,12 @@ ahead of the §7 measurement at the owner's call, so `pnpm tsx script/coach-memo
 is no longer a gate on building it. The script still counts only the capture surfaces that
 came before the card (the `training_constraints` note, `principles` materials, timeline
 annotations, skip reasons); it has no query on `athlete_facts`, so it does not show whether
-athletes use the card. The chat-proposed facts §8 deferred ("v1 has no AI writes") shipped too, as
-proposals the athlete saves or turns down, never writes (AI coach chat review, I5). Where each
-piece lives: [AI and RAG → The Athlete Card](ai-and-rag.md#the-athlete-card). Register entry:
-recommendation #8 in [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md). **Read §0 before
-costing anything here** — two load-bearing claims in that register entry are wrong, and they
-were mine.
+athletes use the card. The chat-proposed facts §8 deferred ("v1 has no AI writes") shipped
+too, as proposals the athlete saves or turns down, never writes (AI coach chat review, I5).
+Where each piece lives: [AI and RAG → The Athlete Card](ai-and-rag.md#the-athlete-card).
+Register entry: recommendation #8 in [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md).
+**Read §0 before costing anything here** — two load-bearing claims in that register entry are
+wrong, and they were mine.
 
 **One-line pitch.** Tell the coach the things that are true every week — bad left knee, no sled
 at my gym, shift work on Tuesdays — once, and have it remember.
@@ -330,8 +330,8 @@ Consent is enforced where facts are _read_ — every render path already sits be
   if `principles` usage is meaningful, the real gap is retrieval _determinism_ — pin
   `type='principles'` chunks ahead of the topK search — which is about a day and no schema
   change. That pin has since shipped (`listPinnedPrincipleChunks`,
-  `server/services/ragService.ts`; see §0), and `script/coach-memory-usage.ts` counts both
-  against a database.
+  `server/services/ragService.ts`; see §0), and `script/coach-memory-usage.ts` counts the
+  athletes with a `principles` material and those with a stored `training_constraints` note.
 
 ---
 

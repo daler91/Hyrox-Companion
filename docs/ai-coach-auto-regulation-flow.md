@@ -25,8 +25,8 @@ Passes from two windows can still run at once on two instances. They never write
 | `workout-created` | `createWorkoutAndScheduleCoaching` |
 | `workout-date-changed` | `updateWorkout`, when the date actually moves |
 | `plan-day-completed` | `updatePlanDayStatus`, on the transition into completed |
-| `plan-day-rescheduled` | `updatePlanDayWithCleanup` / `updatePlanDayStatus`, on a date change |
-| `logged-sets-edited` | a set added, patched, or deleted on an existing workout log |
+| `plan-day-rescheduled` | `updatePlanDayWithCleanup` / `updatePlanDayStatus`, on a date change; folding or shortening a missed session, and undoing that (`server/services/missedRecovery/index.ts`) |
+| `logged-sets-edited` | a set added, patched, or deleted on an existing workout log, when the athlete has the AI coach on |
 
 `logged-sets-edited` is what keeps a corrected session honest. Editing a completed workout's sets used to drop the analytics caches and stop there, leaving the coach note and the adherence percentage describing the sets that were replaced — so the only way to re-run either was to reopen the day, which on a Strava-linked day splits the recording back out into its own entry. The re-derivation lives in `refreshDerivedStateAfterLoggedSetChange`, which also rewrites the adherence snapshot.
 
@@ -52,7 +52,7 @@ flowchart TD
     I --> L["Build deterministic load-governor suggestions<br/>buildLoadGovernorSuggestions(...)"]
     L --> M["Collect workout IDs modified by governor"]
     M --> AD["Adapt the plan to new logs<br/>computePlanAdaptation → adaptPlan<br/>(skips governor days)"]
-    AD --> NU{"Budget allowed and<br/>workouts planned this week?"}
+    AD --> NU{"Budget allowed, text provider configured<br/>and any upcoming planned day?"}
     NU -- "No" --> Z3["Apply governor + adaptation only"]
     NU -- "Yes" --> J["Resolve training style<br/>and retrieve RAG coaching materials"]
     J --> J2["Build CoachNoteInputs audit metadata"]
@@ -65,7 +65,7 @@ flowchart TD
     P --> Q["Prepare structured suggestions<br/>parse rows when workout has exercise table"]
     Q --> R["Merge governor suggestions first, then provider suggestions"]
     R --> S["Generate review notes for unchanged workouts"]
-    S --> T["Apply all changes in DB transaction<br/>(adaptation: set loads, text, note,<br/>then training_plans.engine_state)"]
+    S --> T["Apply all changes in DB transaction<br/>(suggestions, review notes, then the adaptation:<br/>text, note, set loads, training_plans.engine_state)"]
 
     T --> U{"Workout has structured exercise rows?"}
     U -- "Yes" --> V["Replace or append exercise_sets rows<br/>table-first write"]
@@ -95,6 +95,8 @@ flowchart LR
         T5["analytics.getWorkoutLogsByDateRange(userId, last 70 days)"]
         T6["analytics.getAllExerciseSetsWithDates(userId, last 70 days)"]
         T7["analytics.getExerciseLoadTags()"]
+        T8["timelineAnnotations.list(userId)"]
+        T9["athleteFacts.listActive(userId)"]
     end
 
     subgraph Derived["Derived Coaching Signals"]
@@ -118,6 +120,7 @@ flowchart LR
         C5["Structured exercise rows"]
         C6["coachingInsights"]
         C7["exerciseSelection"]
+        C8["Declared absences, athlete card<br/>and standing constraints note"]
     end
 
     T1 --> D1
@@ -127,7 +130,15 @@ flowchart LR
     T1 --> D7
     T2 --> D5
     T3 --> D6
-    T3 --> D8
+    T1 --> D8
+    T2 --> D8
+    T8 --> D8
+    T3 --> D4
+    T9 --> D4
+    T9 --> D10
+    T3 --> C8
+    T8 --> C8
+    T9 --> C8
     T4 --> C3
     T5 --> D9
     T6 --> D9
@@ -175,17 +186,18 @@ flowchart TD
     F --> F3["unilateral_stability"]
     F --> F4["elastic_tendon"]
 
-    E --> G["ACWR<br/>7-day acute avg / 28-day chronic avg"]
+    E --> G["ACWR<br/>acute EWMA (7-day) / chronic EWMA (28-day)"]
     G --> H{"ACWR zone"}
+    H -- "under 14 days since the first log" --> H0["Insufficient data<br/>no ACWR restriction"]
     H -- "< 0.8" --> H1["Undertraining<br/>3-day on-ramp"]
     H -- "0.8 to 1.3" --> H2["Sweet spot<br/>no governor edit"]
     H -- "1.3 to 1.5" --> H3["Yellow load<br/>2-day soft downshift"]
     H -- "> 1.5" --> H4["Danger<br/>4-day intensity lock"]
 
-    F1 --> I1{"High posterior load<br/>last 1 calendar day?"}
+    F1 --> I1{"High posterior load<br/>today or yesterday?"}
     I1 -- "Yes" --> R1["posterior_chain_velocity_lock<br/>block hills, sprints, high-velocity intervals"]
 
-    F2 --> I2{"High anterior load<br/>last 2 calendar days?"}
+    F2 --> I2{"High anterior load<br/>today or the 2 days before?"}
     I2 -- "Yes" --> R2["anterior_chain_braking_guard<br/>downshift downhill, long-road, braking-heavy runs"]
 
     F4 --> I3{"Elastic tendon total high<br/>rolling 7 calendar days?"}
@@ -195,7 +207,7 @@ flowchart TD
     H3 --> R5["acwr_yellow_guard<br/>soften near-term high-intensity work"]
     H4 --> R6["acwr_danger_lock"]
 
-    R1 --> S["Scan upcoming workouts"]
+    R1 --> S["Scan upcoming workouts<br/>most severe rule first, one edit per day"]
     R2 --> S
     R3 --> S
     R4 --> S
@@ -204,9 +216,13 @@ flowchart TD
 
     S --> T{"Upcoming session conflicts<br/>with active restriction?"}
     T -- "No" --> U["No deterministic edit"]
-    T -- "Yes" --> V["Build load-governor suggestion"]
-    V --> W["Replace with flat, low-intensity aerobic work<br/>preserve time or distance when available"]
-    W --> X["aiSource = load_governor<br/>aiRationale explains why"]
+    T -- "Yes" --> V{"Downshift mode of the rule"}
+    V -- "recovery: velocity lock,<br/>speed guard, danger lock" --> W1["Replace with a flat, low-intensity run<br/>keep the distance of the planned run, drop its time<br/>30 min when the day had no run"]
+    V -- "reduce: braking guard,<br/>yellow guard" --> W2["Keep the session, drop about a third<br/>of the sets of each exercise<br/>(a notes cue when no row can be trimmed)"]
+    V -- "cap: on-ramp" --> W3["Keep the session, drop about a fifth<br/>of the sets, on at most 3 sessions"]
+    W1 --> X["aiSource = load_governor<br/>aiRationale explains why"]
+    W2 --> X
+    W3 --> X
 ```
 
 ---
@@ -231,7 +247,7 @@ sequenceDiagram
     end
     Coach->>Provider: generateWorkoutSuggestions(trainingContext, upcomingWorkouts)
     Provider-->>Coach: provider suggestions ([] means nothing to change), or a failure
-    Coach->>Coach: filter provider suggestions for governor-modified days
+    Coach->>Coach: filter provider suggestions for governor- and adaptation-modified days
     Coach->>DB: transaction begins
     Coach->>DB: per-athlete advisory lock, then lock target days FOR UPDATE
     Coach->>Coach: drop every day (and the whole adaptation) that changed since the snapshot
@@ -254,7 +270,7 @@ sequenceDiagram
     else it succeeded, even if the review-note call failed
         Coach-->>Job: complete
     end
-    DB-->>UI: timeline reload/poll returns updated plan day
+    DB-->>UI: client polls the user every 2 s while isAutoCoaching is set, then reloads the timeline
     UI-->>UI: show source badge, rationale, and input chips
 ```
 
@@ -276,10 +292,10 @@ flowchart TD
     C -- "Ad-hoc, stronger than plan" --> R3["Catch up, ≤ 5%"]
     R1 & R2 & R3 --> G{"Fatigued, taper<br/>or race week?"}
     G -- "Yes" --> N1["No raise"]
-    G -- "No" --> W["Rewrite loads in exercise_sets<br/>and the lift's text line"]
+    G -- "No" --> W["Rewrite loads in exercise_sets<br/>and the lift's text line<br/>(sessions in the next 21 days)"]
     H1 & H2 & D1 --> W2["Cap next session; later ones resume +2.5%/week"]
     W2 --> W
-    A --> BR["Lifts not trained for 2+ weeks:<br/>ease back in below the last load"]
+    A --> BR["Lifts not trained for 2+ weeks:<br/>return at the last load, less 2.5%<br/>per further week off, 10% at most"]
     BR --> W2
     A --> RUN{"New best run effort?"}
     RUN -- "Yes, not fatigued" --> P["Rescale every written pace<br/>in the remaining plan"]
@@ -295,13 +311,15 @@ flowchart TD
 | Area | Primary files |
 | --- | --- |
 | Auto-coach job worker | `server/queue.ts` |
+| Enqueue, singleton key and debounce window | `server/services/autoCoachQueue.ts` |
+| Write-time lock and snapshot re-check | `server/services/autoCoachWriteGuard.ts` |
 | Workout creation trigger | `server/services/workoutService/workouts.ts` |
 | Reschedule trigger | `server/services/planService.ts` |
 | Auto-coach orchestration | `server/services/coachService.ts` |
 | Shared training context | `server/services/ai/index.ts`, `server/gemini/types.ts` |
 | Provider suggestion prompt | `server/gemini/suggestionService.ts` |
 | Exercise selection brief (which exercise to choose or swap to) | `server/services/ai/exerciseSelection.ts`, `server/prompts/exerciseSelection.ts` |
-| Deterministic load math + ACWR/restrictions | `server/services/trainingLoadService.ts` |
+| Deterministic load math + ACWR/restrictions | `server/services/trainingLoadService.ts` (daily loads, restrictions), `server/services/trainingLoad/stressScores.ts` (SSS, CSS), `server/services/trainingLoad/loadDynamics.ts` (EWMAs, ACWR and its zones) |
 | Load-governor suggestion builder (`buildLoadGovernorSuggestions`) | `server/services/trainingLoadGovernor.ts` |
 | Plan adaptation stage (reads, writes) | `server/services/planAdaptationService.ts` |
 | Plan adaptation rules (pure) | `server/services/workoutEngine/adaptation.ts`, `server/services/workoutEngine/paceRewrite.ts`, `shared/progression.ts` |
