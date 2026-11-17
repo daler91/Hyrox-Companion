@@ -13,17 +13,19 @@
 
 ## Typography System
 
-**Heading Font**: Space Grotesk - bold, modern geometric sans-serif for headings
+**Heading Font**: Space Grotesk (`font-heading`) - bold, modern geometric sans-serif, used for the landing page headings and the fitai.coach wordmark. In-app headings carry no `font-heading` class and render in the body font
 **Body Font**: Geist - clean, readable at all sizes for body text
-**Mono Font**: Geist Mono - for metrics, numbers, and code
+**Mono Font**: Geist Mono - for the Race Predictor times, coach stat badges, keyboard hints and error details. Other metrics stay in the body font, often with `tabular-nums`
+
+All three are self-hosted through `@fontsource` imports in `client/src/main.tsx`; the stacks are the `--font-*` variables in `client/src/index.css`.
 
 **Hierarchy**:
-- H1 (Page Titles): text-4xl font-bold tracking-tight
-- H2 (Section Headers): text-2xl font-semibold
-- H3 (Card Titles): text-lg font-semibold
+- H1 (Page Titles): text-2xl font-bold tracking-tight, stepping up to text-3xl from `md` on Training and from `sm` on Log Workout. Settings is text-3xl at every width; Analytics (text-2xl font-bold), Weekly Review (text-2xl font-semibold) and Nutrition (text-xl font-semibold) are smaller
+- H2 (Section Headers): text-2xl font-semibold (the `CardTitle` default, rendered with `as="h2"`)
+- H3 (Card Titles): `CardTitle` renders an `h3` at text-2xl font-semibold leading-none tracking-tight; denser cards override the size to text-lg or text-base
 - Body Text: text-base font-normal
-- Metrics/Numbers: text-3xl font-mono font-bold
-- Labels: text-sm font-medium uppercase tracking-wide
+- Metrics/Numbers: text-2xl font-bold on the analytics stat tiles; the Race Predictor headline time is text-4xl font-mono font-bold tabular-nums
+- Labels: text-xs font-medium uppercase tracking-wide
 - Timestamps: text-xs font-normal
 
 ---
@@ -31,15 +33,15 @@
 ## Layout & Spacing System
 
 **Tailwind Units**: Primary spacing with 4, 6, 8, 12, 16, 24
-- Component padding: p-6
+- Component padding: p-6 (the `CardHeader` / `CardContent` default); dense cards such as the timeline workout card and the filter bar use p-4
 - Card spacing: space-y-4
-- Section gaps: gap-8
-- Page margins: px-4 md:px-8
-- Container max-width: max-w-7xl
+- Section gaps: space-y-6 between a page's sections (Training, Analytics, Settings); gap-8 appears only on the landing page
+- Page margins: p-4 md:p-8, from `PageContainer` (`client/src/components/ui/PageContainer.tsx`)
+- Container max-width: `PageContainer` sizes — max-w-5xl by default (Training, Analytics, Nutrition, Weekly Review), max-w-3xl for the Log Workout form, max-w-2xl for Settings
 
 **Grid System**:
-- Dashboard: 3-column grid (lg:grid-cols-3) for metric cards
-- Workout List: Single column on mobile, 2-column on desktop (md:grid-cols-2)
+- Dashboard: the analytics stat tiles use grid-cols-2 md:grid-cols-3 lg:grid-cols-6
+- Workout List: the timeline is a single column of date groups at every width; paired form fields and charts go two-up from `sm` (sm:grid-cols-2)
 - Analytics: Responsive charts with full-width containers
 
 ---
@@ -50,25 +52,25 @@
 
 ### Navigation
 **Sidebar Navigation**:
-- Persistent sidebar on desktop (16rem width, 3rem icon mode)
-- Collapses to icon-only on mobile with hamburger trigger
-- Navigation items: Training (timeline), Log Workout, Nutrition (when the nutrition flag is on), Analytics, Settings — one list, `PRIMARY_NAV_ITEMS` in `client/src/lib/navItems.ts`
-- Desktop: breadcrumb bar above the content; phones get a bottom tab bar (`MobileTabBar`) with the same items instead
+- Persistent sidebar on desktop (16rem width). It uses the sidebar primitive's default off-canvas mode, not the 3rem icon mode: Ctrl/Cmd+B hides or shows it, and the open state is kept in the `sidebar_state` cookie
+- Below 768px the sidebar is a slide-in drawer (a `Sheet`), opened from the trigger in the sticky mobile header; tapping a nav item closes it
+- Navigation items: Training (timeline), Log Workout, Nutrition (when the nutrition flag is on), Analytics, Settings — one list, `PRIMARY_NAV_ITEMS` in `client/src/lib/navItems.ts`. Weekly Review (`/review`) is not in the list; it is linked from Analytics
+- Desktop: breadcrumb bar above the content on Log Workout, Analytics, Settings and the Privacy and Delete Account pages, and on Training while a workout is open (Nutrition and Weekly Review have none); phones get a bottom tab bar (`MobileTabBar`) with the same items instead
 - User profile display with avatar in sidebar footer
-- Theme toggle and logout in footer
+- Theme toggle and logout in footer; logging out with offline changes still queued asks for confirmation first
 
 ### Theme System
 - **Dark Mode**: Full support with class-based toggle
 - **Storage**: Persisted to localStorage, falls back to OS preference
-- **CSS Variables**: 36+ theme variables for light/dark modes
+- **CSS Variables**: 38 HSL colour tokens, each defined for light (`:root`) and dark (`.dark`), plus elevation, outline, font, radius and shadow variables
 - **Elevation System**: Custom `--elevate-1` and `--elevate-2` for hover/active states
 
 ### Workout Cards
 **Timeline Workout Cards**:
-- Icon + Exercise name with category color coding
+- Session title, then one chip per exercise, color-coded by category (`categoryChipColors`); a trophy marks a chip that set a personal record
 - Status indicators (completed, planned, missed, skipped)
-- Compact form layout with inline labels
-- Drag-and-drop reordering via dnd-kit
+- Compact layout (p-4); tapping the card opens the session, and a planned session carries a complete button
+- Drag a card onto another day to move it (dnd-kit), or pick the date from the card's move menu
 
 **Exercise Rows** (Log Workout confirm step and workout detail):
 - Per-set fields for reps/weight/time/distance, chosen per exercise type
@@ -79,12 +81,13 @@
 - Results rows start closed as one-line summaries; tapping opens the set editor. The description/scan/parse tools and the structure builder fold into one "Description & structure" line once rows exist
 - Effort & notes stays open as its own card
 - Supporting context (coach rationale, fuelling, session time, plan link, MAF test, counts-as-training) sits in one `DetailGroup` card as rows: each shows a one-line status when closed and opens in place
-- Footer is one row: Ask coach (primary), Reopen, and an icon-only Delete behind a confirm
+- A plan-linked session also shows its session grade card (`SessionGradeCard`) under the stats
+- Footer is one sticky row: Ask coach (primary), Reopen (plan-linked sessions only), an icon-only Combine, and an icon-only Delete behind a confirm
 
 ### Training Log
 
 **Log Entry Form** (a three-step stepper: Capture → Confirm → Reflect):
-- **Capture**: a structured exercise list plus a "Describe / dictate" panel — free text, voice (Web Speech API) or a photo is auto-parsed by the AI into the list
+- **Capture**: a structured exercise list plus a collapsible "Description, voice, or photo" panel — free text, voice (Web Speech API) or a photo is parsed by the AI into the list. Text is parsed on "Parse into exercise table", or on Continue if it has not been parsed yet
 - **Confirm**: review and correct the parsed rows before saving
 - **Reflect**: RPE and notes
 - Exercise autocomplete (200+ base exercises + custom)
@@ -93,56 +96,56 @@
 
 **Training Timeline**:
 - Vertical timeline with workout cards and date grouping
-- Drag-and-drop workout reordering
+- Drag-and-drop to move a workout to another day
 - Filters by status (completed, planned, missed, skipped)
 - Import training plans (CSV)
-- Inline workout detail dialog with edit mode
-- Floating action button for quick workout logging
+- Tapping a card opens a detail sheet for its state (`LogSheet`, `ReviewSurface`, `SkippedSheet`, `PreviewSheet`): a dialog on desktop, a bottom sheet on phones
+- Two floating pill buttons, AI Coach and Log Workout; Log Workout opens the ad-hoc log sheet (`AdhocLogSheet`)
 
 ### AI Coach Interface
 
-**Coach Panel** (slide-out sheet overlay):
+**Coach Panel** (a docked column beside the timeline on desktop, w-80 / lg:w-96; a full-screen dialog on phones):
 - Streaming chat via Server-Sent Events
 - Auto-suggestions based on plan and recent performance
 - RAG-powered responses from uploaded coaching materials
 - Message bubbles: User right-aligned, AI left-aligned
-- Input: Fixed bottom with rounded border
+- Input: a textarea in the panel footer, under the quick-action chips
 
 ### Analytics Dashboard
-- Personal Records tab (1RM estimation, max weight/distance, best time)
-- Exercise Progression Charts (line, bar, heatmap via Recharts)
-- Training Overview (weekly volume, frequency, intensity)
-- Category Breakdown (strength, conditioning, running, functional)
-- Advanced filtering by date range and exercise
+- Tabs: Overview, Breakdown, PRs & Trends, Session Quality, Coach Insights, Race Predictor, plus MAF Trend for MAF-method athletes and Fuelling when the nutrition flag is on
+- PRs & Trends holds two sub-tabs: Records (estimated 1RM, max weight, max distance, best time, with a category filter) and Progression (pick an exercise; bar or line charts via Recharts)
+- Overview: stat tiles, training-load trend charts, a weekly workouts chart and the workout heatmap
+- Breakdown: category split (strength, conditioning, running, functional) as a pie chart, and coverage grids
+- Date range select (last 30 / 90 days, 6 months, year, all time), CSV / JSON export, and a link to the Weekly Review
 
 ### Data Visualization
 
 **Progress Charts** (Recharts):
 - Line chart for performance over time
 - Y-axis: metric values, X-axis: dates
-- Multiple series with legend
+- Multiple series with legend (the legend is omitted for a single series)
 - Tooltip on hover showing exact values
 - ResponsiveContainer for all chart sizes
 
 **Workout Heatmap**:
-- Calendar grid showing training frequency
-- Intensity indicated by visual weight
+- Calendar grid of the last 16 weeks showing training frequency (a CSS grid, not a Recharts chart)
+- Two states per day, "Workout logged" or "Rest day"; there is no intensity scale. Future days and days outside the selected range are drawn separately
 
 ### Forms & Inputs
 
 **Input Fields**:
 - Tailwind + Radix primitives via shadcn/ui
-- Border: border-2 on focus
-- Height: h-12
-- Rounded: rounded-lg
-- Error states with message below
+- Border: 1px `border-input`; focus adds a 2px ring (focus-visible:ring-2 with ring-offset-2), not a thicker border
+- Height: h-11 (44px touch target) on phones, h-9 from `md`
+- Rounded: rounded-md
+- Error states with message below (`errorMessage` prop: destructive border, text-xs message with `role="alert"`)
 
 **Button Styles** (CVA variants):
-- Primary CTA: default variant, rounded-lg, font-semibold
-- Secondary: outline variant
+- Primary CTA: default variant, rounded-md, font-medium
+- Secondary: outline variant; `secondary` and `ghost` variants also exist
 - Destructive: destructive variant for dangerous actions
-- Icon buttons: icon variant (square)
-- Size variants: sm, default, lg
+- Icon buttons: `size="icon"` (square: 44px on phones, 36px from `md`); `size="icon-touch"` stays 44px
+- Size variants: sm, default, lg (min-heights 8 / 9 / 10)
 
 ---
 
@@ -151,57 +154,66 @@
 ### Training Timeline (/)
 - Sidebar navigation (persistent on desktop)
 - Timeline with date-grouped workout cards
-- Filter bar for status filtering
-- Floating action button (bottom-right) for quick log
-- Coach panel overlay (slide-out sheet)
-- Empty states: welcome wizard, import plan, generate plan
+- Filter bar: plan selector, status filter and a plan tools menu, in one row at every width
+- Two floating pill buttons (bottom-right): AI Coach and Log Workout
+- Coach panel: docked to the right of the timeline on desktop, a full-screen dialog on phones
+- Empty states: a welcome card (generate an AI plan, use the sample plan, import a CSV), a "set start date" card for an unscheduled plan, and a no-results card for an active filter; the onboarding wizard opens over the page on first run
 
 ### Log Workout (/log)
 - Capture → Confirm → Reflect stepper
-- Exercise list auto-filled from parsed text, voice or a photo
+- Exercise list filled from parsed text, voice or a photo
 - Exercise autocomplete and custom exercise support
 
 ### Analytics (/analytics)
-- Tabbed interface (Personal Records, Progression, Overview)
+- Tabbed interface (Overview, Breakdown, PRs & Trends, Session Quality, Coach Insights, Race Predictor; MAF Trend and Fuelling when they apply)
 - Responsive chart containers
-- Date range and exercise filters
+- Date range select in the page header; category filter on Records and exercise select on Progression
 - Category breakdown cards
 
+### Nutrition (/nutrition, when the nutrition flag is on)
+- Day header, food search and a quick-add bar
+- Log actions: barcode scanner, describe a meal, custom food, recipe builder
+- Micronutrient panel, My Foods and an insights panel; targets edited in dialogs
+
+### Weekly Review (/review)
+- One Monday-to-Sunday week: summary, highlights, intent and the week's sessions
+- Reached from the Analytics header and the timeline's weekly review prompt, not from the primary navigation
+
 ### Settings (/settings)
-- Unit and notification preferences
-- Coach personality settings
-- Coaching materials upload (PDF/DOCX/CSV)
-- Strava account linking/unlinking
-- Email subscription management
+- Six tabs: Account, Training, Integrations, Notifications, Data & Privacy, Recycle bin
+- Account: profile, unit preferences, re-run the welcome flow, delete account
+- Training: athlete profile and goals, training style, AI coach on/off, coaching materials upload (TXT/MD/CSV/PDF/DOCX)
+- Integrations: Strava and Garmin account linking/unlinking
+- Notifications: per-type email notifications with send hours, and push notifications
 
 ---
 
 ## Interaction Patterns
 
 **Minimal Animations**:
-- Card hover: subtle elevation shift (custom `hover-elevate` utility)
-- Dialog entrance: zoom + slide (200ms)
+- Card hover: a translucent tint over the card (custom `hover-elevate` utility, `--elevate-1`); on touch screens it shows while pressed instead
+- Dialog entrance: fade + zoom + slide (200ms)
 - Sheet transitions: slide (500ms open, 300ms close)
 - Skeleton screens with `animate-pulse`
 - Loading spinners with `animate-spin`
-- Coach thinking indicator: 3-dot bounce with staggered delays
+- Coach thinking indicator: 3-dot bounce with staggered delays (0 / 150 / 300ms)
+- `prefers-reduced-motion: reduce` cuts every animation and transition to near-instant (`client/src/index.css`)
 
 **Loading States**:
-- Skeleton screens (TimelineSkeleton) for data-heavy views
+- Skeleton screen (TimelineSkeleton) for the timeline; other views show `LoadingSpinner`
 - Spinner (Loader2 icon) for async operations
-- Button disabled state with spinner overlay
+- A pending button is disabled and swaps its icon for the spinner
 
-**Empty States** (4 variants based on user context):
+**Empty States** (3 timeline variants based on user context):
 - Welcome state with onboarding CTAs
 - Ready state for unscheduled plans
 - No-results state for active filters
-- General empty state
 
 **Responsiveness**:
 - Mobile-first approach
-- Breakpoints: sm (640px), md (768px), lg (1024px)
+- Breakpoints: sm (640px), md (768px), lg (1024px); `md` is where the sidebar replaces the phone tab bar
 - Stack columns on mobile
-- Collapsible sidebar navigation
+- Sidebar becomes a drawer plus the bottom tab bar below `md`
 
 **Error Handling**:
 - FallbackErrorBoundary for full-page crashes
@@ -211,17 +223,17 @@
 **Offline Support**:
 - PWA with service worker caching (Workbox)
 - Offline mutation queue with auto-flush on reconnect
-- Visual offline indicator (bottom-left, WifiOff icon)
+- Status pill (`OfflineIndicator`): top-centre below the header on phones, bottom-left from `md`. It shows "You're offline" with the WifiOff icon, then syncing and synced states as the queue drains
 
 ---
 
 ## Images
 
-**Hero Image**: NOT NEEDED - This is a utility-focused app, not a marketing site
+**Hero Image**: NOT NEEDED - This is a utility-focused app. The signed-out landing page uses no photographs either; its hero is a mock of the Training Timeline
 
 **Icon Library**: Lucide React
 - Line style icons throughout the UI
 - Consistent sizing with Tailwind classes
 
-**Exercise Illustrations**: Category-based color coding and icons from Lucide
-- Consistent size: w-12 h-12 or w-16 h-16 for larger contexts
+**Exercise Illustrations**: None. Exercises are shown by name, with category-based color coding on their chips (`categoryChipColors` in `client/src/lib/exerciseUtils.ts`)
+- Standalone empty-state icons are h-10 w-10 on the analytics tabs and h-12 w-12 on the timeline
