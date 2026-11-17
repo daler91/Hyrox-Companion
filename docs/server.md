@@ -382,13 +382,14 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `NODE_ENV` | No | `"development"` (default), `"production"`, or `"test"` |
 | `PORT` | No | Server listen port (default: `"5000"`) |
 | `CLERK_PUBLISHABLE_KEY` | No | Clerk frontend key |
-| `CLERK_SECRET_KEY` | No | Clerk backend key |
+| `CLERK_SECRET_KEY` | No | Clerk backend key. Without both Clerk keys, `setupAuth()` throws at startup unless the dev auth bypass is enabled |
 | `SENTRY_DSN` | No | Sentry error tracking DSN |
 | `RESEND_API_KEY` | No | Resend email delivery API key (email disabled if unset) |
 | `RESEND_FROM_EMAIL` | No | Sender address for outbound emails |
-| `VAPID_PUBLIC_KEY` | No | Web Push VAPID public key. Push is enabled only when `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_EMAIL` are all set; otherwise `GET /api/v1/push/vapid-key` returns 404 (`PUSH_NOT_CONFIGURED`) and sends are skipped |
+| `VAPID_PUBLIC_KEY` | No | Web Push VAPID public key. Web Push is enabled only when `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_EMAIL` are all set; otherwise `GET /api/v1/push/vapid-key` returns 404 (`PUSH_NOT_CONFIGURED`) and browser subscriptions are skipped on send |
 | `VAPID_PRIVATE_KEY` | No | Web Push VAPID private key |
 | `VAPID_EMAIL` | No | Bare contact email address for Web Push; the server prepends `mailto:` when registering VAPID details |
+| `FCM_SERVICE_ACCOUNT_JSON` | No | Firebase service account key file (JSON, pasted whole) for native app push through FCM (`server/fcm.ts`). Unset disables native push; Web Push is unaffected |
 | `AI_FEATURES_ENABLED` | No | Runtime kill switch for AI provider traffic (default `true`; `false` disables all AI features) |
 | `AI_GLOBAL_DAILY_LIMIT_CENTS` | No | Application-wide rolling-24h AI spend ceiling in cents. Unset means no global ceiling (per-user cap only) and a startup warning in production |
 | `AI_TEXT_PROVIDER` | No | Text AI provider (`gemini`, `anthropic`, or `openai-compatible`; default `gemini`) |
@@ -414,6 +415,8 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `STRAVA_WEBHOOK_VERIFY_TOKEN` | No | Webhook validation token; derived from the client secret when unset |
 | `APP_URL` | No | Public application URL (used for CORS, OAuth callbacks) |
 | `ALLOWED_ORIGINS` | No | Comma-separated list of additional CORS origins |
+| `MIN_APP_VERSION_ANDROID` / `MIN_APP_VERSION_IOS` | No | Oldest native app build served, as `MAJOR.MINOR.PATCH`; older builds get `426 APP_UPDATE_REQUIRED` (`appVersionGate`). Unset serves every build |
+| `ANDROID_APP_PACKAGE` / `ANDROID_APP_CERT_SHA256` | No | Android package name and signing-certificate fingerprints for `/.well-known/assetlinks.json`. Must be set together; both unset makes the route a 404 |
 | `TRUST_PROXY` | No | Express `trust proxy` setting for client IP derivation (default `1`) |
 | `VECTOR_DATABASE_URL` | No | Separate Neon PostgreSQL URL for vector storage; falls back to `DATABASE_URL` |
 | `ALLOW_DEV_AUTH_BYPASS` | No | Set to `"true"` to bypass auth in development (fatal in production) |
@@ -470,9 +473,9 @@ Cron jobs run in-process on **each** app replica; the advisory lock above is wha
 
 ### Shared Runtime State
 
-`server/sharedRuntimeState.ts` owns short-lived shared cache helpers backed by Postgres:
+Two Postgres tables hold the state that replicas share. `server/sharedRuntimeState.ts` owns the `server_runtime_cache` helpers (`getRuntimeCache`, `setRuntimeCache`, `claimRuntimeCacheKey`, `deleteRuntimeCache`, `deleteRuntimeCachePrefix`) and the expiry sweep for both tables:
 
-- `rate_limit_buckets` stores per-limiter (category, cap and window) request counters and reset timestamps for `rateLimiter(...)`.
+- `rate_limit_buckets` stores per-limiter (category, cap and window) request counters and reset timestamps for `rateLimiter(...)`. It is read and written by `PostgresRateLimitStore` in `server/rateLimitStore.ts`.
 - `server_runtime_cache` stores short-lived, TTL-bound entries for the Clerk auth seen-cache and the ten-minute tombstone that stops an erased account from being re-provisioned, single-use Strava OAuth state claims, the Strava background-sync 429 cooldown, the Strava webhook subscription state, the Garmin 429 breaker and per-user in-flight lock, the AI circuit-breaker state, planned-session estimates, the embedding health probe, and the record of which USDA food-detail reads came back without portions or micronutrients (`server/services/nutrition/foodDetail.ts`). The RAG retrieval cache is process-local, keyed on each athlete's retrieval version so a replica never serves a stale entry. The Gemini embedding-vector cache is deliberately process-local (`server/gemini/client.ts`) and is not stored here.
 - Expired rows are pruned daily by the `sharedRuntimeCleanup` cron job at 04:15 UTC.
 
@@ -483,8 +486,10 @@ Cron jobs run in-process on **each** app replica; the advisory lock above is wha
 - `rateLimiter(category, max, windowMs)` -- per-route rate limiting factory
 - `validateBody(schema)` / `validateQuery(schema)` / `validateParams(schema)` -- Zod-based validation middleware for the request body, query string, and route params. On success the parsed (coerced) value is written back with `Object.defineProperty`, because Express 5 exposes `req.query` as a read-only getter that a plain `req.query = ...` assignment throws on.
 - `asyncHandler(fn)` -- wraps async route handlers with error forwarding to `next(err)`
-- `formatValidationErrors(error)` -- formats Zod errors into safe client-facing messages
-- `calculateStreak(completedDates)` -- calculates consecutive workout day streaks
+- `formatValidationErrors(error)` / `sendValidationError(res, error)` -- format Zod errors into safe client-facing `{ path, message }` issues and send the `400 VALIDATION_ERROR` response the validators use
+- `sendNotFound(res, message)` -- the uniform `404 { error, code: "NOT_FOUND" }` response
+- `parsePagination(query, res, options)` -- parses `?limit` / `?offset`, answering `400` for an invalid value and `412 PRECONDITION_FAILED` for a limit above `maxLimit`
+- `calculateStreak(completedDates, userTimezone)` -- calculates consecutive workout day streaks, anchored to the athlete's local today (default `UTC`)
 
 > **Express 5 note:** under `@types/express` v5 the default `req.params` value type widened to `string | string[]`, so handlers that read a path parameter type their request generic -- e.g. `Request<{ id: string }>` -- to keep `req.params.id` a `string` (see `server/routes/coaching.ts` and `server/routes/plans.ts`).
 
