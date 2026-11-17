@@ -17,6 +17,8 @@ Hyrox-Companion/
   shared/          Code shared between client and server (schema, OpenAPI, types)
 ```
 
+A fourth directory, `mobile/`, holds the Kotlin Android app. It has its own Gradle build and calls the same `/api/v1` API with an `Authorization: Bearer` token instead of a session cookie. Its API models are generated from `docs/openapi.json` (`pnpm mobile:models`, see §5).
+
 ```mermaid
 graph TD
     subgraph Monorepo
@@ -113,7 +115,7 @@ sequenceDiagram
 
 ## 3. Auto-Coach Pipeline
 
-When a user completes a workout, the auto-coach pipeline adjusts upcoming plan days using AI. The pipeline is queue-driven via pg-boss to avoid blocking the request.
+When a user logs a workout, the auto-coach pipeline adjusts upcoming plan days using AI. The pipeline is queue-driven via pg-boss to avoid blocking the request. The diagram follows the workout-create trigger; the other triggers are listed under Key details.
 
 ```mermaid
 sequenceDiagram
@@ -127,9 +129,9 @@ sequenceDiagram
     participant Storage as Storage Layer
     participant Poll as useAuth (polling)
 
-    Client->>API: POST /api/v1/workouts (complete workout)
-    API->>Storage: set isAutoCoaching = true
-    API->>Queue: enqueue auto-coach job (pg-boss)
+    Client->>API: POST /api/v1/workouts (log workout)
+    API->>Storage: insert workout, set isAutoCoaching = true (one transaction, only if aiCoachEnabled)
+    API->>Queue: enqueueAutoCoach (pg-boss, debounced 60s per athlete)
     API-->>Client: 200 OK (workout saved)
 
     Queue->>Coach: dequeue and execute triggerAutoCoach(userId)
@@ -139,6 +141,7 @@ sequenceDiagram
     AI-->>Coach: TrainingContext (activePlan, upcomingWorkouts, ...)
 
     Coach->>Coach: take the upcoming planned days from TrainingContext.upcomingWorkouts
+    Coach->>Coach: prepareDeterministicStages (load governor, plan adaptation)
 
     Coach->>RAG: retrieveCoachingText(userId, query)
     RAG-->>Coach: coaching text + source (rag | legacy | null)
@@ -146,7 +149,10 @@ sequenceDiagram
     Coach->>TextAI: generateWorkoutSuggestions(context, upcoming, goal, coachingText)
     TextAI-->>Coach: WorkoutSuggestion[]
 
-    loop For each suggestion
+    Coach->>TextAI: buildReviewNotes (days the coach left unchanged)
+    TextAI-->>Coach: review notes
+
+    loop For each suggestion and review note (one transaction)
         Coach->>Storage: updatePlanDay(workoutId, field, aiSource)
     end
 
@@ -159,10 +165,12 @@ sequenceDiagram
 ```
 
 **Key details:**
-- `isAutoCoaching` is a boolean flag on the `users` table that the client polls to detect when coaching is complete.
+- **Triggers**: `enqueueAutoCoach()` (`server/services/autoCoachQueue.ts`) is the single producer, called when a workout is created, a workout's date changes, logged sets are edited, a plan day is completed, or a plan day is rescheduled. It uses pg-boss's debounce with a 60-second window keyed per athlete, so a burst of edits collapses into one pass.
+- `triggerAutoCoach` returns without doing anything when the athlete's `aiCoachEnabled` is off. When the athlete is over their AI budget, no text AI provider is configured, or there are no upcoming planned days, it applies the rule-based stages only and makes no model call.
+- `isAutoCoaching` is a boolean flag on the `users` table that the client polls to detect when coaching is complete. `useAuth` polls every 2 seconds while the flag is set and gives up after 5 minutes.
 - The pipeline uses a `try/finally` block to guarantee `isAutoCoaching` is reset to `false` even on failure.
 - A failed model call (provider error, open circuit breaker, timeout, unreadable reply) is not read as "no changes": the rule-based stages (load governor, plan adaptation) and any safety note are still written, no "the plan still fits" review notes are, and the job fails so pg-boss retries it.
-- Suggestions can either `replace` or `append` content to `mainWorkout` or `accessory` fields on plan days.
+- Suggestions can either `replace` or `append` content to the `mainWorkout`, `accessory` or `notes` field of a plan day.
 - The `aiSource` field on each plan day records whether the AI used RAG chunks (`"rag"`), legacy materials (`"legacy"`), or neither (`null`).
 - Suggestions pass through a safety layer (`aiSafety.ts`) and a repeat-modification guard (`aiModificationGuard.ts`) that suppresses repeated AI fatigue/volume reductions on an unchanged workout. See [AI and RAG](./ai-and-rag.md) for the guard's fingerprinting logic.
 
@@ -222,10 +230,11 @@ All protected mutating endpoints in `server/routes/` and `server/routes/workouts
 **Canonical guard order (enforced by tests):**
 1. auth/idempotency guards (`protectedMutationGuards`)
 2. rate limiter
-3. AI consent/budget guards (when enabled)
-4. validation middleware
-5. custom middleware
-6. async handler wrapper
+3. large-body JSON parser (`largeJsonBodyParser`; a no-op except on the few large-body paths)
+4. AI consent/budget guards (when enabled)
+5. validation middleware
+6. custom middleware
+7. async handler wrapper
 
 ```ts
 // ✅ Required pattern
@@ -250,20 +259,21 @@ The RAG retrieval system (`server/services/ragRetrieval.ts`) determines whether 
 
 ```mermaid
 flowchart TD
-    START([retrieveCoachingContext called]) --> HAS_CHUNKS{hasChunksForUser?}
+    START([retrieveCoachingContext called]) --> HAS_CHUNKS{hasChunksForUser?\nread in parallel with\ngetStoredEmbeddingDimension}
 
     HAS_CHUNKS -- No --> FALLBACK_LEGACY
 
     HAS_CHUNKS -- Yes --> DIM_CHECK{Stored embedding dimension\nmatches EMBEDDING_DIMENSIONS?}
 
     DIM_CHECK -- "Mismatch\n(storedDim != expected)" --> FALLBACK_LEGACY
-    DIM_CHECK -- "Match or null\n(first embed)" --> VECTOR_SEARCH[retrieveRelevantChunks\nvector search top results]
+    DIM_CHECK -- "Match, or null\n(no chunk has an embedding yet)" --> VECTOR_SEARCH[retrieveRelevantChunks\nvector search top results]
 
     VECTOR_SEARCH --> HAS_RESULTS{chunks.length > 0?}
 
     HAS_RESULTS -- Yes --> RETURN_RAG([Return RAG result\nsource: rag\nchunkCount: N])
 
     HAS_RESULTS -- No --> FALLBACK_LEGACY
+    VECTOR_SEARCH -. "throws\n(also a failed probe above)" .-> FALLBACK_LEGACY
 
     FALLBACK_LEGACY[listCoachingMaterials\nfull-text lookup] --> HAS_MATERIALS{coachingMaterials.length > 0?}
 
@@ -276,11 +286,11 @@ flowchart TD
     style RETURN_NONE fill:#6c757d,color:#fff
 ```
 
-**Fallback reasons tracked in `ragInfo.fallbackReason`:**
+**Fallback reasons tracked in `ragInfo.fallbackReason`** (each value starts with one of these codes, followed by `: ` and a detail string; it is unset when the athlete simply has no chunks):
 - `dimension_mismatch` -- stored embeddings were generated with a different model dimension; user must re-embed via settings.
 - `no_embeddings` -- chunks exist but have no embedding vectors yet.
 - `no_matching_chunks` -- vector search returned zero results for the query.
-- `retrieval_error` -- an exception occurred during vector search.
+- `retrieval_error` -- an exception occurred during the chunk and dimension probes or the vector search.
 
 In production, `sanitizeRagInfo` strips `chunks` and `fallbackReason` from API responses to avoid leaking internal diagnostics.
 
@@ -294,13 +304,15 @@ Type safety flows from the database schema all the way to the Swagger UI documen
 flowchart LR
     DRIZZLE["Drizzle pgTable\ndefinitions\n(shared/schema/tables.ts)"] --> DRIZZLE_ZOD["createInsertSchema()\n(drizzle-zod)"]
 
-    DRIZZLE_ZOD --> ZOD_REFINE["Zod schemas with\n.omit() / .extend()\n(shared/schema/types.ts)"]
+    DRIZZLE_ZOD --> ZOD_REFINE["Zod schemas with\n.omit() / .extend()\n(shared/schema/types/)"]
 
     ZOD_REFINE --> OPENAPI_REG["OpenAPIRegistry\n.register() / .registerPath()\n(shared/openapi.ts)"]
 
     OPENAPI_REG --> GENERATOR["OpenApiGeneratorV3\n.generateDocument()\n(@asteasolutions/zod-to-openapi)"]
 
     GENERATOR --> SWAGGER["Swagger UI\n/api/docs\n(dev only)"]
+    GENERATOR --> SNAPSHOT["docs/openapi.json\n(pnpm docs:openapi)"]
+    SNAPSHOT --> KOTLIN["Kotlin API models\nmobile/core/.../api/generated\n(pnpm mobile:models)"]
 
     ZOD_REFINE --> TS_TYPES["TypeScript types\nz.infer&lt;typeof schema&gt;"]
 
@@ -314,10 +326,10 @@ flowchart LR
 **Step-by-step:**
 
 1. **Drizzle table definitions** (`shared/schema/tables.ts`) -- `pgTable()` calls define columns, types, indexes, and constraints. A custom `vector()` type maps PostgreSQL `vector(N)` to TypeScript `number[]`.
-2. **drizzle-zod generation** -- `createInsertSchema()` auto-generates a Zod schema from each Drizzle table, handling column types, nullability, and defaults.
-3. **Zod refinement** (`shared/schema/types.ts`) -- `.omit({ id: true })` removes server-generated fields; `.extend()` adds stricter validation (e.g., `z.number().min(1).max(14)`).
+2. **drizzle-zod generation** -- `createInsertSchema()` auto-generates a Zod schema from a Drizzle table, handling column types, nullability, and defaults. `shared/schema/zod.ts` binds it to the project's `z` instance with `createSchemaFactory()`, after `extendZodWithOpenApi(z)` has run, so every generated schema carries the `.openapi()` extension.
+3. **Zod refinement** (the modules under `shared/schema/types/`, re-exported by `shared/schema/types.ts`) -- `.omit({ id: true })` removes server-generated fields; `.extend()` adds stricter validation (e.g., `z.string().trim().min(1).max(255)` for a coaching material's title).
 4. **OpenAPI registration** (`shared/openapi.ts` and the per-area path modules in `shared/openapiRoutes/`) -- Schemas are registered with `@asteasolutions/zod-to-openapi`'s `OpenAPIRegistry`, including path definitions with examples, the security scheme and the shared error envelopes. Request schemas are the same objects the route validation uses (e.g. `shared/schema/types/native.ts`), so the document cannot drift from what the server accepts; `test/docs/openapiCoverage.test.ts` keeps registered routes and the document in step.
-5. **Document generation** -- `OpenApiGeneratorV3` produces an OpenAPI 3.0 JSON spec from the registry.
+5. **Document generation** -- `OpenApiGeneratorV3` produces an OpenAPI 3.0 JSON spec from the registry (`generateOpenApiDocument()`). `pnpm docs:openapi` (`script/generate-openapi.ts`) writes it to `docs/openapi.json`, and the Build workflow fails when the committed snapshot differs from a fresh run. `pnpm mobile:models` (`script/kotlin-models/`) generates the Android app's Kotlin API models from that snapshot.
 6. **Swagger UI** -- In development, `swagger-ui-express` serves interactive docs at `/api/docs` with a relaxed CSP.
 
 ---
@@ -361,17 +373,21 @@ graph TD
     PGVEC["PostgreSQL + pgvector"]
     QUEUE["pg-boss Queue"]
 
-    R_WORKOUTS --> S_COACH
     R_WORKOUTS --> STORAGE
     R_AI --> S_AI_CTX
     R_AI --> AITEXT
     R_AI --> GEMINI
-    R_COACHING --> S_RAG
+    R_AI --> STORAGE
+    R_COACHING --> S_RAG_SVC
     R_COACHING --> STORAGE
+    R_COACHING --> QUEUE
+    R_PLANS --> S_COACH
     R_PLANS --> STORAGE
+    R_PLANS --> QUEUE
     R_ANALYTICS --> STORAGE
     R_PREFS --> STORAGE
     R_AUTH --> CLERK
+    R_AUTH --> STORAGE
     R_STRAVA --> STRAVA_API
     R_STRAVA --> STORAGE
     R_EMAIL --> STORAGE
@@ -388,6 +404,7 @@ graph TD
     S_RAG --> S_RAG_SVC
     S_RAG --> STORAGE
     S_RAG_SVC --> PGVEC
+    S_RAG_SVC --> GEMINI
 
     STORAGE --> PG
     R_WORKOUTS --> QUEUE
@@ -403,8 +420,8 @@ graph TD
 
 **Notable patterns:**
 - **Route handlers** are thin orchestrators -- they validate input, delegate to use-case functions (e.g., `workoutUseCases.ts`), and return responses. The use-case layer separates transport concerns from business logic orchestration.
-- **coachService** is the most connected service, depending on `aiService`, `ragRetrieval`, the configured text AI provider, Gemini-specific embedding/vision helpers, and the storage layer.
-- **ragRetrieval** delegates vector search to `ragService`, which queries the `pgvector` extension directly via a separate connection pool (`vectorPool`).
+- **coachService** is the most connected service, depending on `services/ai` (`buildTrainingContext`), `ragRetrieval`, the configured text AI provider (through `server/gemini/`), the rule-based stages (`trainingLoadGovernor`, `planAdaptationService`), and the storage layer. The workout routes do not import it: they enqueue an `auto-coach` job and the queue worker calls `triggerAutoCoach`. The plan routes call it directly to regenerate one day's coach note (`regenerateCoachNoteForPlanDay`).
+- **ragRetrieval** delegates vector search to `ragService`, which embeds the query with Gemini and reads `document_chunks` through the storage layer's separate connection pool (`vectorPool`). The coaching-material routes use `ragService` directly (RAG status, re-embed) and enqueue `embed-coaching-material` jobs.
 - **pg-boss** uses the same PostgreSQL database for its job queue, keeping infrastructure simple.
 - **Storage** is a single abstraction layer over Drizzle ORM; all database access goes through it (including idempotency key caching via `IdempotencyStorage`).
 - **Nutrition** is a self-contained subsystem (`server/routes/nutrition/*`, `server/services/nutrition/*`) over the same storage layer. Food search fans out to external providers (Edamam, USDA, Open Food Facts) behind a relevance gate, with local `pg_trgm` fuzzy/synonym matching and an optional semantic-embeddings tier that reuses the `pgvector` pool; per-meal fuel targets are computed by the pure, DB-free `shared/mealFuelling.ts`. See [Nutrition & Fuelling](./nutrition.md).
@@ -428,12 +445,15 @@ flowchart LR
     Plan --> QT["send-today-session"]
     Plan --> QA["send-analysis-digest"]
     Plan --> QR["send-weekly-review-reminder<br/>(local Sunday, default 17:00)"]
+    Run --> Maf["mafReminderUsersForTick<br/>due MAF baseline tests,<br/>local hour == notify_hour"]
+    Maf --> QF["send-maf-test-reminder"]
 
     QW --> W["per-user worker<br/>re-fetch user, re-check toggle"]
     QM --> W
     QT --> W
     QA --> W
     QR --> W
+    QF --> W
 
     W --> Guard{"claim ledger<br/>last&lt;Type&gt;At"}
     Guard -- won --> Tmpl[emailTemplates.*]
@@ -444,13 +464,14 @@ flowchart LR
 ```
 
 **Key details:**
-- **Hourly UTC tick, per-athlete local gate**: `"0 * * * *"` in `server/cron.ts`. `planEmailJobsForUser()` (`server/emailScheduler.ts`) resolves each athlete's local hour and weekday from `users.user_timezone`. Each email kind has its own send hour, resolved by `resolveNotifyHour()` (`shared/notifyHours.ts`): the kind's optional `notify_hour_*` override, else the athlete's `notify_hour` (default 07:00). The exception is the weekly review reminder, which falls back to 17:00 instead. On top of the hour, the weekly summary only goes out on the athlete's local Monday and the review reminder only on their local Sunday. Sixteen other crons live in the same process (idempotency cleanup 03:30, AI-usage log cleanup 04:00, shared runtime state cleanup 04:15, structured exercise health rollup 02:10, RAG chunk prune daily at 03:50, recycle-bin purge daily at 03:45, plan-day move prune daily at 03:55, analytics recompute hourly at :05 firing at each user's local midnight, account erasure sweep hourly at :35, nutrition push reminders hourly at :25, the food-embedding backfill every 30 minutes when semantic food search is enabled, stale `isAutoCoaching` recovery every 10 minutes, queue-depth telemetry every 5 minutes, the Strava auto-sync polling scan every 15 minutes, the session-stream backfill every 15 minutes, and the Strava webhook subscription check six-hourly and 30 s after boot). Each cron body runs under a Postgres advisory lock so only one replica performs the work even when `APP_INSTANCE_COUNT > 1`.
+- **Hourly UTC tick, per-athlete local gate**: `"0 * * * *"` in `server/cron.ts`. `planEmailJobsForUser()` (`server/emailScheduler.ts`) resolves each athlete's local hour and weekday from `users.user_timezone`. Each email kind has its own send hour, resolved by `resolveNotifyHour()` (`shared/notifyHours.ts`): the kind's optional `notify_hour_*` override, else the athlete's `notify_hour` (default 07:00). The exception is the weekly review reminder, which falls back to 17:00 instead. On top of the hour, the weekly summary only goes out on the athlete's local Monday and the review reminder only on their local Sunday. Seventeen other crons live in the same process (idempotency cleanup 03:30, AI-usage log cleanup 04:00, shared runtime state cleanup 04:15, structured exercise health rollup 02:10, RAG chunk prune daily at 03:50, recycle-bin purge daily at 03:45, plan-day move prune daily at 03:55, analytics recompute hourly at :05 firing at each user's local midnight, account erasure sweep hourly at :35, nutrition push reminders hourly at :25, the food-embedding backfill every 30 minutes when semantic food search is enabled, stale `isAutoCoaching` recovery every 10 minutes, the stale plan-generation sweep every 10 minutes at :03, queue-depth telemetry every 5 minutes, the Strava auto-sync polling scan every 15 minutes, the session-stream backfill every 15 minutes, and the Strava webhook subscription check six-hourly and 30 s after boot). Each cron body runs under a Postgres advisory lock so only one replica performs the work even when `APP_INSTANCE_COUNT > 1`.
+- **Before planning**: each `runEmailCronJob` scan first marks past planned days as missed (`storage.plans.markMissedPlanDays()`), in parallel with loading the athletes who have email notifications on and those with a due MAF baseline test. The MAF reminder is planned from that second list, because its athletes may be push-only, and goes out at the athlete's `notify_hour`.
 - **Startup catch-up**: `cron.ts` schedules one catch-up scan 30 s after every boot, as a one-shot timer (not a cron) under its own `startupEmailCatchUp` advisory lock. The per-user local-hour gate and the claim ledgers keep it idempotent, so it needs no time-of-day condition.
 - **Claim before send**: every worker takes an atomic conditional `UPDATE` on its ledger column (`claimWeeklySummary` and friends in `server/storage/users.ts`) before building the email, with a window deliberately shorter than the cadence; only the winner sends.
 - **Scoped retries**: the enqueue uses `sendJobNoRetry()` for the send legs because the ledger is stamped at claim time, so a retry after a post-send failure would deliver a duplicate email. Upstream jobs (parse / ingest) use `sendJob()` with the default `retryLimit: 3` because their handlers are idempotent by id.
 - **No AI on the email path**: the analysis digest reads stored `analytics_results` rows only; recomputes stay with the `analyticsRecompute` cron.
 - **Unsubscribe**: every send carries `List-Unsubscribe` / `List-Unsubscribe-Post` headers and a footer link to `/api/v1/emails/unsubscribe`, mounted ahead of the CSRF guard (see [integrations.md § One-Click Unsubscribe](integrations.md#one-click-unsubscribe)).
-- **External trigger**: the same `runEmailCronJob` can be invoked via `GET /api/v1/cron/emails` guarded by the `CRON_SECRET` header — call it hourly when scheduling from Railway Cron or GitHub Actions instead of the in-process timer.
+- **External trigger**: the same `runEmailCronJob` can be invoked via `GET /api/v1/cron/emails` guarded by the `x-cron-secret` header, which must match `CRON_SECRET` — call it hourly when scheduling from Railway Cron or GitHub Actions instead of the in-process timer.
 - **Per-job timeout**: every worker is wrapped in `runWithTimeout` (50 min, `JOB_TIMEOUT_MS`) so a hung Resend or Gemini call cannot leak a worker slot indefinitely.
 - **Same pattern, different payload — stored-first analytics**: the `analyticsRecompute` cron reuses this exact fixed-UTC-tick → local-time-gate → pg-boss → worker shape. It ticks hourly, fires per user at local midnight, and enqueues `recompute-analytics` jobs that refresh the durable `analytics_results` row (Coach Insights / Race Prediction) so the next open paints a fresh result with no AI spend on the read path. See [integrations.md § Analytics Recompute](integrations.md#analytics-recompute-scan).
 - See [integrations.md § Email](integrations.md#email-system-resend) for the prose walkthrough and [integrations.md § Job Queue](integrations.md#job-queue-pg-boss) for the queue-level details.

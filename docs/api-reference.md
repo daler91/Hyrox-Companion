@@ -8,9 +8,9 @@ fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints req
 
 **Base URL:** `/api/v1`
 **Content-Type:** `application/json` (requests and responses)
-**Authentication:** Clerk JWT via `credentials: "include"` (cookie-based)
+**Authentication:** Clerk JWT via `credentials: "include"` (cookie-based) on the web; the native app sends its Clerk session token as `Authorization: Bearer`
 
-**Machine-readable spec:** a committed OpenAPI 3.0 snapshot lives at [`docs/openapi.json`](openapi.json). It is regenerated from the same Zod registry that powers Swagger UI (`shared/openapi.ts`) via `pnpm docs:openapi` and is CI-gated — the `Build` workflow fails if the committed file drifts from the schemas. Use it for client-code generation, contract testing, or importing into tools like Postman / Insomnia. Path definitions live in per-area modules under `shared/openapiRoutes/`, which share the bearer security scheme, the two error envelopes (`ErrorResponse`, `ValidationErrorResponse`) and the native app's `426 AppUpdateRequiredResponse` (`shared/openapiRoutes/common.ts`). Every client endpoint below is registered; `test/docs/openapiCoverage.test.ts` fails CI when a new route is not, and lists the routes deliberately left out (webhooks, unsubscribe links, health probes, operator and debug endpoints) with the reason for each. Entities several areas return — `ExerciseSetRow`, `WorkoutStructureBlock`, `ParsedExercise`, `CoachNoteInputs`, `PlanProposal` — are registered once in `shared/openapiRoutes/entities.ts`. On pull requests, `openapi-breaking.yml` fails a change that would break installed app builds ([Testing → OpenAPI Breaking Changes](testing.md#6-openapi-breaking-changes-openapi-breakingyml)).
+**Machine-readable spec:** a committed OpenAPI 3.0 snapshot lives at [`docs/openapi.json`](openapi.json). It is regenerated from the same Zod registry that powers Swagger UI (`shared/openapi.ts`) via `pnpm docs:openapi` and is CI-gated — the `Build` workflow fails if the committed file drifts from the schemas. Use it for client-code generation, contract testing, or importing into tools like Postman / Insomnia. Path definitions live in per-area modules under `shared/openapiRoutes/`, which share the bearer security scheme, the two error envelopes (`ErrorResponse`, `ValidationErrorResponse`) and the native app's `426 AppUpdateRequiredResponse` (`shared/openapiRoutes/common.ts`). Every client endpoint below is registered; `test/docs/openapiCoverage.test.ts` fails CI when a new route is not, and lists the routes deliberately left out (webhooks, unsubscribe links, health probes, operator and debug endpoints) with the reason for each. Entities several areas return — `ExerciseSetRow`, `WorkoutStructureBlock`, `ParsedExercise`, `CoachNoteInputs`, `PlanProposal`, `SessionMafCompliance` — are registered once in `shared/openapiRoutes/entities.ts`. On pull requests, `openapi-breaking.yml` fails a change that would break installed app builds ([Testing → OpenAPI Breaking Changes](testing.md#6-openapi-breaking-changes-openapi-breakingyml)).
 
 ---
 
@@ -64,6 +64,7 @@ There are two standard error body shapes, both carrying a machine-readable `code
   - `details` is only included on 4xx responses whose error carries it.
   - A 500 always returns `"Internal Server Error"` to prevent leaking internals.
   - An error from another service is a `502` with `EXTERNAL_API_ERROR` and a generic message; its own status and text are not passed on.
+  - A body the JSON parser refuses keeps its own status: malformed JSON is `400 BAD_REQUEST`, and a body over the route's size limit is `413 PAYLOAD_TOO_LARGE` with a fixed message. A bad percent-escape in a path parameter is `400 BAD_REQUEST` (`"Malformed URL"`).
 
 - **Validation middleware** (`validateBody` / `validateQuery` / `validateParams` in `server/routeUtils.ts`) — a failed Zod parse returns `400` with `message` in place of `error` (see [Request Validation](#request-validation)).
 
@@ -143,7 +144,7 @@ not cause and cannot clear by waiting out their own allowance. See
 Rate limits are applied per-user (keyed by Clerk userId, falling back to the client IP when the request carries no Clerk session) and namespaced by limiter — category, cap and window — so limits are independent across route groups. Two limiters that share a category but not a cap or window (`workoutSet` at 120/min for set edits and 60/min for adding a set) keep separate counters; routes with the same category, cap and window share one.
 
 - **Default window:** 60 seconds
-- **Strava routes:** 15-minute window
+- **Strava and Garmin routes, and the email unsubscribe link:** 15-minute window (the Strava webhook receiver keeps the default)
 - **Response on limit:** `429` with `RATE_LIMITED` code and a `Retry-After` header set to the full window length in seconds
 - **Headers:** `RateLimit-Policy`, `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset` (seconds until the window resets) — the IETF draft-6 set that express-rate-limit sends for `standardHeaders: true`; legacy `X-RateLimit-*` headers are off
 - **Storage:** PostgreSQL-backed `rate_limit_buckets`, shared across app replicas outside tests
@@ -166,7 +167,7 @@ Retrieve a CSRF token for use in subsequent mutating requests.
 
 - **Auth:** Not strictly required (works pre-login, bound to IP; after login, bound to userId)
 - **Response:** `{ csrfToken: string }`
-- **Side effects:** Sets a signed `__Host-fitai.x-csrf` cookie (production) or `fitai.x-csrf` (development)
+- **Side effects:** Sets a signed, `HttpOnly`, `SameSite=Strict` cookie: `__Host-fitai.x-csrf` (production, `Secure`) or `fitai.x-csrf` (any other environment)
 
 The returned token must be sent as the `x-csrf-token` header on all mutating requests. Missing or invalid tokens result in `403 { "error": "invalid csrf token", "code": "EBADCSRFTOKEN" }` — csrf-csrf's error, rendered by the global error handler.
 
@@ -174,7 +175,7 @@ Requests authenticated with a Clerk session token in an `Authorization: Bearer` 
 
 ### Native app headers
 
-The native app sends `X-App-Platform` (`android` or `ios`) and `X-App-Version` (`MAJOR.MINOR.PATCH`) on every request. Both are logged on the access line (validated values only). When the operator sets `MIN_APP_VERSION_ANDROID` / `MIN_APP_VERSION_IOS`, an older build — or one with a missing or malformed version — gets, on any `/api/v1` route and ahead of auth and CSRF:
+The native app sends `X-App-Platform` (`android` or `ios`) and `X-App-Version` (`MAJOR.MINOR.PATCH`) on every request. Both are logged on the access line (validated values only). When the operator sets `MIN_APP_VERSION_ANDROID` / `MIN_APP_VERSION_IOS`, an older build — or one with a missing or malformed version — gets, on any `/api/v1` route but the two health probes (which mount earlier) and ahead of auth and CSRF:
 
 ```json
 426 { "error": "This version of the app is no longer supported. Update it to keep going.", "code": "APP_UPDATE_REQUIRED", "minimumVersion": "1.4.0" }

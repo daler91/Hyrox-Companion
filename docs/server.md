@@ -71,7 +71,7 @@ Clerk auth, CSRF protection and idempotency are **not** part of this global chai
 
 Middleware is ordered intentionally:
 1. **compression** first -- compresses all responses including error pages, **except** `text/event-stream` responses. `compression`'s internal gzip buffer holds chunks indefinitely when the producer is slow (e.g. Gemini with `thinkingLevel: HIGH`), which breaks SSE. The filter in `server/index.ts` checks `res.getHeader("Content-Type")` for `text/event-stream` and falls through to `compression.filter` for everything else.
-2. **CORS** early -- rejects disallowed origins before any processing
+2. **CORS** early -- every later response, error responses included, carries the CORS headers for an allowed origin. A disallowed origin is not rejected: its request is still processed, but the response carries no `Access-Control-Allow-Origin`, so the browser refuses to hand it to the calling page
 3. **CSP nonce + Helmet** before route handlers -- security headers (including the nonce-based CSP from `buildCspDirectives()`) on every response
 4. **Body parsing** after security -- limits apply to parsed bodies only
 5. **pino-http** then **request-context** last in the pre-route stack -- both run **before** Clerk auth (`clerkMiddleware()` is registered later, inside `registerRoutes()`), so `req.log` is bound with `userId: "anonymous"` and the request context carries `requestId` only
@@ -81,9 +81,9 @@ Middleware is ordered intentionally:
 - `APP_URL` (from environment)
 - `https://fitai.coach`
 - Any origins listed in `ALLOWED_ORIGINS` (comma-separated)
-- `http://localhost:5000` and `http://localhost:5173` (development only)
+- `http://localhost:5000` and `http://localhost:5173` (whenever `NODE_ENV` is not `production`)
 
-Same-origin requests (no `Origin` header) are always allowed. Credentials are enabled.
+Requests with no `Origin` header (same-origin and server-to-server requests) are always allowed. Credentials are enabled.
 
 ---
 
@@ -125,7 +125,7 @@ Listed in mount order:
 
 All API routes are prefixed with `/api/v1/` by convention within each router file.
 
-Protected mutating endpoints are declared with the `protectedRouteBuilder` helpers (`protectedPost` / `protectedPatch` / `protectedDelete`) in `server/routes/_helpers/`. The builder applies a canonical guard order -- auth + idempotency (`protectedMutationGuards`), rate limiter, AI consent/budget (when enabled), validation, then the async handler. A compliance test in `server/routes/__tests__/` fails CI if a protected mutation bypasses the builder.
+Protected mutating endpoints are declared with the `protectedRouteBuilder` helpers (`protectedPost` / `protectedPatch` / `protectedDelete`) in `server/routes/_helpers/`. The builder applies a canonical guard order -- auth + idempotency (`protectedMutationGuards`), rate limiter, the large-body JSON parser (`largeJsonBodyParser`, a no-op on every other path), AI consent/budget (when enabled), validation, then the async handler. A compliance test in `server/routes/__tests__/` fails CI if a protected mutation bypasses the builder.
 
 Route handlers follow a **thin controller** pattern -- they validate input, then delegate to a use-case or service function. For workouts, `server/services/workoutUseCases.ts` provides a use-case layer that splits route payloads into service-level arguments; newer use cases also live under `server/usecases/`.
 
@@ -135,20 +135,23 @@ Route handlers follow a **thin controller** pattern -- they validate input, then
 
 ### Helmet
 
-Helmet is configured with the application's full Content-Security-Policy via `buildCspDirectives()` (`server/middleware/csp.ts`), including a per-request nonce in `script-src` (production). Additional settings:
+Helmet is configured with the application's full Content-Security-Policy via `buildCspDirectives()` (`server/middleware/csp.ts`), including a per-request nonce in `script-src` (production). `useDefaults` is `false`, so the emitted policy is exactly those directives. Additional settings:
 
 - `img-src` includes `blob:`, so photo previews built with `URL.createObjectURL` render (a `blob:` URL never matches `'self'`)
+- `style-src` keeps `'unsafe-inline'`: Recharts injects `<style>` tags and Radix UI sets inline `style` attributes
+- `frame-ancestors 'none'`, and `upgrade-insecure-requests` in production only
+- `strictTransportSecurity`: one year (`maxAge: 31536000`), `includeSubDomains`, `preload`
 - `crossOriginEmbedderPolicy: false`
 - `referrerPolicy: "strict-origin-when-cross-origin"`
 - `x-powered-by` header disabled on the Express app directly
 
 ### CSP Nonces
 
-In production, `server/middleware/cspNonce.ts` generates a 128-bit random nonce (base64url-encoded, so it never contains `+`, `/` or `=`) per request, stored in `res.locals.cspNonce`. The nonce is injected into the `script-src` CSP directive and into `<script>` tags in the served HTML (see `server/static.ts`). In development, `'unsafe-inline'` and `'unsafe-eval'` are used instead.
+In production, `server/middleware/cspNonce.ts` generates a 128-bit random nonce (base64url-encoded, so it never contains `+`, `/` or `=`) per request, stored in `res.locals.cspNonce`. The nonce is injected into the `script-src` CSP directive and into `<script>` tags in the served HTML (see `server/static.ts`). Outside production the nonce middleware is not mounted; `script-src` uses `'unsafe-inline'` and `'unsafe-eval'` instead, and `connect-src` adds `ws:` and `wss:` for Vite HMR.
 
 ### CORS
 
-A strict origin whitelist is enforced. Requests from unlisted origins receive a CORS error. See the allowed origins table above.
+A strict origin allowlist is enforced. The `origin` callback in `server/index.ts` answers `callback(null, false)` for an unlisted origin: the server raises no error and still processes the request, but sends no CORS headers, so the browser blocks the calling page from reading the response, and its preflight fails, so a request that needs one is never sent. See the allowed origins list above.
 
 ### Rate Limiting
 
@@ -156,9 +159,10 @@ A strict origin whitelist is enforced. Requests from unlisted origins receive a 
 
 - Per-user keying (falls back to IP for unauthenticated requests), namespaced by limiter: the bucket key is `${category}:${maxRequests}:${windowMs}:user:${id}` (or `:ip:`), so two limiters that share a category but not a cap or window keep separate counters
 - Default window: 60 seconds (`DEFAULT_RATE_LIMIT_WINDOW_MS`)
-- Standard `RateLimit-*` headers (RFC 6585)
+- Standard `RateLimit-*` headers (`standardHeaders: true`); the legacy `X-RateLimit-*` headers are off
 - Returns `429` with `Retry-After` header and `RATE_LIMITED` error code
-- Limiter instances are cached per `(category, maxRequests, windowMs)` tuple
+- Limiter instances are cached per `(category, maxRequests, windowMs)` tuple, one fail-open and one fail-closed instance each (see below)
+- A request with neither a user id nor an IP (`req.ip`) is not rate-limited
 - Uses PostgreSQL-backed `rate_limit_buckets` outside tests so limits are shared across app replicas
 - **Store-error behaviour is split by method** (`passOnStoreError` is chosen per request in `server/routeUtils.ts`): safe methods (`GET`, `HEAD`, `OPTIONS`) fail **open**, so a Postgres blip cannot 500 the entire read surface; everything else — every mutation, and therefore every auth, AI-spend and write route — fails **closed**, where allowing unthrottled requests during a store outage is the bigger risk. An attacker cannot defeat the limiter on a mutating route by inducing store errors. Counts stay unified per limiter because both instances share the same Postgres key.
 - Every authenticated `/api/v1` route carries a limiter, including plain reads such as `GET /api/v1/plans`, `GET /api/v1/plans/:id`, `GET /api/v1/preferences` and the Strava/Garmin status and disconnect routes.
@@ -223,11 +227,11 @@ Server-side enforcement for the `X-Idempotency-Key` header sent by the client's 
 
 ### Dev Auth Bypass Guard
 
-`ALLOW_DEV_AUTH_BYPASS=true` causes an immediate `process.exit(1)` if `NODE_ENV` is `"production"`. This is enforced both by the Zod schema refinement in `server/env.ts` and by a runtime check in `server/index.ts`.
+`ALLOW_DEV_AUTH_BYPASS=true` stops the process from starting if `NODE_ENV` is `"production"`. Two guards enforce it: the Zod schema refinement in `server/env.ts` throws while the environment is parsed, and a runtime check in `server/index.ts` logs a fatal line and calls `process.exit(1)` if the value ever gets past the schema.
 
 ### Error Sanitization
 
-The global error handler (`server/middleware/errorHandler.ts`) passes on a status and message from two sources only: an `AppError`, whose message is replaced by a generic `"Internal Server Error"` at 500, and the app's own HTTP layer — the client-safe 4xx errors body-parser and csrf-csrf build with http-errors (`expose: true`), such as a malformed-JSON 400, a 413 or `EBADCSRFTOKEN` — plus the router's own 400 for a malformed percent-escape in a route param (a `URIError`), answered with a fixed `Malformed URL` message and never reported to Sentry. Any other error that carries a status came from someone else's API (an AI provider's 400/401/403/429, a Strava 404) and is answered `502 EXTERNAL_API_ERROR` with a generic message, so a provider 429 is never read as the app's rate limit and a rotated key never looks like an expired session; an error with no status is a generic `500 INTERNAL_SERVER_ERROR`. Error details (`err.details`) are only included for 4xx responses. Only 5xx errors and 429s are reported to Sentry (`shouldReportToSentry()`); every other status is still logged and returned but not sent upstream.
+The global error handler (`server/middleware/errorHandler.ts`) passes on a status and message from two sources only: an `AppError`, whose message is replaced by a generic `"Internal Server Error"` at 500, and the app's own HTTP layer — the client-safe 4xx errors body-parser and csrf-csrf build with http-errors (`expose: true`), such as a malformed-JSON 400, a 413 or `EBADCSRFTOKEN` — plus the router's own 400 for a malformed percent-escape in a route param (a `URIError`), answered with a fixed `Malformed URL` message and never reported to Sentry. Any other error that carries a status came from someone else's API (an AI provider's 400/401/403/429, a Strava 404) and is answered `502 EXTERNAL_API_ERROR` with a generic message, so a provider 429 is never read as the app's rate limit and a rotated key never looks like an expired session; an error with no status is a generic `500 INTERNAL_SERVER_ERROR`. Error details (`err.details`) are only included for responses below 500. A 413 is answered with the handler's own message and the code `PAYLOAD_TOO_LARGE` rather than body-parser's. Only 5xx errors and 429s are reported to Sentry (`shouldReportToSentry()`); every other status is still logged (`error` level at 500 and above, `warn` below) and returned but not sent upstream. When the response has already started (an SSE stream that failed mid-reply), the handler logs the error and passes it to Express's default handler, which closes the connection.
 
 The same rule applies to errors that are **stored** and read back later, not just
 those returned inline. `training_plans.generation_error` is surfaced verbatim by
@@ -296,9 +300,10 @@ Structured logging is provided by **Pino** (`server/logger.ts`).
 ### Configuration
 
 - Log level is set via `LOG_LEVEL` environment variable (default: `"info"`)
-- Sensitive headers are redacted: `authorization`, `cookie`, `x-csrf-token`, `x-idempotency-key`, `x-cron-secret`, `x-internal-analytics-secret` (the `SENSITIVE_REQUEST_HEADERS` list, which the Sentry `beforeSend` scrubber in `server/bootstrap/observability.ts` also uses). Credential-like request-body fields (e.g. passwords, access/refresh tokens, API keys, client secrets, `imageBase64`, Web Push `p256dh`/`auth` keys) are redacted too
-- In development, `pino-pretty` is used for human-readable colorized output
+- Sensitive headers are redacted: `authorization`, `cookie`, `x-csrf-token`, `x-idempotency-key`, `x-cron-secret`, `x-internal-analytics-secret` (the `SENSITIVE_REQUEST_HEADERS` list, which the Sentry `beforeSend` scrubber in `server/bootstrap/observability.ts` also uses). Credential-like request-body fields (e.g. passwords, access/refresh tokens, API keys, client secrets, `imageBase64`, Web Push `p256dh`/`auth` keys) are redacted too, as are the response `set-cookie` header (it carries the CSRF cookie) and the AI provider key fields (`openAiCompatibleApiKey`, `anthropicApiKey`) of a logged config object. The full list is `LOG_REDACT_PATHS`
+- Outside production (`NODE_ENV` other than `production`), `pino-pretty` is used for human-readable colorized output
 - In production, raw JSON is emitted (suitable for log aggregation)
+- A `mixin()` adds the async-local `requestId` to every line logged inside a request or a pg-boss job, including lines written through the module-level `logger`. `userId` is deliberately left out
 
 ### pino-http Middleware
 
@@ -308,6 +313,9 @@ The `pino-http` middleware adds structured context to every request log:
 - **userId** -- always `"anonymous"` on the per-request `req.log` child, which is bound at request start, before `clerkMiddleware()` has run. The completion line re-reads Clerk auth: a signed-in request logs `"authenticated"` when it succeeds and its real Clerk user id only when the response status is >= 400, keeping user ids out of the high-volume success log
 - **route** -- the request URL path (query string stripped)
 - **context** -- set to `"http"`
+- **appPlatform** / **appVersion** -- only on requests from the native app, taken from the validated `X-App-Platform` and `X-App-Version` headers (`readAppClient()`); a malformed version logs as `"invalid"`
+
+The request serializer logs the URL path only: the query string and the parsed `query` object are dropped, because OAuth callbacks carry the provider `code` and signed `state` there.
 
 Auto-logging is filtered to API routes only (`req.url` starting with `/api/v1`). Non-API requests (static assets, SPA fallback) are not logged by pino-http.
 
@@ -333,12 +341,16 @@ Auto-logging is filtered to API routes only (`req.url` starting with `/api/v1`).
 
 8. **Exit** -- `process.exit(0)` on success, `process.exit(1)` on error.
 
+A second signal while shutdown is under way is ignored. Once `drainSseStreams()` has run, a stream that registers late (its request was mid-handler when the signal arrived) is aborted immediately by `registerSseStream()`.
+
+`registerProcessErrorHandlers()` (`server/bootstrap/observability.ts`) handles `uncaughtException` and `unhandledRejection` separately from this sequence: it logs the error at `fatal`, sets `startupError` if none is set yet (so both health endpoints answer `503`), reports to Sentry, waits up to 2 seconds for the flush and calls `process.exit(1)`.
+
 ### Health Check Lifecycle
 
 - `isReady` starts as `false`, `startupError` as `null`
 - Server listens on port BEFORE routes register (allows health check during startup)
 - `GET /api/v1/health` (readiness) returns `503` `{ status: "starting", phase, ... }` while bootstrapping
-- Once the `ready` phase sets `isReady = true` (after `registerRoutes()` and the post-route wiring), it probes the main DB and, when `VECTOR_DATABASE_URL` is set, the vector DB (results cached for 5 s). It returns `{ status: "ok", vectorSchema, ... }` when both answer, otherwise `503` `{ status: "degraded", db, vectorDb, ... }`
+- Once the `ready` phase sets `isReady = true` (after `registerRoutes()` and the post-route wiring), it probes the main DB and, when `VECTOR_DATABASE_URL` is set, the vector DB (each probe is a `SELECT 1` with a 3 s timeout; results are cached for 5 s). It returns `{ status: "ok", vectorSchema, ... }` when both answer, otherwise `503` `{ status: "degraded", db, vectorDb, vectorSchema, ... }`
 - If startup throws, `startupError` is set -- returns `503` `{ status: "error", error: "startup_error", phase, ... }`. The raw error message is only logged, never returned
 - `GET /api/v1/health/live` (liveness) never touches the DB: it returns `{ status: "alive", uptimeMs, ... }`, or `503` `{ status: "startup_failed", phase, ... }` once startup has failed. It answers 200 before boot has finished, so it is not a deploy gate
 - `.railway/railway.ts` points Railway's healthcheck at `/api/v1/health` (readiness). Railway polls it only while a deploy rolls out: the first 2xx makes the new deployment active and retires the old one, and it is not polled after go-live. A release whose boot fails therefore fails its deploy, and the previous deployment keeps serving (D2, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md))
@@ -435,17 +447,18 @@ This table covers the variables most relevant to the server runtime. It is not e
 - Idle timeout: 30 s
 - Connection timeout: 10 s (`VECTOR_DB_CONNECTION_TIMEOUT_MS`)
 - Statement timeout: 30 s
+- SSL selection: the same rule as the main pool, applied to whichever URL the pool uses
 - Used for `pgvector` similarity search on document chunks
 
 Both pools log unexpected errors on idle clients.
 
 ### Job Queue
 
-pg-boss (`server/queue.ts`) is initialized with the `DATABASE_URL` connection string. Workers are registered for every queue at boot — ten in `server/queue.ts`, plus `strava-sync` in `server/services/stravaAutoSync.ts` and `session-streams` in `server/services/sessionStreamSync.ts`.
+pg-boss (`server/queue.ts`) is initialized with the `DATABASE_URL` connection string, to which `buildQueueConnectionString()` adds a 45-minute session `statement_timeout` (`PGBOSS_STATEMENT_TIMEOUT_MS`): pg-boss owns its own pool, so the main pool's 30 s limit does not reach job handlers. Workers are registered for every queue at boot — ten in `server/queue.ts`, plus `strava-sync` in `server/services/stravaAutoSync.ts` and `session-streams` in `server/services/sessionStreamSync.ts`.
 
 **The queue catalogue lives in [Integrations → Job Types](integrations.md#job-types)** — name, worker and payload for each. It is not repeated here: this section previously carried a second copy of that table and drifted from it.
 
-Idempotent jobs use `DEFAULT_JOB_OPTIONS` (retry 3× with exponential backoff); the email send jobs and `plan-generation` use `NO_RETRY_JOB_OPTIONS`. Each email job claims its send in the database before calling Resend, so a send that fails after the claim is forgone for that window rather than retried. Each job runs under a 50-minute wall-clock timeout, and in-batch parallelism is bounded to 2. Failed jobs are re-thrown to let pg-boss handle retries.
+Idempotent jobs use `DEFAULT_JOB_OPTIONS` (retry 3× with exponential backoff); the email send jobs and `plan-generation` use `NO_RETRY_JOB_OPTIONS`. Each email job claims its send in the database before calling Resend, so a send that fails after the claim is forgone for that window rather than retried. Each job runs under a 50-minute wall-clock timeout (`JOB_TIMEOUT_MS`), inside the 60 minutes after which pg-boss expires an active job (`expireInSeconds`), and in-batch parallelism is bounded to 2. Failed jobs are re-thrown to let pg-boss handle retries.
 
 ### Cron Scheduling
 
@@ -453,14 +466,14 @@ Idempotent jobs use `DEFAULT_JOB_OPTIONS` (retry 3× with exponential backoff); 
 
 **The schedule catalogue lives in [Integrations → Registered Cron Jobs](integrations.md#registered-cron-jobs)** — expression, timezone and advisory lock for each job. As with the queue table above, the copy that used to sit here drifted from it.
 
-Cron jobs run in-process on **each** app replica; the advisory lock above is what keeps only one of them doing the work. Rate limits use `rate_limit_buckets`, while the Clerk seen-cache and AI/RAG hot caches use `server_runtime_cache`, so `APP_INSTANCE_COUNT > 1` no longer weakens abuse prevention or provider-spend cache behavior.
+Cron jobs run in-process on **each** app replica; the advisory lock above is what keeps only one of them doing the work. Rate limits use `rate_limit_buckets`, while the Clerk seen-cache, the AI circuit-breaker state and the embedding health probe use `server_runtime_cache`, so `APP_INSTANCE_COUNT > 1` no longer weakens abuse prevention or provider-spend cache behavior.
 
 ### Shared Runtime State
 
 `server/sharedRuntimeState.ts` owns short-lived shared cache helpers backed by Postgres:
 
 - `rate_limit_buckets` stores per-limiter (category, cap and window) request counters and reset timestamps for `rateLimiter(...)`.
-- `server_runtime_cache` stores short-lived, TTL-bound entries for the Clerk auth seen-cache, single-use Strava OAuth state claims, the Strava background-sync 429 cooldown, the Strava webhook subscription state, the Garmin 429 breaker and per-user in-flight lock, the AI circuit-breaker state, planned-session estimates, and the embedding health probe. The RAG retrieval cache is process-local, keyed on each athlete's retrieval version so a replica never serves a stale entry. The Gemini embedding-vector cache is deliberately process-local (`server/gemini/client.ts`) and is not stored here.
+- `server_runtime_cache` stores short-lived, TTL-bound entries for the Clerk auth seen-cache and the ten-minute tombstone that stops an erased account from being re-provisioned, single-use Strava OAuth state claims, the Strava background-sync 429 cooldown, the Strava webhook subscription state, the Garmin 429 breaker and per-user in-flight lock, the AI circuit-breaker state, planned-session estimates, the embedding health probe, and the record of which USDA food-detail reads came back without portions or micronutrients (`server/services/nutrition/foodDetail.ts`). The RAG retrieval cache is process-local, keyed on each athlete's retrieval version so a replica never serves a stale entry. The Gemini embedding-vector cache is deliberately process-local (`server/gemini/client.ts`) and is not stored here.
 - Expired rows are pruned daily by the `sharedRuntimeCleanup` cron job at 04:15 UTC.
 
 ### Route Utilities
@@ -477,15 +490,15 @@ Cron jobs run in-process on **each** app replica; the advisory lock above is wha
 
 ### Static File Serving
 
-In production (`server/static.ts`):
+In production and under `NODE_ENV=test` (`server/static.ts`):
 
-- `/assets/*` is served with `Cache-Control: max-age=1y, immutable` (fingerprinted build artifacts)
+- `/assets/*` is served with `maxAge: "1y"` and `immutable: true`, i.e. `Cache-Control: public, max-age=31536000, immutable` (fingerprinted build artifacts)
 - Other static files are served with `max-age=0` and no index
 - A missing `/assets/*` file is a `404` (with `Cache-Control: no-store`), and an `/api` path no route matched is a JSON `404 NOT_FOUND`. Neither gets the SPA shell: a missing chunk must fail as a chunk error, and the offline queue treats any `2xx` as synced
-- The SPA fallback (`/{*splat}`) reads `index.html` once at startup and injects the per-request CSP nonce into all `<script>` tags. The named-wildcard form is required by Express 5's path-to-regexp v8 -- a bare `*` throws at route registration
+- The SPA fallback (`/{*splat}`) reads `index.html` once at startup and injects the per-request CSP nonce into all `<script>` tags, and answers with `Cache-Control: no-cache`. The named-wildcard form is required by Express 5's path-to-regexp v8 -- a bare `*` throws at route registration
 - The fallback route is rate-limited to 100 requests per 15-minute window
 
-In development, `server/vite.ts` serves the client through Vite's middleware and answers an unmatched `/api` path with the same JSON `404 NOT_FOUND` before its own `index.html` fallback, so dev behaves like production for a renamed route (C38, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)).
+When `NODE_ENV` is `development`, `server/vite.ts` serves the client through Vite's middleware and answers an unmatched `/api` path with the same JSON `404 NOT_FOUND` before its own `index.html` fallback, so dev behaves like production for a renamed route (C38, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)).
 
 ---
 
