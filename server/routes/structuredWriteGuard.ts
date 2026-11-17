@@ -51,7 +51,23 @@ function getRoutePath(req: Request): string {
   return req.path;
 }
 
-export function rejectTextOnlyWriteIfNeeded(req: Request, res: Response, ownerType: "workout_log" | "plan_day"): boolean {
+export interface TextOnlyWriteContext {
+  /**
+   * The body's `planDayId` names a plan day the caller owns, checked by the
+   * route. Only then is a text-only write let through: the log is seeded from
+   * that day's prescribed rows. A `planDayId` that is someone else's, or gone,
+   * is dropped when the workout is saved (resolveActivePlanLinks), so it used
+   * to exempt a write that then saved as a text-only, unlinked log.
+   */
+  readonly ownedPlanDayLink?: boolean;
+}
+
+export function rejectTextOnlyWriteIfNeeded(
+  req: Request,
+  res: Response,
+  ownerType: "workout_log" | "plan_day",
+  context: TextOnlyWriteContext = {},
+): boolean {
   refreshFallbackWindow();
 
   if (!structuredBlocksGateOpen()) {
@@ -70,9 +86,8 @@ export function rejectTextOnlyWriteIfNeeded(req: Request, res: Response, ownerTy
   }
 
   try {
-    const body = req.body as { exercises?: unknown[]; structureBlocks?: unknown[]; mainWorkout?: string | null; accessory?: string | null; planDayId?: string | null };
-    const hasPlanDayLink = typeof body.planDayId === "string" && body.planDayId.trim().length > 0;
-    if (hasPlanDayLink) {
+    const body = req.body as { exercises?: unknown[]; structureBlocks?: unknown[]; mainWorkout?: string | null; accessory?: string | null };
+    if (context.ownedPlanDayLink === true) {
       return false;
     }
     const hasExerciseRows = Array.isArray(body.exercises) && body.exercises.length > 0;

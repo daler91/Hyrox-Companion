@@ -107,6 +107,12 @@ async function assertWorkoutDateNotFuture(userId: string, date: string | undefin
   }
 }
 
+/** Whether `planDayId` names a plan day that belongs to the athlete. */
+async function ownsPlanDay(planDayId: string | null | undefined, userId: string): Promise<boolean> {
+  if (!planDayId?.trim()) return false;
+  return Boolean(await storage.plans.getPlanDay(planDayId, userId));
+}
+
 export async function createWorkout(input: {
   userId: string;
   payload: CreateWorkoutPayload;
@@ -119,9 +125,11 @@ export async function createWorkout(input: {
   // createWorkoutInTx.copyPrescribedSetsIntoLog will seed the new log from the
   // plan day's already-persisted (possibly edited) exercise rows. Re-parsing
   // here would supply fresh rows that win over the copy path and overwrite
-  // the athlete's pre-log edits.
-  const canCopyFromPlanDay = !!workoutData.planDayId;
-  if ((!structured || structured.length === 0) && !hasStructureBlocks && !canCopyFromPlanDay && isTextAiProviderConfigured()) {
+  // the athlete's pre-log edits. Only a day the athlete owns can be copied
+  // from: any other planDayId is dropped on save, so it must not skip the
+  // parse and leave a text-only log behind.
+  const needsLegacyParse = (!structured || structured.length === 0) && !hasStructureBlocks && isTextAiProviderConfigured();
+  if (needsLegacyParse && !(await ownsPlanDay(workoutData.planDayId, input.userId))) {
     logger.warn({ context: "workout-structure", event: "legacy_only_parse_fallback_create", userId: input.userId }, "Missing structure-editor payload on create; using legacy parse fallback.");
     const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
     if (textToParse) {

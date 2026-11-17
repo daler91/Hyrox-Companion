@@ -14,6 +14,7 @@ vi.mock("../gemini", () => ({ parseExercisesFromText: vi.fn() }));
 vi.mock("../storage", () => ({
   storage: {
     users: { getUser: vi.fn() },
+    plans: { getPlanDay: vi.fn() },
     analytics: { getExerciseSetsForPersonalRecords: vi.fn() },
   },
 }));
@@ -63,6 +64,25 @@ describe("createWorkout legacy text parse", () => {
 
     expect(parseExercisesFromText).not.toHaveBeenCalled();
     expect(createWorkoutAndScheduleCoaching).toHaveBeenCalledWith(expect.objectContaining({ mainWorkout: TEXT_ONLY.mainWorkout }), undefined, USER_ID, undefined);
+  });
+
+  it("skips the parse for the athlete's own plan day, whose prescribed rows the log copies", async () => {
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "own-day" } as never);
+
+    await createWorkout({ userId: USER_ID, payload: { ...TEXT_ONLY, planDayId: "own-day" } });
+
+    expect(storage.plans.getPlanDay).toHaveBeenCalledWith("own-day", USER_ID);
+    expect(parseExercisesFromText).not.toHaveBeenCalled();
+  });
+
+  it("parses the text when the planDayId is not the athlete's, since that link is dropped on save", async () => {
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(undefined);
+
+    await createWorkout({ userId: USER_ID, payload: { ...TEXT_ONLY, planDayId: "someone-elses-day" } });
+
+    expect(storage.plans.getPlanDay).toHaveBeenCalledWith("someone-elses-day", USER_ID);
+    expect(parseExercisesFromText).toHaveBeenCalledWith(TEXT_ONLY.mainWorkout, { weightUnit: "kg", distanceUnit: "km" }, undefined, USER_ID);
+    expect(createWorkoutAndScheduleCoaching).toHaveBeenCalledWith(expect.anything(), PARSED, USER_ID, undefined);
   });
 });
 

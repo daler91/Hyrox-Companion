@@ -390,7 +390,9 @@ describe("Workouts Routes", () => {
     expect(updateRes.body.code).toBe("STRUCTURED_ROWS_REQUIRED");
   });
 
-  it("allows text-only workout create when linked to a plan day", async () => {
+  it("allows text-only workout create when linked to the athlete's own plan day", async () => {
+    const { storage } = await import("../../storage");
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValueOnce({ id: "plan-day-1" } as never);
     const createRes = await request(app)
       .post("/api/v1/workouts")
       .send({
@@ -401,6 +403,28 @@ describe("Workouts Routes", () => {
       });
 
     expect(createRes.status).toBe(200);
+    expect(storage.plans.getPlanDay).toHaveBeenCalledWith("plan-day-1", "test_user_id");
+  });
+
+  it("rejects a text-only create that names a plan day the athlete does not own", async () => {
+    const [{ storage }, { createWorkout }] = await Promise.all([
+      import("../../storage"),
+      import("../../services/workoutUseCases"),
+    ]);
+    // Another athlete's (or a deleted) day: getPlanDay is owner-scoped and finds nothing.
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValueOnce(undefined);
+    const createRes = await request(app)
+      .post("/api/v1/workouts")
+      .send({
+        date: "2026-01-02",
+        focus: "Conditioning",
+        mainWorkout: "just text",
+        planDayId: "someone-elses-day",
+      });
+
+    expect(createRes.status).toBe(422);
+    expect(createRes.body.code).toBe("STRUCTURED_ROWS_REQUIRED");
+    expect(createWorkout).not.toHaveBeenCalled();
   });
 
   it("supports mixed payload contract: legacy-only rejected, structured-only accepted, hybrid accepted", async () => {

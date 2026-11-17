@@ -74,13 +74,34 @@ describe("structuredWriteGuard", () => {
       expect(statusMock).not.toHaveBeenCalled();
     });
 
-    it("should allow writes with a planDayId link to pass", () => {
+    it("should allow writes linked to a plan day the caller owns to pass", () => {
+      req.body = { planDayId: "plan_day_123", mainWorkout: "text without rows" };
+
+      const result = rejectTextOnlyWriteIfNeeded(req, res, "workout_log", { ownedPlanDayLink: true });
+
+      expect(result).toBe(false);
+      expect(statusMock).not.toHaveBeenCalled();
+    });
+
+    it("should reject a text-only write whose planDayId the caller does not own", () => {
+      // Another athlete's (or a deleted) plan day is dropped when the workout is
+      // saved, so naming one must not exempt a text-only write.
+      req.body = { planDayId: "someone_elses_day", mainWorkout: "text without rows" };
+
+      const result = rejectTextOnlyWriteIfNeeded(req, res, "workout_log", { ownedPlanDayLink: false });
+
+      expect(result).toBe(true);
+      expect(statusMock).toHaveBeenCalledWith(422);
+      expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({ code: "STRUCTURED_ROWS_REQUIRED" }));
+    });
+
+    it("should not trust a planDayId in the body when the caller confirmed no ownership", () => {
       req.body = { planDayId: "plan_day_123", mainWorkout: "text without rows" };
 
       const result = rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
 
-      expect(result).toBe(false);
-      expect(statusMock).not.toHaveBeenCalled();
+      expect(result).toBe(true);
+      expect(statusMock).toHaveBeenCalledWith(422);
     });
 
     it("should reject writes with text but no structured rows", () => {
