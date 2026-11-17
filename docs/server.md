@@ -445,7 +445,7 @@ pg-boss (`server/queue.ts`) is initialized with the `DATABASE_URL` connection st
 
 **The queue catalogue lives in [Integrations → Job Types](integrations.md#job-types)** — name, worker and payload for each. It is not repeated here: this section previously carried a second copy of that table and drifted from it.
 
-Idempotent jobs use `DEFAULT_JOB_OPTIONS` (retry 3× with exponential backoff); the email send jobs use `NO_RETRY_JOB_OPTIONS`, because the "sent" marker is persisted after delivery and a retry would duplicate the email. Each job runs under a 50-minute wall-clock timeout, and in-batch parallelism is bounded to 2. Failed jobs are re-thrown to let pg-boss handle retries.
+Idempotent jobs use `DEFAULT_JOB_OPTIONS` (retry 3× with exponential backoff); the email send jobs and `plan-generation` use `NO_RETRY_JOB_OPTIONS`. Each email job claims its send in the database before calling Resend, so a send that fails after the claim is forgone for that window rather than retried. Each job runs under a 50-minute wall-clock timeout, and in-batch parallelism is bounded to 2. Failed jobs are re-thrown to let pg-boss handle retries.
 
 ### Cron Scheduling
 
