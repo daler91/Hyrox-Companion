@@ -74,7 +74,7 @@ sequenceDiagram
     TQ->>Fetch: GET/POST /api/v1/...
     Fetch->>Compress: HTTP request
     Compress->>CORS: pass through (compresses the response)
-    CORS->>Helmet: validate origin
+    CORS->>Helmet: CORS headers for allowlisted origins only
     Helmet->>Body: set security headers & CSP nonce
     Body->>Log: parse JSON body (100kb default limit)
     Log->>Auth: attach requestId, log request
@@ -109,7 +109,7 @@ sequenceDiagram
 11. request-context wiring -- async context carrying `requestId` only
 12. Route handlers (registered via `registerRoutes`)
 
-`registerRoutes()` first installs `clerkMiddleware()` via `setupAuth()` (`server/clerkAuth.ts`, when Clerk keys are configured), so Clerk JWT verification runs after everything above, then mounts `csrfProtection` on `/api/v1`; idempotency runs per protected mutating route via the `protectedRouteBuilder` guards rather than as a global middleware.
+`registerRoutes()` first installs `clerkMiddleware()` via `setupAuth()` (`server/clerkAuth.ts`, when Clerk keys are configured), so Clerk JWT verification runs after everything above. It then mounts `appVersionGate` on `/api/v1` (outdated native builds get 426 `APP_UPDATE_REQUIRED`), the `GET /api/v1/csrf-token` issuer and the Strava webhook and email-unsubscribe routes (which carry no CSRF token), then `csrfProtection` and `invalidateTrainingContextOnWrite` on `/api/v1`, then the route modules; idempotency runs per protected mutating route via the `protectedRouteBuilder` guards rather than as a global middleware.
 
 ---
 

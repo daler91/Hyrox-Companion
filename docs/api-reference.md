@@ -1080,7 +1080,7 @@ Partially update an annotation. The handler fetches the existing row, merges the
 - **Rate limit:** `annotations` category, 20/min
 - **Body:** Partial `{ startDate?, endDate?, type?, note? }`
 - **Validation:** `updateTimelineAnnotationSchema`
-- **Response:** `TimelineAnnotation` (or 404 when the id doesn't belong to the user)
+- **Response:** `TimelineAnnotation` (or 404 when the id doesn't belong to the user); `400 VALIDATION_ERROR` when the merged `endDate` falls before the merged `startDate`
 
 ### DELETE /api/v1/timeline-annotations/:id
 
@@ -1104,7 +1104,7 @@ Every fact the athlete has, retired ones included, oldest first.
 
 - **Auth:** Required
 - **Rate limit:** `athleteFacts` category, 60/min
-- **Response:** `AthleteFact[]`
+- **Response:** `AthleteFact[]`, with the active-fact cap (20) in the `X-Max-Active-Facts` header
 
 ### POST /api/v1/athlete-facts
 
@@ -1150,7 +1150,7 @@ Deleted workout logs, plan days and training plans are snapshotted into the `rec
 
 The client uses these in two places: an **Undo** action on the delete toast (single item or bulk-delete batch) and the **Recycle bin** tab under Settings (`?tab=recycle-bin`).
 
-While a device-imported workout sits in the bin, the Strava and Garmin syncs treat its activity id as already imported, so the next sync does not re-create the workout the athlete just deleted. After _Delete forever_ or expiry the activity can be imported again if it is still inside the provider's fetch window.
+While a device-imported workout sits in the bin, the Strava, Garmin and Health Connect syncs treat its activity id as already imported, so the next sync does not re-create the workout the athlete just deleted. After _Delete forever_ or expiry the activity can be imported again if it is still inside the provider's fetch window.
 
 ### GET /api/v1/recycle-bin
 
@@ -1170,7 +1170,7 @@ Restore one item and remove it from the bin.
 - **Errors:**
   - `404` — unknown, expired, or another user's item; or, for a plan day, the parent plan has been deleted (restore the plan first)
   - `409 PLAN_OVERLAP` — restoring a live training plan whose dates overlap another live plan (archive that plan first, same rule as [`PATCH /api/v1/plans/:id/retirement`](#patch-apiv1plansidretirement))
-  - `409 RECYCLE_BIN_CONFLICT` — a record with the same id or the same Strava/Garmin activity id already exists (a race with a concurrent sync)
+  - `409 RECYCLE_BIN_CONFLICT` — a record with the same id or the same Strava, Garmin or Health Connect activity id already exists (a race with a concurrent sync)
 
 ### POST /api/v1/recycle-bin/batches/:batchId/restore
 
@@ -1203,7 +1203,7 @@ Empty the bin.
 
 **File:** `server/routes/analytics.ts`
 
-All analytics endpoints support optional date filtering via query parameters: `?from=YYYY-MM-DD&to=YYYY-MM-DD`.
+`GET /personal-records`, `GET /exercise-analytics` and `GET /training-overview` take optional date filtering via query parameters: `?from=YYYY-MM-DD&to=YYYY-MM-DD`. A malformed date is `400 BAD_REQUEST`; a `to` after the athlete's local today (in their `userTimezone`) is clamped to today. These three read training workouts only.
 
 **Coalesced request cache.** Exercise sets, the column-slim sets behind personal records, and workout logs used by these routes pass through three in-memory promise caches (`getExerciseSetsCoalesced`, `getPersonalRecordSetsCoalesced` and `getWorkoutLogsCoalesced`, each built by `createCoalescedCache()` in `server/services/analyticsRouteCache.ts`) keyed by `userId + from + to`. The cache holds the _pending_ promise, so three concurrent requests for the same user/window trigger a single database query. Parameters:
 
@@ -1214,7 +1214,7 @@ All analytics endpoints support optional date filtering via query parameters: `?
 | Eviction              | Expired entries first, then oldest-by-timestamp once over the size cap | `evictStale()` (same file)               |
 | Failure behavior      | The rejected promise is evicted so the next caller retries immediately | `.catch` in `createCoalescedCache()`     |
 
-Every workout write drops the athlete's entries from this process's caches before it answers (`invalidateAnalyticsCachesForUser()`), so the refetch that follows a save reads the write rather than the pre-write cache: create, update, plan-day assignment, delete, bulk delete, combine, seed-from-plan, reparse (single, from an image, batch), the assisted-migration backfill, device link and unlink, recycle-bin restore, set edits, reopening a completed plan day, deleting a plan or a plan day, and Strava and Garmin syncs that wrote anything (D10, `docs/CODEBASE_ANALYSIS_2026-10-03.md`). Other app instances keep their own copies until the TTL runs out.
+Every workout write drops the athlete's entries from this process's caches before it answers (`invalidateAnalyticsCachesForUser()`), so the refetch that follows a save reads the write rather than the pre-write cache: create, update, plan-day assignment, delete, bulk delete, combine, seed-from-plan, reparse (single, from an image, batch), the assisted-migration backfill, device link and unlink, recycle-bin restore, set edits, reopening a completed plan day, deleting a plan or a plan day, and Strava, Garmin and Health Connect syncs that wrote anything (D10, `docs/CODEBASE_ANALYSIS_2026-10-03.md`). Other app instances keep their own copies until the TTL runs out.
 
 ### GET /api/v1/personal-records
 
@@ -1267,12 +1267,19 @@ Calculate weekly training summaries, category totals, station coverage, and week
     workoutDates: string[],
     categoryTotals: { /* per-category totals */ },
     stationCoverage: { /* Hyrox station coverage */ },
+    movementPatternCoverage: MovementPatternCoverage[],
+    muscleGroupCoverage: MuscleGroupCoverage[],
+    currentStreak: number,
+    weeklyCompletedWorkouts: number,
+    weeklyGoal: number,
     currentStats: {
       totalWorkouts: number,
       avgPerWeek: number,
       totalDuration: number,
       avgDuration: number,
       avgRpe: number | null,
+      totalRunningMeters: number,
+      avgCompliancePct: number | null,
     },
     // Omitted when no meaningful previous window exists — e.g. the user
     // picked "all time" so `from` is absent.
@@ -1282,6 +1289,8 @@ Calculate weekly training summaries, category totals, station coverage, and week
       totalDuration: number,
       avgDuration: number,
       avgRpe: number | null,
+      totalRunningMeters: number,
+      avgCompliancePct: number | null,
     },
     // UTSS, ACWR, Form, monotony and the governor's restrictions over the
     // trailing 70-day load window ending on `to` (or today).
@@ -1295,16 +1304,16 @@ Calculate weekly training summaries, category totals, station coverage, and week
 
 - **Previous-window derivation (`computePreviousWindow`):** The previous period is the equal-length, non-overlapping range ending the day before `from`. If `to` is omitted, the current window's upper bound is pinned to midnight UTC of today (not wall-clock `now`) so the previous window doesn't drift across the day. Returns `null` when `from` is absent, and the route responds without `previousStats`.
 - The client's `DeltaIndicator` component renders the percentage change between `currentStats` and `previousStats` for each of the six stat cards.
-- **Load by body system (`bodySystemLoad`):** each session's load is its RPE × minutes (Foster session-RPE). A session with no RPE uses its heart-rate equivalent, then the default effort of what was logged; one with no duration uses an estimate from its sets; both are counted in `estimatedSessions`. The load is split by each exercise's profile, weighted by its share of the session's time, and each system is compared with the mean of the up-to-four full weeks before this one (`ratio` bands 0.8 / 1.3 / 1.5). `sixWeekHigh` needs six weeks of history and a week at least 20% above the usual one. A parallel model: it never feeds UTSS or the governor. Types in `shared/schema/types/analytics.ts`; model in `server/services/trainingLoad/bodySystemLoad.ts`.
+- **Load by body system (`bodySystemLoad`):** each session's load is its RPE × minutes (Foster session-RPE). A session with no RPE uses its heart-rate equivalent, then the default effort of what was logged; one with no duration uses an estimate from its sets; both are counted in `estimatedSessions`. The load is split by each exercise's profile, weighted by its share of the session's time, and each system is compared with the mean of the up-to-four full weeks before this one, once at least two of them are full (`ratio` bands 0.8 / 1.3 / 1.5). `sixWeekHigh` needs six full weeks of history and a week heavier than each of the five before it and at least 20% above the usual one. A parallel model: it never feeds UTSS or the governor. Types in `shared/schema/types/analytics.ts`; model in `server/services/trainingLoad/bodySystemLoad.ts`.
 
 ### GET /api/v1/weekly-review
 
-The athlete's own Monday→Sunday week: completion against plan, prior-week comparison, PRs, annotations, and the intent they set for this week and last. Not persisted and not AI-gated — four bounded queries over data the weekly summary email already reads. See [weekly-review-spec.md](weekly-review-spec.md).
+The athlete's own Monday→Sunday week: completion against plan, prior-week comparison, PRs, annotations, and the intent they set for this week and last. Not persisted and not AI-gated — the same reads the weekly summary email makes (this week's and last week's training logs and plan days, the athlete's PR sets, annotations and both weeks' intents), run in parallel. See [weekly-review-spec.md](weekly-review-spec.md).
 
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 20/min
 - **Query:** `week` (optional) — any date inside the wanted week; defaults to the last completed week. The week is resolved in the athlete's `userTimezone` (falling back to UTC) and the payload reports the zone it was actually resolved in.
-- **Session grades:** each `sessions[]` entry carries `grade: SessionGradeChip | null` — `{ intent, purpose, verdict, confidence, headline, streamStatus }` for a graded run (see [session grades](#get-apiv1session-grades)), `null` otherwise — and the review carries `gradeSummary: { graded, onTarget, driftedHarder, easyTooHard } | null`. Both are computed only for this route; the weekly email builds the review without them. A grading failure drops the chips, never the review.
+- **Session grades:** each `sessions[]` entry carries `grade: SessionGradeChip | null` — `{ intent, purpose, verdict, confidence, headline, streamStatus }` for a graded run (see [session grades](#get-apiv1session-grades)), `null` otherwise — and the review carries `gradeSummary: { graded, onTarget, driftedHarder, easyTooHard } | null`. Both are computed only for this route; the weekly email builds the review without them. A grading failure omits `grade` and `gradeSummary`, never the review; `gradeSummary` is `null` when no run in the week has a definite verdict.
 - **Errors:** `400` (`Invalid 'week' date format`)
 
 ### POST /api/v1/weekly-review/intent
@@ -1313,7 +1322,7 @@ Write or clear the athlete's intent for a week. `POST` rather than `PUT` despite
 
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 20/min
-- **Body:** `{ week: string, intent?: string | null }` — the date is anchored server-side to its Monday, since the unique index is on `(user_id, week_start)`. A blank or `null` intent clears the week's line.
+- **Body:** `{ week: string, intent?: string | null }` (`intent` max 280 chars) — the date is anchored server-side to its Monday, since the unique index is on `(user_id, week_start)`. A blank or `null` intent clears the week's line.
 - **Response:** `{ weekStart, intent }`
 - **Errors:** `400` (validation)
 
@@ -1347,7 +1356,7 @@ Predict the athlete's HYROX finish time from their logged history. **Stored-firs
 - **Rate limit:** `race-prediction` category, 12/min
 - **AI gates:** None — the service degrades to a deterministic estimate when AI is disabled, unconsented, or over budget, and only calls the model when consent + budget allow.
 - **Query:** `refresh?` — `refresh=1` forces regeneration and persistence
-- **Response:** `RacePredictionResponse & { generatedAt: string, stale: boolean }` — on a stored read, `stale` is `true` when a training workout was logged after `generatedAt` (a walk or other session that does not count as training leaves it fresh, as the prediction never reads it); a freshly generated prediction returns `stale: false`.
+- **Response:** `RacePredictionResponse & { generatedAt: string, stale: boolean }` — on a stored read, `stale` is `true` when the athlete's training-log history has changed since the prediction was generated: the latest training-log date or the number of training logs differs from the one recorded with it (a new, deleted or back-dated training workout; editing a workout in place does not count, and a walk or other session that does not count as training leaves it fresh, as the prediction never reads it); a freshly generated prediction returns `stale: false`.
 
 ---
 
@@ -1361,6 +1370,7 @@ Parse free-text or voice input into structured exercise data using the configure
 
 - **Auth:** Required
 - **Rate limit:** `parse` category, 5/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Body:** `{ text: string }` (1-2000 chars)
 - **Validation:** `parseExercisesRequestSchema`
 - **Response:** `ParsedExercise[]` with confidence scores and category classification
@@ -1451,10 +1461,11 @@ Send a message to the AI coach and receive a complete response.
 
 - **Auth:** Required
 - **Rate limit:** `chat` category, 10/min
-- **Body:** `{ message: string (1-4000 chars, CHAT_MESSAGE_MAX_LENGTH), photo?: { mimeType, imageBase64 }, userMessageId?: uuid, assistantMessageId?: uuid, replaceAssistantId?: uuid, focusPlanDayId?: string, focusWorkoutLogId?: string, history?: ChatMessage[], planEditing?: boolean (default true) }`. `planEditing: false` is the opt-out for a chat surface that does not render proposal cards: the reply then never raises a plan-change proposal.
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
+- **Body:** `{ message: string (1-4000 chars, CHAT_MESSAGE_MAX_LENGTH), photo?: { mimeType, imageBase64 }, userMessageId?: uuid, assistantMessageId?: uuid, replaceAssistantId?: uuid, focusPlanDayId?: string, focusWorkoutLogId?: string, history?: ChatMessage[], planEditing?: boolean (default true) }`. `planEditing` is accepted but has no effect here: this route always answers in prose and never raises a plan-change proposal or a fact offer (both are `POST /api/v1/chat/stream` only).
   - **`photo`** (I20) is one image with the message: `mimeType` `image/jpeg`, `image/png` or `image/webp`, `imageBase64` at most `CHAT_PHOTO_MAX_BASE64_CHARS` (4 MiB of base64, about 3 MB of image), whose first bytes must match the declared type. The two chat send routes accept a 5 MB body for it. Gemini vision reads it into words for the coach (`server/services/chatPhoto.ts`) alongside the context build; the coach reads that reading after the message, marked as data, and the athlete's turn keeps it as `attachment: { kind: "photo", reading }`. The image itself is never stored. A photo that can't be read refuses the send with `502 CHAT_PHOTO_UNREADABLE` before anything is saved.
   - **The message ids** hand the conversation to the server, and the current client always sends them. They must come together and differ. The server reads the history from its own saved conversation (see [AI and RAG → Chat History](ai-and-rag.md#chat-history)) and, once the reply exists, saves both turns under these ids. A retry sends the same `userMessageId`, which is saved once, and the failed reply's id as `replaceAssistantId`; the server deletes that reply first.
-  - **`history`** is read only from a request without the ids (a tab opened before the server owned the conversation), keeping its last 20 messages; nothing is saved for such a request.
+  - **`history`** is read only from a request without the ids (a tab opened before the server owned the conversation), keeping its last 20 messages within a 30,000-character window (older turns past it are cut to 200 characters); nothing is saved for such a request.
   - **The focus ids** (max 255 each) name the workout the athlete is chatting from; the server loads them, ownership-checked, into the prompt's FOCUSED WORKOUT block, ignores ids that aren't theirs, and stores them with both turns.
 - **Validation:** `chatRequestSchema`
 - **Response:** `{ response: string, ragInfo: RagInfo, safetyNotice?: ChatSafetyNotice }` — `safetyNotice` (`{ level: "urgent" | "caution", message }`) is present when the athlete's message, or their previous one, matches the red-flag symptom (`urgent`) or heart-rate-medication (`caution`) patterns in `server/services/aiSafety.ts`. It is fixed copy, shown above the reply whatever the model wrote.
@@ -1465,10 +1476,11 @@ Send a message to the AI coach and receive a streaming response via Server-Sent 
 
 - **Auth:** Required
 - **Rate limit:** `chat` category, 10/min
-- **Body:** Same as `/api/v1/chat`, plus `planEditing?: boolean` (default `true`; `false` skips plan proposals). `focusPlanDayId` is also passed to the proposal generator
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
+- **Body:** Same as `/api/v1/chat`; here `planEditing?: boolean` (default `true`; `false` is the opt-out for a chat surface that does not render proposal cards, and skips plan proposals) takes effect. `focusPlanDayId` is also passed to the proposal generator
 - **Saving (with the message ids):** the athlete's turn is saved before the first event; if that fails, the request ends in a 500 and is not answered. The reply is saved when the stream ends, whether finished, cut off or a proposal, with the text that was sent, its `ragInfo` (without excerpts), its `safetyNotice`, a `factProposal` it offered and, for a proposal, `kind: "proposal"` and the `proposalId`.
 - **Athlete facts (with the message ids):** a message that may state something lasting (a keyword gate) is read by the fast model alongside the reply. When it states a fact the [athlete card](#athlete-fact-routes) doesn't hold, the reply's last event before `done` offers it, on prose and proposal replies alike. Nothing is written to the card until the athlete answers with [`POST /api/v1/chat/messages/:id/fact`](#post-apiv1chatmessagesidfact). Never after a red-flag symptom, and the stream waits at most 2 seconds for a read still running.
-- **Plan editing:** when `planEditing` is on and the message is classified as a plan-change request, the reply is a [plan proposal](#plan-proposal-routes) instead of streamed prose; if the athlete has `coachAutoApplyPlanChanges` on, the stream tries to apply it immediately. A failure before any of the proposal's summary is sent falls back to the normal chat stream; after that, the reply ends saying the change could not be drafted. A message that trips the red-flag symptom patterns is never treated as a plan change: it gets the normal chat reply, told to put medical care first.
+- **Plan editing:** when `planEditing` is on and the message is classified as a plan-change request, the reply is a [plan proposal](#plan-proposal-routes) instead of streamed prose; if the athlete has `coachAutoApplyPlanChanges` on, the stream tries to apply it immediately. A failure before any of the proposal's summary is sent falls back to the normal chat stream; after that, the reply ends saying the change could not be drafted. A message that trips the red-flag symptom patterns is never treated as a plan change: it gets the normal chat reply, told to put medical care first. With `AI_CHAT_TOOLS=true` the classifier does not run: the coach model streams its reply with lookup tools and may itself call for a plan change, whose proposal then follows the prose already sent; a failed draft on that path ends with the failure text.
 - **Response headers:** `Content-Type: text/event-stream`, `Cache-Control: no-cache`
 - **SSE events:**
   - `{ ragInfo: RagInfo }` — First event with RAG metadata
@@ -1577,7 +1589,7 @@ Return the **last stored** Coach Insights analysis instantly, with no AI spend, 
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 60/min
 - **AI gates:** None (read-only; never calls the model)
-- **Response:** `{ ...CoachInsightsResult, generatedAt: string, stale: boolean }` — `stale` is `true` when a workout was logged after `generatedAt`. Returns `{ insights: null }` when the user has never generated insights.
+- **Response:** `{ ...CoachInsightsResult, generatedAt: string, stale: boolean }` — `stale` is `true` when the athlete's workout history has changed since the result was generated: the latest log date or the number of logs differs from the one recorded with it (every log counts, walks included; editing a workout in place does not). Returns `{ insights: null }` when the user has never generated insights.
 
 ### POST /api/v1/coach-insights
 
@@ -1594,8 +1606,8 @@ The last stored "what this means for you" reading for each Overview-tab chart, k
 
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 60/min
-- **Query:** `range` (optional) — the Analytics page's selected range: a day count from 1 to 366 (the page sends `30`, `90`, `180` or `365`) or `all`. With it, a stored analysis of a different range answers `{ sections: null }`, so a reading never sits beside charts of another range. A result stored before analyses had a range counts as `all`. Without it, the stored result is returned whatever its range. An invalid value is a `400`.
-- **Response:** the stored `OverviewAnalysisResult` (including `rangeDays`: the day count it covers, or `null` for all time) plus `generatedAt` and a `stale` flag (`true` once a training workout was logged after it was generated; a walk or other session that does not count as training does not mark it stale); `{ sections: null }` when nothing has been generated yet for the range
+- **Query:** `range` (optional) — the Analytics page's selected range: a day count from 1 to 366 (the page sends `30`, `90`, `180` or `365`) or `all`. With it, a stored analysis of a different range answers `{ sections: null }`, so a reading never sits beside charts of another range. A result stored before analyses had a range is returned for any `range`. Without it, the stored result is returned whatever its range. An invalid value is a `400`.
+- **Response:** the stored `OverviewAnalysisResult` (including `rangeDays`: the day count it covers, or `null` for all time) plus `generatedAt` and a `stale` flag (`true` once the athlete's training-log history has changed since it was generated: the latest training-log date or the number of training logs differs; a walk or other session that does not count as training does not mark it stale, nor does editing a workout in place); `{ sections: null }` when nothing has been generated yet for the range
 
 ### POST /api/v1/overview-analysis
 
@@ -1679,7 +1691,7 @@ Update a coaching material. Re-embeds if content or title changed.
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Body:** Partial `{ title?, content?, type? }`
 - **Side effects:** Queues re-embedding if content or title changed.
-- **Response:** Updated `CoachingMaterial`
+- **Response:** Updated `CoachingMaterial`, or `404` when the material isn't the athlete's
 
 ### DELETE /api/v1/coaching-materials/:id
 
@@ -1687,7 +1699,7 @@ Delete a coaching material, then purge its RAG chunks (`deleteChunksByMaterialId
 
 - **Auth:** Required
 - **Rate limit:** `coaching` category, 10/min
-- **Response:** `{ success: true }`
+- **Response:** `{ success: true }`, or `404` when the material isn't the athlete's
 
 ### GET /api/v1/coaching-materials/rag-status
 
@@ -1695,16 +1707,16 @@ Check the RAG pipeline status (embedding counts, dimension info).
 
 - **Auth:** Required
 - **Rate limit:** `coaching` category, 60/min
-- **Response:** RAG status object
+- **Response:** `{ hasApiKey, totalMaterials, totalChunks, allEmbedded, materials: [{ id, title, type, contentLength, chunkCount, hasEmbeddings }], storedDimension, expectedDimension, dimensionMismatch, embeddingApi }`
 
 ### POST /api/v1/coaching-materials/re-embed
 
-Re-embed all coaching materials for the current user.
+Re-embed all coaching materials for the current user, inline in the request (not queued).
 
 - **Auth:** Required
 - **Rate limit:** `coaching` category, 5/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Response:** Re-embed result summary
+- **Response:** `{ success: true, materialsProcessed: number, errors: string[] }` — a material that fails is listed in `errors` (`"<id>: <message>"`) rather than failing the request
 
 ---
 
@@ -1737,7 +1749,7 @@ Apply the proposed changes to the plan: all of them, or the ones the athlete pic
 - **Rate limit:** `suggestionApply` category, 10/min — requires AI consent. The AI budget is deliberately _not_ checked up front: it is checked internally only if a structured re-parse actually turns out to be needed.
 - **Body:** optional `{ planDayIds?: string[] }` (1–14 ids). Without it, every change is applied. Only the picked changes are re-checked, re-parsed and written; the others are never applied.
 - **Response:** `{ applied: true, changeCount }`, or `{ applied: false, reason, message }` for a retryable failure (`structured_parse_failed`, `ai_budget_exceeded`, `ai_disabled`), with the proposal left pending.
-- **Errors:** `400` (`invalid_selection` — an empty pick, or a day the proposal doesn't change), `404` (proposal not found), `409` (`not_pending` or `stale` — the plan moved on underneath it, or a picked change is for a day before the athlete's today)
+- **Errors:** `400` (`invalid_selection` — an empty pick, or a day the proposal doesn't change), `404` (proposal not found), `409` (`not_pending` or `stale` — the plan moved on underneath it, or a picked change is for a day before the athlete's today). A `stale` failure resolves the proposal `invalidated` and lists the affected days as `staleChanges: [{ planDayId, dayLabel }]`. The days are checked once before any re-parse and again under a row lock before writing.
 
 ### POST /api/v1/plan-proposals/:id/undo
 
@@ -1754,6 +1766,7 @@ Decline the proposal and leave the plan untouched.
 
 - **Auth:** Required
 - **Rate limit:** `suggestionApply` category, 10/min
+- **Response:** `{ dismissed: boolean }` — `false` when the proposal is no longer pending
 - **Errors:** `404` (proposal not found)
 
 ---
@@ -1768,7 +1781,7 @@ Record a consent decision.
 
 - **Auth:** Required
 - **Rate limit:** `consent` category, 20/min
-- **Body:** `{ consentType, granted }` (`recordConsentSchema`); stored as `{ userId, consentType, granted, consentedAt }`
+- **Body:** `{ consentType: "privacy_notice" | "error_reporting", granted: boolean }` (`recordConsentSchema`); stored as `{ userId, consentType, granted, consentedAt }`, one row per consent type: a later decision overwrites the earlier one and moves `consentedAt`
 - **Response:** `{ success: true }`
 
 ### GET /api/v1/consents
@@ -1777,7 +1790,7 @@ The user's recorded consent decisions — the read behind a DSAR.
 
 - **Auth:** Required
 - **Rate limit:** `consent` category, 30/min
-- **Response:** `{ consents }`
+- **Response:** `{ consents: Array<{ consentType, granted, consentedAt }> }` — the latest decision per type, newest first
 
 ---
 
@@ -1822,7 +1835,7 @@ Manually trigger email checks for the current user (weekly summary, missed remin
 
 - **Auth:** Required (Clerk JWT)
 - **Rate limit:** `emailCheck` category, 5/min
-- **Response:** `{ sent: string[] }` — list of email types sent
+- **Response:** `{ sent: string[] }` — list of email types sent (`weekly_summary`, `missed_reminder`); always empty when the athlete has no email address or `emailNotifications` is off, and each type also needs its own toggle
 
 ### GET /api/v1/cron/emails
 
@@ -1831,7 +1844,8 @@ External cron trigger endpoint for batch email processing across all users.
 - **Auth:** `x-cron-secret` header (timing-safe comparison with `CRON_SECRET` env var)
 - **No Clerk auth required**
 - **Rate limit:** `cronEmails` category, 10/min
-- **Response:** Cron job result summary
+- **Response:** `{ usersChecked, emailsSent, details: string[] }` — `emailsSent` counts the send jobs enqueued, not emails delivered; `401 UNAUTHORIZED` when the header is missing, wrong, or `CRON_SECRET` is unset
+- **Side effects:** marks past planned days `missed`, enqueues each due email as a job, and enqueues MAF baseline-test reminders for athletes whose test is due (at their notify hour, whatever their email settings)
 - **Note:** The scan gates per athlete on each email's own local send hour (its override, else their default `notifyHour`), so an external scheduler should call this hourly.
 
 ### GET /api/v1/emails/unsubscribe
@@ -1858,7 +1872,7 @@ Internal structured exercise health rollup endpoint. Defined in `server/routes/a
 
 - **Auth:** Clerk auth plus `x-internal-analytics-secret` header (timing-safe comparison with `INTERNAL_ANALYTICS_SECRET` env var)
 - **Rate limit:** `internalAnalytics` category, 5/min
-- **Response:** `{ rollups, counters }`
+- **Response:** `{ rollups, counters }` — the daily rollups for the last 30 days, newest first, and today's counters; `401 UNAUTHORIZED` when the secret header is missing or wrong
 
 ---
 
@@ -1875,7 +1889,7 @@ Return the server's VAPID public key so the client can call `PushManager.subscri
 - **Auth:** Required
 - **Rate limit:** `push` category, 60/min
 - **Response:** `{ publicKey: string }`
-- **Errors:** `404 PUSH_NOT_CONFIGURED` when push is not configured
+- **Errors:** `404 PUSH_NOT_CONFIGURED` when web push is not configured
 
 ### POST /api/v1/push/subscribe
 
