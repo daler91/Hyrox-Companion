@@ -26,9 +26,10 @@ The app is branded as **fitai.coach** and serves as an AI fitness coach that let
 This is the application entry point. It performs the following in order:
 
 1. **Font imports** -- Loads Space Grotesk, Geist Sans, and Geist Mono at various weights via `@fontsource`: only the families the `--font-*` stacks in `index.css` name, since every imported face is emitted into the build (pinned by `test/build/fontAssets.test.ts`, PF6).
-2. **Sentry initialization** -- Conditionally initializes `@sentry/react` when the `VITE_SENTRY_DSN` environment variable is set.
-3. **Root render** -- Calls `createRoot` on the `#root` DOM element and renders `<App />` wrapped in a `Sentry.ErrorBoundary` with `FallbackErrorBoundary` as its fallback UI.
-4. **PWA service worker registration** -- Calls `registerSW()` from `virtual:pwa-register` with callbacks for `onNeedRefresh` (new version available) and `onOfflineReady` (app cached for offline use).
+2. **Storage key migration** -- Calls `migrateLegacyKeys()` (`client/src/lib/storageMigration.ts`), which moves five `localStorage` keys from the old `hyrox-` prefix to `fitai-` (offline queue, workout draft and its announced flag, onboarding-complete, privacy consent).
+3. **Sentry setup** -- Calls `setupErrorReporting()` (`client/src/lib/errorReporting.ts`). It does nothing unless the `VITE_SENTRY_DSN` environment variable is set, and it defers `Sentry.init` until the privacy notice has been acknowledged (see [Sentry Integration](#sentry-integration)).
+4. **Root render** -- Calls `createRoot` on the `#root` DOM element, passing `Sentry.reactErrorHandler()` as React 19's `onUncaughtError`, `onCaughtError` and `onRecoverableError` callbacks, and renders `<App />` wrapped in a `Sentry.ErrorBoundary` with `FallbackErrorBoundary` as its fallback UI.
+5. **PWA service worker registration** -- Calls `registerSW()` from `virtual:pwa-register` with `onNeedRefresh` (new version available) and `onOfflineReady` (app cached for offline use) callbacks, both of which are empty. Registration is skipped under Cypress and in a browser without service workers.
 
 ### `client/src/App.tsx`
 
@@ -46,15 +47,18 @@ ClerkProvider
 
 When auth is bypassed (dev mode or Cypress tests), ClerkProvider is omitted and the hierarchy starts at `QueryClientProvider`. A yellow `DevModeBanner` is rendered in dev preview mode.
 
-`AppContent` uses Clerk's `<Show when="signed-in">` to conditionally render either the `AuthenticatedLayout` (sidebar + router) or the `Landing` page for unauthenticated users.
+`AppContent` uses Clerk's `<Show when="signed-in">` to conditionally render either the `AuthenticatedLayout` (sidebar + router) or the signed-out router (the `Landing` page, plus `/privacy` and `/delete-account`) for unauthenticated users. It also calls `useNavigationBreadcrumb`, which records each route change as a Sentry breadcrumb.
 
-`AuthenticatedLayout` wraps the main content in a `SidebarProvider` and renders:
+`AuthenticatedLayout` shows a centred `LoadingSpinner` until auth has resolved, then wraps the main content in a `SidebarProvider` (open state read from the `sidebar_state` cookie) and renders:
 
 - A skip-to-content accessibility link
 - `AppSidebar` (navigation sidebar)
-- A mobile header with `SidebarTrigger` (visible on `md:hidden`)
-- The `AuthenticatedRouter` as the main content area
-- `MobileTabBar` -- Bottom tab bar for the five primary destinations, visible on `md:hidden`; shares `PRIMARY_NAV_ITEMS` with `AppSidebar` (`client/src/lib/navItems.ts`)
+- A mobile header with `SidebarTrigger` and the `Logo` (visible on `md:hidden`)
+- `<main id="main-content">`, the only scrolling region (html, body and `#root` are locked to the viewport), holding `Breadcrumbs` and the `AuthenticatedRouter`
+- `MobileTabBar` -- Bottom tab bar for the primary destinations (five with the nutrition flag on, four without), visible on `md:hidden`; shares `PRIMARY_NAV_ITEMS` with `AppSidebar` (`client/src/lib/navItems.ts`)
+- `PrivacyConsentBanner`
+
+It also mounts the app-wide hooks: `useEmailCheck`, `useDetectTimezone`, `useOfflineDropNotifier`, `useOfflineQueueFlush` and `useFocusMainOnRouteChange`.
 
 ---
 
@@ -90,8 +94,8 @@ The `Landing` page is also lazy-loaded and rendered outside the authenticated la
 
 The home page and primary view. Displays a chronological timeline of training plan days and logged workouts. Key features:
 
-- **Onboarding wizard** -- Shown for new users via `OnboardingWizard` dialog.
-- **AI Coach panel** -- A slide-out `CoachPanel` for chatting with the AI coach, visible as a sidebar on desktop and a fullscreen overlay on mobile. The phone overlay is a modal Radix dialog (`TimelineCoachPanels`): it takes focus and keeps it, hides the timeline from assistive tech, closes on Escape and hands focus back to the coach FAB. It is hidden rather than unmounted while a workout sheet is open, so a chat stream survives. `CoachPanel` is its own chunk, loaded through `lazyWithReload` the first time the panel opens, with a spinner in its place meanwhile (PF8).
+- **Onboarding wizard** -- Shown for new users via `OnboardingWizard` dialog, a lazy chunk of its own behind `TimelineOnboardingWizard` (`pages/timeline/`), which wraps it in a `FeatureErrorBoundaryWrapper` named "Onboarding".
+- **AI Coach panel** -- A `CoachPanel` for chatting with the AI coach, docked as a column beside the timeline on desktop (`w-80`, `lg:w-96`) and a full-screen overlay on phones, each wrapped in a `FeatureErrorBoundaryWrapper` named "Coach". The phone overlay is a modal Radix dialog (`TimelineCoachPanels`): it takes focus and keeps it, hides the timeline from assistive tech, closes on Escape and hands focus back to the coach FAB. It is hidden rather than unmounted while a workout sheet is open, so a chat stream survives. `CoachPanel` is its own chunk, loaded through `lazyWithReload` the first time the panel opens, with a spinner in its place meanwhile (PF8).
 - **Load failures** -- When the timeline (or, under an empty timeline, the plans list) fails to load, `TimelineContent` shows a `LoadErrorCard` with a retry instead of the first-run welcome, and `useTimelineData` keeps `isNewUser` false so onboarding does not launch. The card stays up, its button reading "Retrying…", while a retry runs or waits for the network. A first fetch paused because the browser is offline counts as loading (the skeleton, under the "You're offline" pill), never as an empty account, and onboarding only launches by itself once the auth user says it is not completed: a failed auth-user query leaves that unknown (`useIsOnboardingCompleted` returns `undefined`). Nutrition's day summary and the Analytics Overview, Breakdown, PRs & Trends, MAF Trend and Fuelling tabs follow the same rule through `queryLoadState` (`client/src/lib/queryLoadState.ts`, which `useTimelineData` uses too): a first fetch paused offline shows their spinner, and a failed one a `LoadErrorCard` that stays up, marked retrying, while its retry runs, rather than a 0 kcal day or "No workout data yet". Coach Insights uses it for its spinner only, so a paused first fetch never shows the "Generate" prompt. Race Predictor and Session Quality use it too: a paused first fetch shows their spinner, and only a failed one their own "Couldn't load…" message. Race Predictor's Retry regenerates the prediction, which may spend AI budget, so it runs only when tapped. It reads "Retrying…" while the tab's own re-read or the athlete's Retry is in flight, and the message stops asking to try again meanwhile.
 - **Virtual scrolling** -- Uses `@tanstack/react-virtual` (`useVirtualizer`) to efficiently render large timeline lists.
 - **Timeline filtering** -- Filter by plan and by workout status (completed, planned, missed, skipped; deep-linkable as `?status=`). Collapsible past/future groups with "show more" buttons. When nothing in the loaded pages matches but older pages exist, `TimelineContent` says so and offers "Load older workouts" instead of the final "No skipped workouts" empty state (CL71).
@@ -99,9 +103,9 @@ The home page and primary view. Displays a chronological timeline of training pl
 - **Plan management** -- CSV import (`ImportPreviewDialog`), plan scheduling (`SchedulePlanDialog`), plan renaming, and goal setting. Every start-date picker (this dialog, the onboarding `ScheduleStep` and the AI generator) defaults to the next Monday, or today on a Monday, via `defaultPlanStartDate()` in `lib/planStart.ts`, and a midweek pick explains which week-1 sessions it leaves off the calendar.
 - **Workout actions** -- Mark complete, change status, skip with confirmation (`SkipConfirmDialog`), open the sheet-based planned/logged/skipped workout surfaces, edit workout titles inline from sheet headers, delete, and combine two logged workouts from one day (the review sheet's "Combine with another workout" action, then a tap on the second card, then `CombineWorkoutsDialog`; a plan day either log completed stays completed, on the merged workout).
 - **Priority tiers and missed-session recovery** -- Cards badge key and optional sessions (supporting ones stay unmarked), and the planned-session sheets carry a `SessionPriorityControl` to change the tier. A missed session's card asks what to do with it instead of showing a bare "Missed" badge: fold it into another day, shorten it, or let it go (`missed-recovery/MissedRecoveryPrompt`, ordered by tier). The server decides which misses ask (`TimelineEntry.recoverable`: recent, undecided, a real session in a live plan); older misses, race-week days and retired plans' days just read "Missed" in a muted tone, and the tier chips are hidden on race-week days (`raceDerived`). Folding or shortening opens `MissedRecoveryDialog`, which loads the server's preview (`useMissedRecoveryPreview`) and shows, per candidate day, what the choice does to that day and its week, with the server's recommendation marked "Best fit" and the confirm button pinned to the bottom of the sheet. When the session changed elsewhere (logged, moved or let go on another device) the sheet says so and refreshes the timeline instead of offering a retry. A let-go card reads quietly with an undo; a recovered session carries a "Moved from …" / "Shortened · missed …" badge, and while the server says the move can still be taken back (`TimelineEntry.recoveryUndoable`) a quiet "Moved here after you missed it. / Shortened after you missed it. Undo" line: undoing puts it back on the day it was missed, undecided, with its whole prescription, and the toast says where it went. The weekday chip on every card is the day the card sits on, so a moved session doesn't keep its old slot's name. `useMissedRecoveryFlow` (`pages/timeline/`) owns the sheet's state, and sends one undo per session at a time, so a double tap does not send a second reopen (CL72). Dragging a missed card to today or later folds it too (`useMoveTimelineEntry`). A logged workout only drops on days up to tomorrow (`pages/timeline/dropTargets.ts`, CL70), the latest date the server takes for a log: the athlete's own tomorrow, in their stored timezone.
-- **Floating action button** -- Toggles the coach panel.
+- **Floating action button** -- Two buttons: one toggles the coach panel, the other opens the quick-log sheet (`AdhocLogSheet`). Hidden while a workout sheet is open or bulk-delete mode is on.
 
-State management is centralized in the `useTimelineState` custom hook, with `TimelineWorkoutSurfaces` wiring the log/review/preview/skipped workout sheets.
+State management is centralized in the `useTimelineState` custom hook, with `TimelineWorkoutSurfaces` wiring the log/review/preview/skipped workout sheets and the quick-log sheet. The page renders inside `PageContainer` (`client/src/components/ui/PageContainer.tsx`, `max-w-5xl` by default, `max-w-3xl` for the Log Workout form and `max-w-2xl` for Settings), as Analytics, Weekly Review, Nutrition, Log Workout and Settings do.
 
 ### Log Workout (`client/src/pages/LogWorkout.tsx`)
 
@@ -126,7 +130,7 @@ Displays training data analysis across six base tabs plus two conditional ones �
 - **MAF Trend** (`MafTrendTab`, MAF training style only) -- Pace-at-MAF-ceiling trend across MAF tests over time.
 - **Fuelling** (`FuellingTab`, nutrition flag only) -- The nutrition block view for the selected range: daily intake vs. training load (`IntakeVsTrainingChart`) plus a `FuellingCorrelationCard` comparing session RPE and workout compliance on days the load-adjusted carb target was hit vs. missed, among days with food logged (an unlogged day is not a miss). "All time" is capped to the last 365 days.
 
-A date range selector (`?range=`; 30 days, 90 days (default), 6 months, 1 year, all time) filters the Overview, Breakdown, PRs & Trends and Fuelling tabs. Session Quality is scoped to a plan instead, and Coach Insights, Race Predictor and MAF Trend do not take the range.
+A date range selector (`?range=`; 30 days, 90 days (default), 6 months, 1 year, all time) filters the Overview, Breakdown, PRs & Trends and Fuelling tabs. Session Quality is scoped to a plan instead, and Coach Insights, Race Predictor and MAF Trend do not take the range. The selected tab is not kept in the URL: the page always opens on Overview. Beside the range selector the header has a "Weekly review" link to `/review` and an Export menu that downloads the athlete's training data as CSV or JSON (`api.analytics.exportData`).
 
 Every tab but Overview and PRs & Trends is its own lazy chunk, loaded when first opened. Each loads through `lazyWithReload`, like the routes (see [Routing](#routing)), so a tab chunk a deploy removed reloads the page instead of failing. The wrapper is generic over props, so Breakdown and Fuelling carry the date range through it.
 
@@ -138,24 +142,24 @@ A per-week retrospective at `/review`, deep-linkable through `?week=<any date in
 
 ### Nutrition (`client/src/pages/Nutrition.tsx`)
 
-Food logging and fuelling at `/nutrition`, mounted only when `featureFlags.nutritionEnabled` is on. A date navigator drives one day at a time: `DailyTotalsHeader` → `EnergyBalanceCard` (shown when the profile supports a BMR) → `FoodSearch` + `QuickAddBar` → a single `LogFoodActions` sheet (describe / snap / scan label / barcode, plus custom food, recipe and targets entry points) → one `MealSection` per meal → `MicronutrientPanel` → `MyFoodsSection` → `NutritionInsightsPanel`. Data access is centralised in `client/src/hooks/useNutrition.ts`. The component-by-component map, the AI parse flows, and the per-meal fuel targets live in [Nutrition & Fuelling § Client UI map](nutrition.md#6-client-ui-map).
+Food logging and fuelling at `/nutrition`, mounted only when `featureFlags.nutritionEnabled` is on. A date navigator drives one day at a time: `DailyTotalsHeader` → `EnergyBalanceCard` (shown when the profile supports a BMR) → `FoodSearch` + `QuickAddBar` → a single `LogFoodActions` sheet (describe / snap / scan label / barcode, plus custom food, recipe and targets entry points) → one `MealSection` for each meal that has a target or an entry → `MicronutrientPanel` (once something is logged) → `MyFoodsSection` → `NutritionInsightsPanel`. A day with nothing logged shows a prompt in the meal area: under the meal sections when the day has per-meal targets, in their place when it has none. For an athlete with no recent foods and no favourites, who has never logged, the prompt is `FirstRunStarter` (`client/src/pages/nutrition/FirstRunStarter.tsx`): "Log your first meal", with describe-a-meal, scan-a-barcode and, when no daily target exists, set-your-targets actions. Everyone else gets "Repeat previous day", which a first-run athlete is never offered (the per-meal copy-yesterday action is hidden for them too). Data access is centralised in `client/src/hooks/useNutrition.ts`. The component-by-component map, the AI parse flows, and the per-meal fuel targets live in [Nutrition & Fuelling § Client UI map](nutrition.md#6-client-ui-map).
 
 ### Settings (`client/src/pages/Settings.tsx`)
 
-User preferences and account management. Organized into six deep-linkable tabs (`?tab=account|training|integrations|notifications|data|recycle-bin`, default `account`) driven by `useUrlQueryState` and mirroring the Analytics tab pattern. The sticky "Save Settings" bar and the unsaved-changes guard live **outside** the tabs, so preference edits made on any tab are tracked together, saved by one button, and persist across tab switches.
+User preferences and account management. Organized into six deep-linkable tabs (`?tab=account|training|integrations|notifications|data|recycle-bin`, default `account`) driven by `useUrlQueryState`, the hook behind Analytics' `?range=`. The sticky "Save Settings" bar and the unsaved-changes guard live **outside** the tabs, so preference edits made on any tab are tracked together, saved by one button, and persist across tab switches.
 
 Most tab sections are their own lazy chunks, loaded through `lazyWithReload` like the routes (see [Routing](#routing)) and the Analytics tabs. Each non-default tab wraps its sections in one `Suspense` with a centred `LoadingSpinner`, so opening a tab for the first time shows the spinner until its chunks arrive. The default Account tab has no `Suspense` of its own, so its sections (`ProfileSection`, `UnitsPreferencesCard`, `AccountDangerZone`) are bundled with the page: a lazy one there would suspend the whole page to the route's shared spinner until its chunk arrived. `Settings.account-tab.test.tsx` fails if one goes lazy. `AthleteCardSection`, on the Training tab, is bundled with the page too.
 
-- **Account** (`?tab=account`, default) -- **ProfileSection** (user name and avatar), **UnitsPreferencesCard** (weight unit kg/lb, distance unit km/mi), a "Getting Started" card to re-run onboarding, and the account **DangerZone** (delete account → hold-to-confirm → `DELETE /api/v1/account`, then hard-redirect to the landing page after Clerk sign-out).
+- **Account** (`?tab=account`, default) -- **ProfileSection** (user name and avatar), **UnitsPreferencesCard** (weight unit kg/lb, distance unit km/mi), a "Getting Started" card to re-run onboarding, and the account **DangerZone** (`AccountDangerZone`: delete account → a confirm dialog whose button stays disabled until the athlete types `DELETE` → `DELETE /api/v1/account` → `clearUserLocalData()`, then a full-page redirect to `/` 1.5 s later).
 - **Training** (`?tab=training`) -- **AthleteProfileCard** (division/gender/age), **BodyCompositionCard** (bodyweight, height, activity level, weight goal), **HealthMetricsCard** (optional resting HR, max HR and FTP that sharpen hrTSS/TSS training load; left blank, max HR is estimated from age), **NutritionPreferencesCard** (meals per day — 3, 4 or 5 — that the per-meal fuel targets are spread across), **TrainingGoalsCard** (weekly workout goal), **AthleteCardSection** (the athlete card: facts that are true every week, each in the athlete's words with a category; add, edit, retire, restore and delete, "Still true?" on a fact past its review date, a 20-fact cap, and the older free-text injuries note with "Add to card" and "Remove note" while the athlete has one; its own requests, outside the Save bar), **TrainingStyleSection** (Balanced vs. MAF Method selection, MAF setup gating, style-transition messaging, and a local audit trail of style changes), **WorkoutReviewCard** (adherence insights), **AiCoachCard** (the **consent gate** for AI provider calls -- defaults off for new users; AI features stay hidden/disabled until enabled -- plus the auto-apply-chat-plan-changes toggle), and **CoachingSection** (AI coaching configuration and materials management).
-- **Integrations** (`?tab=integrations`) -- **StravaSection** (connect/disconnect, sync status; handles the `?strava=connected`/`?strava=error` OAuth callback and lands the user on this tab) and **GarminSection** (Garmin Connect credential form, status/last-sync badge, manual "Sync now"; surfaces the `lastError` banner and disables sync when the global 429 circuit breaker is tripped).
+- **Integrations** (`?tab=integrations`) -- **StravaSection** (connect/disconnect, sync status; handles the `?strava=connected`/`?strava=error` OAuth callback and lands the user on this tab) and **GarminSection** (Garmin Connect credential form, status/last-sync badge, manual "Sync" button; surfaces the `lastError` banner with a "Reconnect needed" badge. The sync button is disabled only while a sync is running: the client has no circuit-breaker state, so a sync the server refuses with `GARMIN_CIRCUIT_OPEN` shows as a failed-sync toast).
 - **Notifications** (`?tab=notifications`) -- **EmailNotificationsCard** (master `emailNotifications` switch; nested under it, a default send hour (`notifyHour`, 07:00 unless changed) and per-type toggles for the weekly summary, missed-workout reminder, weekly review reminder, session brief and analysis digest. The nested group is grayed and the per-type toggles disabled while the master is off. Each type that is switched on shows its own "Send at" hour override, which defaults to following the default send hour — except the weekly review reminder, whose fallback is 17:00, Sunday evening) and **PushNotificationSection** (Web Push opt-in, unsubscribe, denied-permission messaging, and a test notification when the browser + server VAPID config support push).
 - **Data & Privacy** (`?tab=data`) -- **DataToolsSection** (`StructureOldWorkoutsCard`, `ExportDataCard`, and the error-reporting consent card).
 - **Recycle bin** (`?tab=recycle-bin`) -- **RecycleBinCard** (deleted workouts, plan days and training plans, restorable for 90 days, with per-item _Delete forever_ and _Empty bin_ behind confirm dialogs).
 
 ### Privacy (`client/src/pages/Privacy.tsx`)
 
-First-party privacy policy page. Lists each third-party processor the app sends data to (Clerk for auth, the configured AI provider for AI features when `aiCoachEnabled`, Strava for activity sync when connected, Garmin for activity sync when connected, Resend for email when `emailNotifications`, Sentry for error telemetry) with a plain-language description of what data each receives. The Landing page footer and the Settings page both link here. The route is accessible while signed out so prospective users can read it before sign-up.
+First-party privacy policy page. Lists each third-party processor the app sends data to (Clerk for auth, the configured AI text provider for AI features when `aiCoachEnabled`, Google's Gemini API for photos and search embeddings whichever text provider is configured, the food databases Open Food Facts, USDA FoodData Central and Edamam, Strava for activity sync when connected, Garmin for activity sync when connected, Resend for email when `emailNotifications`, the browser's push service and Firebase Cloud Messaging for opt-in push notifications, Sentry for error telemetry) with a plain-language description of what data each receives. The Landing page footer, the privacy banner, the AI consent disclosure (`AiConsentDetails`), the onboarding Welcome step and the Delete Account page link here. The route is accessible while signed out so prospective users can read it before sign-up.
 
 ### Delete Account (`client/src/pages/DeleteAccount.tsx`)
 
@@ -189,7 +193,7 @@ Components are organized into subdirectories under `client/src/components/`:
 
 ### `ui/` -- shadcn/ui Primitives
 
-Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordion`, `avatar`, `badge`, `button`, `card`, `dialog`, `input`, `select`, `sidebar`, `tabs`, `toast`, `toaster`, `tooltip`, and more. Also includes the custom `OfflineIndicator` component.
+Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordion`, `avatar`, `badge`, `button`, `card`, `dialog`, `input`, `select`, `sidebar`, `tabs`, `toast`, `toaster`, `tooltip`, and more. Also includes the custom `OfflineIndicator`, `PageContainer` (the page width and padding wrapper), `LoadingSpinner` and `ResponsiveSheet` components.
 
 ### `analytics/` -- Analytics Tab Components
 
@@ -208,8 +212,9 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `CoachInsightsTab` -- AI coaching-signal tab (RPE trends, plan phase, fatigue/progression flags); stored-first with instant paint.
 - `ExerciseProgressionCharts` -- Per-exercise progression chart group used by the Trends tab.
 - `FuellingTab` -- Fuelling tab (nutrition flag only): `IntakeVsTrainingChart` and `FuellingCorrelationCard` over the nutrition block view, loaded by `useFuellingAnalytics`.
+- `SessionGradesTab` -- "Session Quality" tab, with `session-grades/WeeklyGradesChart` and `session-grades/BlockGradesTable`.
 - `chartConstants.ts` -- Shared chart configuration.
-- `training-overview/` -- Overview-tab building blocks: `OverviewStatsGrid`, `OverviewTrendCharts`, `WeeklyWorkoutsChart`, and the `useTrainingOverviewData` hook.
+- `training-overview/` -- Overview-tab building blocks: `OverviewStatsGrid`, `OverviewTrendCharts`, `WeeklyWorkoutsChart`, `BodySystemLoadCard`, the load trend charts (`AcwrTrendChart`, `FormMonotonyTrendCharts`, `ObjectiveLoadTrendCharts`), the AI chart analysis (`OverviewAnalysisHeader` with its Generate / Regenerate button, `ChartExplanation` under each chart, and the `useOverviewAnalysis` hook), and the `useTrainingOverviewData` hook.
 
 ### `coach/` -- AI Coach Panel Components
 
@@ -222,6 +227,8 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `SuggestionsTab` -- Hook and logic for fetching/applying suggestions.
 - `AIConsentDialog` -- Opt-in consent dialog shown before the first AI coach interaction.
 - `AiConsentDetails` -- The consent disclosure (what the AI Coach sends, the privacy link) shared by `AIConsentDialog`, the AI plan generator's consent step and the onboarding `CoachStep`.
+- `PlanProposalCard` / `InlinePlanProposal` -- A plan-adjustment proposal's card at the chat turn that produced it: Apply and Dismiss while pending (with a toggle per change when there is more than one), what changed and an Undo once applied.
+- `AiCoachOffNotice` -- Shown beside a disabled "Generate" while the athlete has not opted in to AI processing; says why and links to the switch.
 
 ### `onboarding/` -- Onboarding Wizard Steps
 
@@ -233,6 +240,8 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `PlanStep` -- Plan choice (sample plan, import CSV, AI-generated, or skip). The AI plan leads only when the AI Coach is on; otherwise the template leads and the AI option says it needs the coach.
 - `ScheduleStep` -- Start date picker for the template plan. Defaults to the next Monday; today can be chosen; a midweek pick says which week-1 sessions it leaves off the calendar.
 - `OnboardingWizardFooter` -- Back / Continue / Start Training, pinned to the bottom of the scrolling dialog so the primary action stays in view on a phone.
+- `OnboardingWizardFrame` -- The dialog shell around the steps: the "Step N of M" counter and progress bar.
+- `LeaveSetupDialog` -- The "Leave setup?" confirmation that Esc and the dialog's ✕ open.
 
 The step counter counts through the Plan step; the template's Schedule step shares the Plan step's number, so the total never grows. When a step changes, focus moves to its heading, and Enter in a text field moves on. Choosing **Import** closes the wizard for the file picker, and cancelling the picker reopens it on the Plan step (the Plan step also shows the CSV columns and a template download). The toasts that end setup offer **Connect a device** (Settings → Integrations).
 
@@ -248,7 +257,7 @@ The template plan is created on **Start Training**, together with its schedule, 
 - `ProfileSection` -- User profile display.
 - `StravaSection` -- Strava connection management.
 - `GarminSection` -- Garmin Connect credential form, status display, manual sync button.
-- `AccountDangerZone` -- Account deletion (hold-to-confirm → `DELETE /api/v1/account`, then hard-redirect to the landing page after Clerk sign-out).
+- `AccountDangerZone` -- Account deletion (type `DELETE` to confirm → `DELETE /api/v1/account` → `clearUserLocalData()`, then a full-page redirect to `/` 1.5 s later).
 - `TrainingStyleSection` -- Balanced/MAF style selector, MAF setup dialog, style transition notice, and local settings audit.
 - `PushNotificationSection` -- Web Push subscribe/unsubscribe and test-notification controls.
 - `DataToolsSection` -- Structure old workouts, data export, and error-reporting consent. The recycle bin is not part of it: Settings mounts `RecycleBinCard` directly on its own Recycle bin tab.
@@ -266,11 +275,11 @@ The template plan is created on **Start Training**, together with its schedule, 
 
 The largest component group, further subdivided:
 
-- **Top-level**: `TimelineHeader`, `TimelineSkeleton`, `TimelineEmptyState`, `TimelineDateGroup`, `FloatingActionButton`, `TimelineTodayIndicator` (jump-to-today pill; hidden when today is filtered out of the current view), `CoachReviewingIndicator`.
-- **Annotations**: `AnnotationsDialog`, `TimelineAnnotationCard`, `AnnotationTypeIcon` — inline annotation rows rendered as first-class log entries on the Timeline for injury / illness / travel / rest periods.
+- **Top-level**: `TimelineHeader`, `TimelineSkeleton`, `TimelineEmptyState`, `TimelineDateGroup`, `FloatingActionButton`, `TimelineTodayIndicator` (jump-to-today pill; hidden when today is filtered out of the current view), `CoachReviewingIndicator`, `TimelineSummaryCard`, `StationRadar` (days since each race station and running were trained, as a chip row), `WeeklyReviewPrompt` (the Sunday-evening-to-Tuesday nudge into the weekly review, dismissible for the week), `FuellingDayChip` (the date row's intake-against-target chip, linking to that day in Nutrition), and `BulkDeleteControls` / `BulkDeleteToolbar` for bulk-delete mode.
+- **Annotations**: `AnnotationsDialog`, `TimelineAnnotationCard`, `AnnotationTypeIcon` — inline annotation rows rendered as first-class log entries on the Timeline for injury / illness / travel / rest periods. The dialog's form, list and mutations are in `annotations/` (`AnnotationCreateForm`, `AnnotationList`, `useAnnotationForm`, `useTimelineAnnotationMutations`).
 - **Dialogs and surfaces**: `SchedulePlanDialog`, `SkipConfirmDialog`, `ImportPreviewDialog`, and `ConfirmDialog`. `TimelineWorkoutSurfaces`, which wires the workout-detail sheet surfaces from `workout-detail/`, lives beside the page in `client/src/pages/timeline/` rather than in this directory.
-- **`timeline-filters/`**: `TimelineFilters`, `PlanSelector`, `GoalDialog`, `csv-utils.ts`.
-- **`timeline-workout-card/`**: `TimelineWorkoutCard`, `ExerciseChips`, `WorkoutStravaStats`, `SessionTierBadges` (priority and recovered-from badges), utility and type files.
+- **`timeline-filters/`**: `TimelineFilters`, `PlanSelector`, `PlanToolsMenu`, `PlanGoalRow` (the goal strip under the filters), `GoalDialog`, `RenamePlanDialog`, `csv-utils.ts`.
+- **`timeline-workout-card/`**: `TimelineWorkoutCard`, `ExerciseChips`, `WorkoutStravaStats`, `SessionTierBadges` (priority and recovered-from badges), `MoveEntryMenu` (drag handle plus a move-to-date menu), `DeviceLinkControls`, `FuellingTargetChip`, `MafCeilingChip`, `CoachNote`, `WorkoutNotes`, utility and type files.
 - **`missed-recovery/`**: `MissedRecoveryPrompt` (the card's fold / shorten / let-go row, or the undo line for a let-go, fold or shorten), `MissedRecoveryDialog` (the option sheet with each day's impact) and `recoveryFormat.ts` (minutes, day, week and load-change copy).
 - **`combine-workouts-dialog/`**: `CombineWorkoutsDialog`, `FieldSelector`, `WorkoutCard`, `CombinedResultSummary`.
 
@@ -293,6 +302,11 @@ Workout detail surfaces live in their own top-level directory so Timeline, Log W
 - `WorkoutCoachPanel`, `EmbeddedWorkoutCoachChat`, and `MobileCoachToggle` -- Embedded AI coach surfaces for asking questions about the open workout.
 - `AthleteNoteInput` -- Free-text note capture scoped to the workout.
 - `SaveStatePill` -- Autosave indicator for structured table and note edits.
+- `SessionGradeCard` -- The "Did it do its job?" card on a completed workout; renders nothing for workouts that are not graded.
+- `ReviewActionButtons` -- The review sheet's sticky footer: ask coach, reopen, combine and delete.
+- `MafTestTagSection` / `MafTestForm` -- Tag a workout as a MAF test and correct the heart rate, duration and distance the test is scored from.
+- `FuellingAroundSessionPanel`, `FuellingPlanPanel`, `FuellingGuidanceNote` -- Session fuelling targets and intake on logged and planned sessions (nutrition flag only).
+- `shared/` -- Pieces the sheets share, among them `PrescriptionEditor`, `WorkoutEffortNotes`, `RpePrompt` and `WorkoutPlanDayPicker`. `exercise-table/` holds `ExerciseTable`'s rows, dialogs, drag-and-drop helpers and the "Last time" row.
 
 ### `exercise-row/` -- Exercise Row Renderer
 
@@ -315,6 +329,13 @@ Workout detail surfaces live in their own top-level directory so Timeline, Log W
 ### `session-grades/` -- Session Grade Chip
 
 - `GradeVerdictBadge` -- A session grade's verdict as a chip: tone, icon and words together, so colour is never the only signal, with the headline as its tooltip. Shared by the workout sheet's grade card, the Weekly Review and the Analytics session-quality tab.
+
+### `review/` -- Weekly Review Sections
+
+- `WeeklyReviewSummary` -- The week's headline numbers, with sessions logged and plan adherence as separate tiles.
+- `WeeklyReviewSessions` -- The week's session rows, each with its grade chip.
+- `WeeklyReviewHighlights` -- Records and context: the week's records beside the annotations that change how its numbers read.
+- `WeeklyReviewIntent` -- The one line the athlete carries into next week, and last week's shown back.
 
 ### `nutrition/` -- Shared Nutrition Rows
 
@@ -349,7 +370,7 @@ Editing surfaces for structured workout formats (EMOM, AMRAP, rounds, intervals)
 
 - `AppSidebar` -- Main navigation sidebar rendering `PRIMARY_NAV_ITEMS` (Training, Log Workout, Nutrition when the nutrition flag is on, Analytics, Settings); the footer holds the user avatar and name, the theme toggle, and a log-out button.
 - `MobileTabBar` -- Bottom tab bar mirroring the sidebar's `PRIMARY_NAV_ITEMS` for phones (`md:hidden`).
-- `Breadcrumbs` -- Route breadcrumb trail driven by `useNavigationBreadcrumb`; desktop-only (`hidden md:block`) since the tab bar covers "where am I" on phones.
+- `Breadcrumbs` -- A "Training › current page" trail read from the wouter location. It renders on `/log`, `/analytics`, `/settings`, `/privacy` and `/delete-account`, and on `/` only while a workout sheet is open (`?workout=`), where it names that workout from the cached timeline; `/nutrition` and `/review` have no label and so no trail. Desktop-only (`hidden md:block`) since the tab bar covers "where am I" on phones. (`useNavigationBreadcrumb` is unrelated: it records route changes as Sentry breadcrumbs.)
 - `CoachPanel` -- AI coach chat panel (described above).
 - `OnboardingWizard` -- Multi-step onboarding dialog.
 - `ThemeProvider` -- Dark/light theme context provider.
@@ -357,10 +378,11 @@ Editing surfaces for structured workout formats (EMOM, AMRAP, rounds, intervals)
 - `FallbackErrorBoundary` -- Global error fallback UI.
 - `FeatureErrorBoundaryWrapper` -- Per-feature Sentry error boundary.
 - `FeatureErrorBoundary` -- Feature-scoped error fallback UI.
+- `LoadErrorCard` -- What a page shows when its data request failed, with a retry, in place of the empty or first-run state.
 - `ChatMessage` -- Chat bubble rendering.
 - `ChatInput` -- Chat text input.
 - `ExerciseSelector` -- Exercise picker.
-- `ImageCaptureButton` -- Camera + file-input wrapper that opens the device camera (or falls back to file chooser), compresses the picked image via `lib/image.ts`, and exposes the result as a base64 payload. Used by the Log Workout flow and by `CoachPrescriptionCollapsible` in workout detail surfaces.
+- `ImageCaptureButton` -- Camera + file-input wrapper that opens the device camera (or falls back to file chooser), compresses the picked image via `lib/image.ts`, and exposes the result as a base64 payload. Used by the Log Workout flow (`WorkoutTextMode`), by `CoachPrescriptionCollapsible` in workout detail surfaces, by `ChatInput` for a photo with a coach message, and by the Nutrition page's `SnapMealButton` and `ScanLabelButton`.
 - `PrivacyConsentBanner` -- First-load privacy notice listing the third-party processors. "Accept" keeps error reporting on and "Decline analytics" turns Sentry off; either records the `privacy_notice` consent (server-side too, for signed-in athletes) and the banner links to `/privacy`. The AI consent gate is separate (`aiCoachEnabled`).
 - `RagDebugBadge` -- In production, an athlete-facing "From your coaching notes" chip shown only when a response actually used RAG; in development, a debug view of which retrieval path (RAG, legacy materials, none) fed the response.
 - `RpeSelector` -- Rate of Perceived Exertion selector. An optional `suggestedValue` marks one value (dashed) while nothing is selected; the review sheet passes the workout's heart-rate `suggestedRpe` through `WorkoutEffortNotes` → `RpePrompt`, and it is saved only when the athlete taps a value.
@@ -374,12 +396,12 @@ A user flow introduced in April 2026 that lets athletes snap a photo of a whiteb
 - **Entry points**: `ImageCaptureButton` mounted inside `WorkoutTextMode` (Log Workout) and inside `CoachPrescriptionCollapsible` (workout detail surfaces, for re-parsing an existing workout against a new photo).
 - **Client-side compression**: `compressImage()` in `client/src/lib/image.ts` resizes the captured image to a max edge of 1600px and re-encodes as JPEG at quality 0.8 before base64 upload, keeping payloads OCR-ready while staying inside the Gemini request limit. Because it always re-encodes, the `CompressedImage` it returns carries a literal `mimeType: "image/jpeg"` — every call site reads the mime type off that result rather than deriving it from the source `File`, so both paths agree by construction.
 - **Orchestration surface**: `shared/PrescriptionEditor` manages the text/photo parse controls for workout detail surfaces, including preview URL lifecycle, Retake/Parse confirmation, and clearing transient preview state after dispatch.
-- **Server endpoints**: `POST /api/v1/parse-exercises-from-image` (new workout) and `POST /api/v1/workouts/:id/reparse-from-image` (existing workout). Both accept `{ imageBase64, mimeType }` and are rate-limited under the AI category. See [API Reference](api-reference.md).
+- **Server endpoints**: `POST /api/v1/parse-exercises-from-image` and `POST /api/v1/parse-workout-structure-from-image` (new workout), `POST /api/v1/workouts/:id/reparse-from-image` (existing workout) and `POST /api/v1/plans/days/:dayId/reparse-from-image` (a planned day). The client sends each `{ imageBase64, mimeType }` and waits up to 130 s (`AI_REQUEST_TIMEOUT_MS`). See [API Reference](api-reference.md).
 
 ### Component Communication Patterns
 
 - **Props drilling**: Parent pages pass data to child components (e.g., Timeline passes `entries` to TimelineWorkoutCard)
-- **Shared hooks**: Multiple components use the same React Query hook (e.g., `useTimelineData` consumed by both timeline and coach panel)
+- **Shared hooks**: Multiple components use the same React Query hook (e.g., `useUnitPreferences`, read by `TimelineWorkoutCard`, `LogSheet`, `ReviewSurface` and the Log Workout form). The coach panel does not call `useTimelineData`: the Timeline page passes it the loaded timeline as a prop
 - **Query invalidation**: After mutations, hooks call `queryClient.invalidateQueries()` to trigger refetches (e.g., `useWorkoutActions` invalidates timeline after creating a workout)
 - **Event-driven updates**: `useAutoCoachWatcher` detects when `isAutoCoaching` transitions from true to false, then invalidates the timeline query
 
@@ -423,30 +445,30 @@ The project uses Tailwind CSS 4 integrated via the `@tailwindcss/vite` plugin (n
 
 ### Dark Mode
 
-Dark mode uses the **class strategy** (`darkMode: ["class"]`). The `ThemeProvider` component manages a `class` on the root element. Users toggle themes via `ThemeToggle` in the sidebar footer.
+Dark mode uses the **class strategy** (`darkMode: ["class"]`). The `ThemeProvider` component sets a `light` or `dark` class on the root element, starting from the `theme` key in `localStorage` or, without one, the OS `prefers-color-scheme`. Users toggle themes via `ThemeToggle` in the sidebar footer.
 
 ### Color System
 
-All colors are defined as HSL CSS custom variables (e.g., `--background`, `--foreground`, `--primary`, etc.) and referenced in Tailwind config using the `hsl(var(--name) / <alpha-value>)` pattern. This enables opacity modifiers on all semantic colors.
+All colors are defined as HSL CSS custom variables (e.g., `--background`, `--foreground`, `--primary`, etc.) in `client/src/index.css` (`:root` for light, `.dark` for dark) and referenced in Tailwind config using the `hsl(var(--name) / <alpha-value>)` pattern. This enables opacity modifiers on the semantic colors; the `border` variants of `primary`, `secondary`, `muted`, `accent`, `destructive`, `sidebar-primary` and `sidebar-accent` are plain `var(--…-border)` values.
 
 Key color tokens:
 
-- `background`, `foreground` -- Base page colors.
-- `card`, `popover` -- Surface colors with optional `border` variants.
+- `background`, `foreground`, `border`, `input`, `ring` -- Base page colors.
+- `card`, `popover` -- Surface colors, each with `foreground` and `border` variants.
 - `primary`, `secondary`, `muted`, `accent`, `destructive` -- Semantic UI colors, each with `foreground` and `border` variants.
 - `success` -- Success state color (used for completed workouts).
+- `warning` -- Warning state color. Both have a `foreground`.
 - `chart-1` through `chart-5` -- Chart palette.
 - `sidebar`, `sidebar-primary`, `sidebar-accent` -- Sidebar-specific tokens.
-- `status` -- Online/away/busy/offline indicator colors.
 
 ### Typography
 
 Custom font families are defined via CSS variables:
 
-- `--font-sans` (Geist Sans)
+- `--font-sans` (Geist Sans, then `system-ui`)
 - `--font-heading` (Space Grotesk)
 - `--font-mono` (Geist Mono)
-- `--font-serif`
+- `--font-serif` (Space Grotesk as well; no serif face is loaded)
 
 ### Plugins
 
@@ -493,6 +515,11 @@ Configured via `components.json` at the project root:
   - `WorkoutHeader`
   - `CoachReviewingIndicator` (inactive + active states)
   - `TimelineWorkoutCard`
+  - `Breadcrumbs`, `RpeSelector`, `OfflineIndicator`, `BulkDeleteToolbar`, `MissedRecoveryDialog`
+  - `BodySystemLoadCard`, `SessionGradeCard`
+  - The onboarding `WelcomeStep`, `GoalStep`, `CoachStep` and `PlanStep`
+  - `RecycleBinCard`, `EmailNotificationsCard`, `PreferenceRows`
+  - `Landing`
 - Keyboard activation tests on `TimelineWorkoutCard` asserting the
   `role="button"` card responds to both Enter and Space when focused.
 - Static regression test on `prefers-reduced-motion` — fails if the global
@@ -523,14 +550,17 @@ File findings on issue #768 or open focused follow-up PRs referencing it.
 
 PWA is enabled via `vite-plugin-pwa` in `vite.config.ts`:
 
-- **Register type**: `prompt` -- Users are prompted when a new version is available (not auto-updated).
-- **Manifest**: App name "fitai.coach", standalone display mode, dark background (`#0a0a0a`).
+- **Register type**: `prompt` -- A new version is not activated automatically. No prompt is shown either: `onNeedRefresh` in `main.tsx` is an empty callback and nothing calls the update function `registerSW()` returns.
+- **Manifest**: App name "fitai.coach" (short name "fitai"), standalone display mode, dark background (`#0a0a0a`), theme colour `#C4F37E`, and 192px, 512px and maskable 512px PNG icons plus the SVG favicon.
 - **Workbox configuration**:
   - Precaches `js`, `css`, `html`, `ico`, `png` and `svg` files, and of the fonts only the latin-subset `woff2` of each face (`PRECACHE_GLOB_PATTERNS`). Other subsets and the `woff` fallbacks are cached at runtime the first time a page needs them. Fonts are never inlined into the stylesheet as base64 (`build.assetsInlineLimit`), so the entry CSS carries none (PF6).
   - `cleanupOutdatedCaches: true` removes stale cache entries on update.
   - `importScripts: ["sw-push.js"]` pulls the push handlers into this same worker — see [Push notifications](#push-notifications-and-the-service-worker) below.
+  - `navigateFallbackDenylist: [/^\/api\//]` keeps top-level navigations to `/api/*` (a data-export download, say) out of the SPA fallback, so the browser handles them itself.
   - Runtime caching for `/api/` responses — see [Cached API data](#cached-api-data-and-sign-out).
-- **Service worker registration**: Called in `main.tsx` after render, with `onNeedRefresh` and `onOfflineReady` callbacks. There is exactly **one** registration.
+  - Runtime caching for fonts: `CacheFirst` into `font-cache` (20 entries, one year) for font files (`woff`, `woff2`, `ttf`, `otf`, `eot`) and for `fonts.googleapis.com` / `fonts.gstatic.com`.
+  - Runtime caching for images (`png`, `jpg`, `jpeg`, `svg`, `webp`): `StaleWhileRevalidate` into `image-cache` (100 entries, 30 days).
+- **Service worker registration**: Called in `main.tsx` after render, with `onNeedRefresh` and `onOfflineReady` callbacks (both empty), and skipped under Cypress. There is exactly **one** registration.
 - **Offline indicator and replay state**: The `OfflineIndicator` component (`client/src/components/ui/OfflineIndicator.tsx`) displays offline status, the count of queued writes awaiting replay (workout creates, plan-day status changes and food logs — see [Offline Queue](state-management.md#offline-queue)), and sync/drop feedback after replay attempts.
 
 ### Push notifications and the service worker
@@ -552,8 +582,10 @@ within the app.
 
 ### Cached API data and sign-out
 
-Workbox applies `NetworkFirst` to programmatic `/api/` requests (50 entries,
-5-minute TTL). There is deliberately no network timeout: the cache answers only
+Workbox applies `NetworkFirst` to programmatic `/api/` requests (cache
+`api-cache`, 50 entries, 5-minute TTL); a top-level navigation to an `/api/` URL
+(`request.destination === "document"`) is not matched. There is deliberately
+no network timeout: the cache answers only
 when the network fails outright, because a timeout fallback served a slow
 refetch after a save the pre-save response (C53). Two things follow from Cache
 Storage being keyed by URL with **no per-user partition**:
@@ -571,7 +603,17 @@ Storage being keyed by URL with **no per-user partition**:
 The same sweep clears the per-user analytics snapshots (coach insights, race
 prediction, overview analysis, MAF heart-rate tests) and the weekly-review
 dismissal keys, which hold AI-written narratives and health data and previously
-survived both sign-out and account deletion.
+survived both sign-out and account deletion. It also clears the offline queue
+(`clearOfflineQueue()`), the log-workout drafts and their announced flags, the
+onboarding-complete flag and the Settings training-style audit trail. The
+privacy-notice and error-reporting choices, the theme and the `font-cache` and
+`image-cache` caches are left in place. Account deletion calls the same function
+without awaiting it.
+
+`clearUserLocalData()` also detaches the browser's push subscription: it asks the
+server to forget it (`DELETE /api/v1/push/unsubscribe`, bounded to 5 s, while the
+session is still valid) and then calls `subscription.unsubscribe()`, so the
+previous athlete's notifications stop arriving on a shared device.
 
 ---
 
@@ -579,12 +621,14 @@ survived both sign-out and account deletion.
 
 ### Sentry Integration
 
-- **Initialization**: `@sentry/react` is initialized in `client/src/lib/errorReporting.ts` when `VITE_SENTRY_DSN` is set. Init is deferred until the first-load privacy notice is acknowledged, and is additionally subject to the per-user opt-out in Settings.
-- **Global boundary**: The entire `<App />` is wrapped in `Sentry.ErrorBoundary` with `FallbackErrorBoundary` as the fallback. This catches any unhandled React errors at the top level.
+- **Initialization**: `@sentry/react` is initialized in `client/src/lib/errorReporting.ts` when `VITE_SENTRY_DSN` is set. Init is deferred until the first-load privacy notice is acknowledged, and is additionally subject to the opt-out in `client/src/lib/errorReportingConsent.ts`, a browser-local flag (not an account setting) set by "Decline analytics" on the notice or the error-reporting card in Settings. The Settings toggle applies at once through `startErrorReporting()` / `stopErrorReporting()`.
+- **Global boundary**: The entire `<App />` is wrapped in `Sentry.ErrorBoundary` with `FallbackErrorBoundary` as the fallback. This catches any unhandled React errors at the top level. `createRoot` is also given `Sentry.reactErrorHandler()` for `onUncaughtError`, `onCaughtError` and `onRecoverableError`, since React 19 no longer re-throws render errors for the SDK's global handlers to see.
 - **Scrubbing**: `dataCollection` (every category switched off — it replaced `sendDefaultPii: false` in Sentry v11, whose defaults collect everything) only stops the SDK gathering identity, cookies, headers, HTTP bodies and query strings itself — it does not stop the app's own payloads. `client/src/lib/errorReportingScrub.ts` is wired in as both `beforeSend` and `beforeBreadcrumb` (the browser counterpart to `scrubSentryEvent` on the server) and covers three channels:
   - `apiRequest` throws ``new Error(`${status}: ${body}`)``, so a raw 4xx response body became the exception message — and Zod validation errors echo the values the athlete submitted. The body half is replaced with `[redacted]`, keeping the status code.
   - Navigation breadcrumbs record `pathname?search` (`/nutrition?date=…&meal=…`), and the SDK's own fetch/xhr breadcrumbs record request URLs. Query strings are stripped everywhere they appear.
   - The fetch/xhr integrations attach request and response bodies to breadcrumb `data`; those keys are dropped.
+
+  `beforeSend` also deletes the event's request data, query string, cookies and headers and the user's email, username and IP address.
 
   Scrubbing runs at `beforeBreadcrumb` as well as `beforeSend` so a payload never sits in the in-memory breadcrumb buffer waiting for an error that may never come.
 
@@ -598,7 +642,7 @@ A full-page error screen with:
 
 ### FeatureErrorBoundaryWrapper (`client/src/components/FeatureErrorBoundaryWrapper.tsx`)
 
-A per-feature error boundary that wraps each route and the Coach panel. Uses `Sentry.ErrorBoundary` internally so errors are reported to Sentry with the feature name as context. Falls back to `FeatureErrorBoundary`, a scoped error UI that only affects the broken feature, not the entire app.
+A per-feature error boundary that wraps each authenticated feature route (not `/privacy`, `/delete-account` or the 404), the Coach panel and the onboarding wizard. Uses `Sentry.ErrorBoundary` internally so errors are reported to Sentry; the `featureName` prop is not sent with them, it only names the feature in the fallback. Falls back to `FeatureErrorBoundary`, a scoped error UI (the feature's name and "couldn't load", with a "Try again" that resets the boundary, or reloads the page for a failed code chunk) that only affects the broken feature, not the entire app.
 
 ---
 
@@ -627,8 +671,10 @@ the ~140 icons of the lazy routes. The build records how many icons the eager gr
 `MAX_EAGER_LUCIDE_ICONS` (PF19).
 
 Route-level code splitting is achieved via `React.lazy`, wrapped by `lazyWithReload` (see
-[Routing](#routing)): every page — `Timeline`, `LogWorkout`, `Settings`, `Analytics`, `Nutrition`,
-`Review`, `Landing`, and `Privacy` — is lazy-loaded in `App.tsx`, each producing its own chunk.
+[Routing](#routing)): every page but the 404 — `Timeline`, `LogWorkout`, `Settings`, `Analytics`, `Nutrition`,
+`Review`, `Landing`, `Privacy` and `DeleteAccount` — is lazy-loaded in `App.tsx`, each producing its own chunk.
+Below the routes, the Analytics tabs, most Settings sections, `CoachPanel`, `OnboardingWizard`, `ChatMarkdown`
+and the Nutrition page's `MacroDonut` and `InsightsMarkdown` are lazy chunks too.
 
 Build output goes to `dist/public`.
 
@@ -661,7 +707,7 @@ In both bypass modes, the app renders the `AuthenticatedLayout` directly (skippi
 
 Root-level Vite configuration:
 
-- **Plugins**: `@tailwindcss/vite`, `@vitejs/plugin-react`, `vite-plugin-pwa`, and `@sentry/vite-plugin` (source-map upload; disabled unless `SENTRY_AUTH_TOKEN` is set).
+- **Plugins**: `@tailwindcss/vite`, `@vitejs/plugin-react`, `vite-plugin-pwa`, `bundleStatsPlugin` from `script/bundleStats.ts` (writes `dist/bundle-stats.json`), and `@sentry/vite-plugin` (source-map upload; disabled unless `SENTRY_AUTH_TOKEN` is set; the uploaded `.map` files are deleted from `dist/public` afterwards). Source maps are built `hidden`.
 - **Path aliases**: `@` maps to `client/src`, `@shared` maps to `shared/`.
 - **Root**: `client/` directory.
 - **Build output**: `dist/public/`.
@@ -697,7 +743,7 @@ shadcn/ui CLI configuration:
 
 ### CSRF Token Handling
 
-The API client layer fetches a CSRF token from `GET /api/v1/csrf-token` on initialization and attaches it as the `x-csrf-token` header on all mutating requests (POST/PUT/PATCH/DELETE). The token is cached in memory and automatically refreshed on 403 CSRF errors or after Clerk sign-in events.
+The API client layer fetches a CSRF token from `GET /api/v1/csrf-token` before the first mutating request (not at startup) and attaches it as the `x-csrf-token` header on all mutating requests (POST/PUT/PATCH/DELETE). The token is cached in memory and automatically refreshed on a 403 that may be a CSRF rejection; `useAuth` clears the cache on a Clerk sign-in or sign-out transition (`resetCsrfToken()`), so the next mutation fetches a new one.
 
 See also: [Authentication -- CSRF Protection](authentication.md#csrf-protection), [State Management -- API Client Layer](state-management.md#api-client-layer)
 

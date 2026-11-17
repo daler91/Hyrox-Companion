@@ -60,7 +60,8 @@ script/mobile-gallery/seed.sh
 cd mobile && FITAI_GALLERY_UPSTREAM=http://localhost:5000 ./gradlew :composeApp:jvmTest --rerun --tests '*LayoutGalleryTest*'
 ```
 
-The images are dark-theme unless `FITAI_GALLERY_THEME=light`. The seed script
+The images are dark-theme unless `FITAI_GALLERY_THEME=light`, and
+`FITAI_GALLERY_OUT` writes them somewhere else. The seed script
 deletes the dev user's plans, workouts, food log and custom foods, and refuses
 a database that isn't on localhost.
 
@@ -125,7 +126,8 @@ the permissions rationale Health Connect shows is `HealthPermissionsRationaleAct
 Play App Signing holds the app signing key; CI signs bundles with the upload
 key. Tagging a commit `mobile-v<major>.<minor>.<patch>` runs
 `.github/workflows/mobile-release.yml`: it tests, builds the release bundle
-(version name from the tag, version code `major·1,000,000 + minor·1,000 + patch`)
+(version name from the tag, version code `major·1,000,000 + minor·1,000 + patch`,
+so minor and patch must stay below 1,000)
 and uploads it to Play's internal track with Gradle Play Publisher, keeping the
 bundle and its R8 mapping as a workflow artifact.
 
@@ -149,8 +151,10 @@ sign-out. `.github/workflows/mobile-e2e.yml` (run by hand) builds the debug app
 with the staging Clerk key and server, boots an emulator and runs them,
 uploading the JUnit report and screenshots. They sign in with a Clerk
 development instance's test account (a `+clerk_test` address, code 424242)
-whose account has finished setup and has a plan; the repository variables are
-listed at the top of the workflow. Against a local emulator or phone:
+whose account has finished setup, acknowledged the privacy notice and has a
+plan; the repository variables (`STAGING_CLERK_PUBLISHABLE_KEY`,
+`STAGING_API_BASE_URL`, `FITAI_TEST_EMAIL`) are described at the top of the
+workflow. Against a local emulator or phone:
 
 ```sh
 maestro test maestro -e TEST_EMAIL=you+clerk_test@example.com -e TEST_CODE=424242
@@ -158,13 +162,16 @@ maestro test maestro -e TEST_EMAIL=you+clerk_test@example.com -e TEST_CODE=42424
 
 ## Performance
 
-Release builds are shrunk and optimised by R8 and ship a Baseline Profile
-(`androidApp/src/release/generated/baselineProfiles`), which compiles the code
-startup and the main screens run ahead of time. `baselineprofile/` generates it
-and benchmarks cold startup and scrolling with Macrobenchmark, on a Gradle
-Managed Device; both need a machine that can run an emulator, so CI runs them on
-demand (`.github/workflows/mobile-performance.yml`), checks the results against
-`baselineprofile/budgets.json`, and uploads the profile to commit. Locally:
+Release builds are shrunk and optimised by R8, and read a Baseline Profile from
+`androidApp/src/release/generated/baselineProfiles` when one is committed there;
+it compiles the code startup and the main screens run ahead of time. No profile
+is committed yet, so a release build ships without one until a generated one is.
+`baselineprofile/` generates it and benchmarks cold startup and browsing the
+tabs with Macrobenchmark, on a Gradle Managed Device (Pixel 6, API 34); both
+need a machine that can run an emulator, so CI runs them on demand
+(`.github/workflows/mobile-performance.yml`), checks the results against
+`baselineprofile/budgets.json` (`pnpm mobile:perf-budgets`), and uploads the
+profile as the `baseline-profile` artifact, to commit. Locally:
 
 ```sh
 ./gradlew :androidApp:generateBaselineProfile

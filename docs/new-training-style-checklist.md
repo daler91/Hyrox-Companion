@@ -29,6 +29,9 @@ Use this checklist whenever adding a new training methodology so implementation 
   falls back to `DEFAULT_TRAINING_STYLE_ID` and logs a
   `training_style_resolution_failed` health alert for an unknown id, so an unregistered
   style degrades quietly rather than throwing — register it or it will never run.
+- Add the style's core prompt fragment to `STYLE_CORE_FRAGMENTS` in the same file. The
+  shared `buildPromptSuffix()` falls back to the `balanced_default` fragment for an id
+  with no entry, so a missing one silently coaches the new style as Balanced.
 - Avoid scattered `if/else` conditionals in coach services.
 
 ## 3) Keep shared core separate from style logic
@@ -43,13 +46,31 @@ Use this checklist whenever adding a new training methodology so implementation 
 
 ## 4) Onboarding and settings integration
 
-- Add style selection in onboarding.
-- Ask only the follow-up questions required for the selected style.
-- Support style switching in settings with a confirmation message.
+- Add style selection in onboarding: the style `SelectItem` list in
+  `client/src/components/onboarding/GoalStep.tsx`.
+- Ask only the follow-up questions required for the selected style (the MAF questions are
+  gated in `GoalStep.tsx` and `client/src/hooks/useOnboardingWizard.ts`). If the style
+  needs inputs before it can be selected, reject an incomplete switch server-side the way
+  `validateMafTransition()` in `server/routes/preferences.ts` does for `maf_method`.
+- Support style switching in settings with a confirmation message. In
+  `client/src/components/settings/TrainingStyleSection.tsx` that means the `SelectItem`
+  list, `STYLE_LABELS`, `getStyleConstraintText()` and `buildRecalculationSummary()`.
+  Unknown ids render as "Balanced" in all of these, as they do in the coach panel's
+  `activeStyleLabel` ternary (`client/src/components/CoachPanel.tsx`), which also needs
+  the new label.
+- The Android app has its own hand-written style picker and labels: the `Chips` list in
+  `mobile/composeApp/src/commonMain/kotlin/com/fitai/coach/ui/settings/TrainingSettings.kt`,
+  the style constants, `styleLabel()`, `styleConstraint()` and the recalculation summary in
+  `ui/settings/TrainingSettingsModel.kt`, and `trainingStyleLabel()` in
+  `ui/coach/CoachModel.kt`. The generated Kotlin models need no change, because
+  `trainingStyleId` is a plain string in the API schema.
 - Persist on `users` (see [Database § users](database.md#users)):
-  - `training_style_id` — the active style, default `'balanced_default'`,
-  - `training_style_previous_id`,
-  - `training_style_changed_at`,
+  - `training_style_id` — the active style, default `'balanced_default'`. The API
+    validates it only as a string of at most 100 characters (`updateUserPreferencesSchema`)
+    and the column has no CHECK constraint, so a new id needs no enum, migration or
+    OpenAPI change — and an unregistered id is stored as-is and resolved to the default,
+  - `training_style_previous_id` and `training_style_changed_at` — sent by the client on a
+    switch (`client/src/pages/settings/usePreferencesForm.tsx`) and stored as given,
   - `training_style_recompute_now` — sent as `trainingStyleRecomputeNow: true` on the
     switch's `PATCH /api/v1/preferences`. The handler treats it as a request, not state:
     it queues an immediate refresh of the stored style-aware analyses (the features in
@@ -57,7 +78,11 @@ Use this checklist whenever adding a new training methodology so implementation 
     Coach Insights) and leaves the column `false`. A new style whose rules reach another
     stored analysis must add that feature to the list.
 - Append a row to the `user_training_style` history table (`style`, `effective_date`,
-  `source`) so the selection timeline survives later switches.
+  `source`) so the selection timeline survives later switches. No runtime code writes this
+  table yet: only migration `0035_maf_artifacts.sql` and
+  `script/backfill-user-training-style.ts` insert rows (`source = 'migration_default'`),
+  so the onboarding/settings write path has to be added. `source` is CHECK-constrained to
+  `'onboarding'`, `'settings'` or `'migration_default'`; `style` is free text.
 
 ## 5) Data model and migration readiness
 
@@ -68,7 +93,8 @@ Use this checklist whenever adding a new training methodology so implementation 
   - style-specific workout analyses.
 - Version records used in reasoning. The MAF tables are the shipped precedent: `maf_profile`, `maf_test_results` and `maf_workout_analysis` each carry an integer `version` column.
 - Define null/default behavior for users without explicit selection.
-- Include idempotent backfill for legacy users.
+- Include idempotent backfill for legacy users (`script/backfill-user-training-style.ts`
+  is the existing precedent).
 
 ## 6) Prompt/rules packaging
 
@@ -103,7 +129,8 @@ Use this checklist whenever adding a new training methodology so implementation 
   - phase assignment,
   - workout classification,
   - prescription constraints.
-- Contract tests for style interface conformance.
+- Contract tests for style interface conformance (the existing prompt-context and
+  style-divergence tests are in `server/services/training_styles/registry.test.ts`).
 - Regression tests to confirm intentional output differences by style.
 - Safety tests for escalation and prohibited language blocking.
 - Migration tests for legacy-user behavior.

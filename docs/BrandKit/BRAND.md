@@ -86,14 +86,17 @@ Stacked: mark above wordmark, gap = 0.5 × mark height.
 |---|---|---|---|
 | `--color-ink` | `#0A0A0A` | `0 0% 4%` | Primary text, secondary surface, logo strokes |
 | `--color-paper` | `#FFFFFF` | `0 0% 100%` | Primary surface |
-| `--color-lime` | `#C4F37E` | `96 85% 74%` | Brand primary — logo bg, key CTAs, hero accents |
+| `--color-lime` | `#B1F584` | `96 85% 74%` | Brand primary — logo bg, key CTAs, hero accents |
 | `--color-lime-ink` | `#365F1A` | `96 56% 24%` | Lime-tinted text on light surface |
-| `--color-lime-soft` | `#F0F9E4` | `96 60% 94%` | Lime wash — badges, subtle highlights |
+| `--color-lime-soft` | `#EEF9E7` | `96 60% 94%` | Lime wash — badges, subtle highlights |
 
 The app's stylesheet and the logo files use the **HSL** column for the lime tokens (`--accent` and
-the dark theme's `--primary` are `96 85% 74%`; `NexusMark` and the SVGs fill with `hsl(96 85% 74%)`).
-The two columns are not the same colour for two of them: `#C4F37E` converts to `84 83% 72%` and
-`#F0F9E4` to `86 64% 94%`, while `96 85% 74%` is `#B1F584` and `96 60% 94%` is `#EEF9E7`.
+the dark theme's `--primary` are `96 85% 74%`; `NexusMark` and the SVGs fill with `hsl(96 85% 74%)`),
+and the Android app uses the matching hex values. The Hex column is that same colour. Earlier
+versions of this table gave lime as `#C4F37E` and lime-soft as `#F0F9E4`, which are different
+colours (`84 83% 72%` and `86 64% 94%`) that neither the stylesheet nor the logos used. Two
+places still carry `#C4F37E`: the designed PDF beside this file, and the PWA manifest's
+`theme_color` in `vite.config.ts`.
 
 ### Neutrals (ink ramp)
 | Token | Hex | Use |
@@ -130,9 +133,9 @@ Reserved for data viz. Never use for UI chrome.
   /* brand */
   --color-ink: #0A0A0A;
   --color-paper: #FFFFFF;
-  --color-lime: #C4F37E;
+  --color-lime: #B1F584;
   --color-lime-ink: #365F1A;
-  --color-lime-soft: #F0F9E4;
+  --color-lime-soft: #EEF9E7;
 
   /* ink ramp */
   --color-ink-900: #0A0A0A;
@@ -191,7 +194,7 @@ export default {
       colors: {
         ink: { DEFAULT: '#0A0A0A', 900: '#0A0A0A', 700: '#3D3D3D', 500: '#858585', 300: '#D4D4D4', 200: '#EFEFEF', 100: '#F5F5F5', 50: '#FAFAFA' },
         paper: '#FFFFFF',
-        lime: { DEFAULT: '#C4F37E', ink: '#365F1A', soft: '#F0F9E4', brand: '#C4F37E' },
+        lime: { DEFAULT: '#B1F584', ink: '#365F1A', soft: '#EEF9E7', brand: '#B1F584' },
         data: { 1: '#1E90F0', 2: '#00B88A', 3: '#F5A623', 4: '#E84A5F', 5: '#8B5CF6' },
       }
     }
@@ -366,4 +369,4 @@ Height 40px, border `--color-border-strong`, radius `--radius-md`, padding-x 12p
 
 Paste this at the top of any UI task:
 
-> Use the fitai.coach brand system. Primary surface is `--color-paper`, text is `--color-ink-900`, brand accent is `--color-lime` (#C4F37E) used sparingly — hero CTAs, logo, single highlighted metrics. Neutrals come from the ink ramp. Typography: Space Grotesk for headings, Geist for UI/body, Geist Mono for all numbers and timestamps. Cards have a 12px radius, 1px `--color-border`, no default shadow. Buttons are 40px, 8px radius, no scale animation. Voice is lowercase, direct, second-person, no emoji. The Nexus mark (three connected nodes) is the only logo; never recolor individual nodes.
+> Use the fitai.coach brand system. Primary surface is `--color-paper`, text is `--color-ink-900`, brand accent is `--color-lime` (#B1F584) used sparingly — hero CTAs, logo, single highlighted metrics. Neutrals come from the ink ramp. Typography: Space Grotesk for headings, Geist for UI/body, Geist Mono for all numbers and timestamps. Cards have a 12px radius, 1px `--color-border`, no default shadow. Buttons are 40px, 8px radius, no scale animation. Voice is lowercase, direct, second-person, no emoji. The Nexus mark (three connected nodes) is the only logo; never recolor individual nodes.

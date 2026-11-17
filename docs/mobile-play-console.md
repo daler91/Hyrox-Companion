@@ -11,7 +11,7 @@ collecting something new, and keep it in step with the privacy policy
 | --- | --- |
 | Privacy policy | https://fitai.coach/privacy |
 | Account deletion (web link) | https://fitai.coach/delete-account (`client/src/pages/DeleteAccount.tsx`): public, no app needed, lists the steps, what is deleted and what is kept |
-| In-app deletion | Settings → Account → Delete my account (type DELETE), which calls `DELETE /api/v1/account` |
+| In-app deletion | Settings → Account → Danger zone → Delete my account (type DELETE), which calls `DELETE /api/v1/account` |
 | Category | Health & Fitness |
 
 ## Data safety
@@ -27,7 +27,7 @@ or used for advertising. All traffic is HTTPS (`usesCleartextTraffic="false"`).
 | Health and fitness: health info | Yes | Optional | App functionality, Personalisation | Body profile (weight, height, age, gender, resting/max HR, FTP), MAF answers incl. injury, illness and medication |
 | Health and fitness: fitness info | Yes | Required for the core app | App functionality, Analytics (in-app), Personalisation | Workouts, sets, RPE, heart rate, distance, calories; from logging, Strava, Garmin and Health Connect |
 | Photos | Yes | Optional | App functionality | Workout, meal, label and coach photos the athlete picks or takes; parsed by Google Gemini |
-| Audio | No | | | Dictation uses the phone's speech recogniser; the app receives only the text |
+| Audio | No | | | Dictation uses the phone's speech recogniser (`SpeechRecognizer`), which needs the `RECORD_AUDIO` permission, asked for on the first tap of Dictate; the app receives only the text |
 | Messages: other in-app messages | Yes | Optional (AI Coach is opt-in) | App functionality, Personalisation | AI Coach conversations |
 | App activity: other user-generated content | Yes | Optional | App functionality | Notes, food log, recipes, custom foods (publicly shared custom foods are visible to others, unlinked) |
 | Device or other IDs | Yes | Optional (push is opt-in) | App functionality | FCM registration token and Firebase installation ID, only once push is turned on |
@@ -43,6 +43,13 @@ The scan runs on the phone and only the digits reach fitai.coach. Google's own
 SDK may send device and usage diagnostics to Google. Check its current data
 disclosure (ML Kit's "Data disclosure" page) before submitting the form, and
 add what it lists to the rows above.
+
+Besides the Health Connect reads below, the app's own manifest
+(androidApp/src/main/AndroidManifest.xml) declares `INTERNET`,
+`ACCESS_NETWORK_STATE`, `POST_NOTIFICATIONS` (asked for when the athlete turns
+notifications on in Settings) and `RECORD_AUDIO` (dictation). It declares no
+camera, location, storage or contacts permission: a photo is taken by the
+phone's camera app, which writes it to a file the app hands it.
 
 ## Health Connect declaration
 
@@ -88,10 +95,12 @@ keep the account's data realistic (a plan, a few workouts).
 
 ## Target API level
 
-`targetSdk` is 36 (androidApp/build.gradle.kts), which Play requires of new
-apps and updates now. Android lint's OldTargetApi check is turned off with that
-note; moving to 37 is a separate change, tested against Android 17's behaviour
-changes, before Play's next yearly deadline.
+`targetSdk` is 36 (`android-targetSdk` in gradle/libs.versions.toml, which
+androidApp/build.gradle.kts reads), which Play requires of new apps and updates
+now. The app already compiles against 37 (`android-compileSdk`). Android lint's
+OldTargetApi check is turned off with that note in androidApp/build.gradle.kts;
+moving the target to 37 is a separate change, tested against Android 17's
+behaviour changes, before Play's next yearly deadline.
 
 ## Before production
 

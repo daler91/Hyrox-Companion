@@ -612,7 +612,12 @@ quick win **#11** (edit mode in `LogFoodDialog.tsx` matches an entry's grams bac
 named serving) and quick win **#18** (`workout-detail/exercise-table/nextTarget.ts` over
 `shared/progression.ts`). Quick win **#14** is half done: the added and removed set counts
 show on the Weekly Review's session rows, not beside the adherence badge on the workout
-itself. Still absent from the tree: a session timer (#1), `activeConstraints` (#2), a
+itself. Recommendation **#2** has largely shipped under other names: declared absences reach
+the coach as `TrainingContext.absences` (`server/services/ai/index.ts`, rendered by
+`server/prompts/athleteConstraints.ts`) and plan generation (`buildGenerationAbsences`), and a
+day inside one is held out of missed by both the sweep (`server/storage/absenceGuard.ts`) and
+the timeline status (`shared/absence.ts`); its sketch items (3) to (6) were not re-checked.
+Still absent from the tree: a session timer (#1), a
 station report card (#3), any route that edits `raceDate` (#4), a readiness check-in (#7),
 quick wins **#7, #8, #9, #13, #16, #17, #19, #20**, and bigger bets **A, B, D, E, F**.
 Recommendations #6 and #9, quick win #15 and bigger bet C were not re-checked. The product

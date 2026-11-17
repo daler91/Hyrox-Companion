@@ -15,12 +15,12 @@ Three separate 60× errors shipped behind a single column, `exercise_sets.time`:
 
 | Where                                | What it believed | Evidence                                                    |
 | ------------------------------------ | ---------------- | ----------------------------------------------------------- |
-| The athlete-facing set editor         | minutes          | `fieldMeta.ts` — label `"Time (min)"`, hint `"Duration in minutes"`, step 1 |
-| `plannedSessionEstimate.ts:265`       | minutes          | reads it into a variable named `explicitMin`                 |
+| The athlete-facing set editor         | minutes          | `fieldMeta.ts` — label `"Time (min)"`                        |
+| `shared/plannedSessionEstimate.ts` (`estimateSetMinutes`) | minutes | reads it into a variable named `explicitMin`     |
 | `workoutStructureSummary.ts`          | minutes          | rendered `` `${set.time}min` ``                              |
-| `exerciseSetFormatter.ts:101`         | minutes          | renders `` `${n} min` `` into the coaching prompt            |
-| `racePrediction/featureBuilder.ts:283` | minutes          | multiplies by 60 to reach seconds                            |
-| The workout **structure** editor      | **seconds**      | field labelled `"Sec"`, `aria-label="duration in seconds"`   |
+| `exerciseSetFormatter.ts` (`formatSetMeasurements`) | minutes | renders `` `${n} min` `` into the coaching prompt      |
+| `racePrediction/featureBuilder.ts` (`projectedSplitSeconds`) | minutes | multiplies by 60 to reach seconds             |
+| The workout **structure** editor      | **seconds**      | field with placeholder `"Sec"`, `aria-label` ending `"duration in seconds"` |
 | `shared/schema/types/workouts.ts`     | **seconds**      | bound `max(86_400)` — seconds in a day                       |
 | `shared/openapi.ts`                   | **seconds**      | `{ distance: 1000, time: 210 }` — a 3:30 1 km row            |
 
@@ -58,14 +58,17 @@ In order of preference:
 | `workout_logs.duration`         | minutes                    | yes        |
 | `workout_logs.distanceMeters`   | metres                     | yes        |
 | `workout_logs.timeOfDayMin`     | minutes from local midnight | yes       |
-| `maf_test_results.durationSeconds` | seconds                 | yes        |
+| `maf_test_results.metrics` → `durationSeconds` (JSONB, `MafTestMetrics`) | seconds | yes |
 | structure block `durationSeconds`, `workSeconds`, `restSeconds` | seconds | yes |
 | `exercise_sets.weight`          | the athlete's unit at write time (kg **or** lbs) | **no** |
 | `exercise_sets.distance`        | the athlete's stored unit (m **or** ft) | **no** |
 
 The last two rows are the important ones. They have no canonical unit, so any code
 touching them must carry the athlete's preference alongside the number. `getStoredDistanceUnit`
-is the accessor for distance; `weightUnit` / `weightLabel` for weight.
+is the accessor for distance; `weightUnit` / `weightLabel` for weight. Since migration
+`0088_glamorous_zuras.sql` each row also records the unit it was written in, in
+`exercise_sets.weight_unit` and `exercise_sets.distance_unit`, which cover the planned
+counterparts (`plannedWeight`, `plannedDistance`) too — see [L4](#l4--decided-and-closed).
 
 ### 3. Seconds may not be assigned into a minutes field, or vice versa
 
@@ -73,8 +76,8 @@ Convert at the boundary with `secondsToMinutes` / `minutesToSeconds` from `share
 The branded types make the assignment a compile error:
 
 ```ts
-const metrics: MafTestMetrics = { durationSeconds: workout.duration };
-//                                                 ^ Minutes is not assignable to Seconds
+const durationSeconds: Seconds = minutes(workout.duration);
+//    ^ Minutes is not assignable to Seconds
 ```
 
 **What the brands do not catch:** a branded number is still a `number` to the arithmetic
@@ -82,15 +85,20 @@ operators, so `someMinutes + someSeconds` compiles. That gap is covered by rule 
 identifier holding a duration ends in `Seconds` or `Minutes`, so mixed arithmetic is
 visible on the line. This is a real limitation and is why the naming rule comes first.
 
+A brand also only guards a slot that is typed with it. The Drizzle row types and
+`MafTestMetrics.durationSeconds` (`shared/maf.ts`) are plain `number`, so a stored value is
+tagged where it is read (`minutes(workout.duration)`) and unwrapped with `unitless` where
+it is written, as `server/services/mafTestService.ts` does for the MAF duration.
+
 ### 4. No hardcoded unit suffix outside a formatter
 
 `"kg"`, `"lbs"`, `"m"`, `"ft"`, `"min"` must not be interpolated next to a stored value.
 Route through `formatWeight` / `formatDistance` / `formatMinutes`, or take the athlete's
 preference as a **required** parameter.
 
-Required, not defaulted. `serializeWorkoutStructure` now demands the distance preference
-and `computeProgressionFlags` the weight unit, because a default is what produced H16 and
-M8 — the code did not know the unit, guessed metric, and rendered the guess as fact.
+Required, not defaulted. `serializeWorkoutStructure` and `computeProgressionFlags` now each
+demand both the weight unit and the distance preference, because a default is what produced
+H16 and M8 — the code did not know the unit, guessed metric, and rendered the guess as fact.
 
 ## Consequences
 
@@ -111,6 +119,14 @@ M8 — the code did not know the unit, guessed metric, and rendered the guess as
 ## L4 — decided and closed
 
 **Whether to canonicalise stored weights and distances** (audit L4) is no longer open.
+The values stay in the athlete's own unit, and every `exercise_sets` row written since
+migration `0088_glamorous_zuras.sql` records that unit in `weight_unit` (`"kg"` / `"lbs"`)
+and `distance_unit` (`"m"` / `"ft"`). `stampForPreferences` writes the stamp;
+`storedWeightToDisplay` / `storedDistanceToDisplay` (`shared/unitConversion.ts`) read a
+stamped value and convert it when the athlete's preference has since changed. Rows written
+before the migration carry `NULL` in both columns, and an unstamped row is read as the
+athlete's current preference.
+
 `server/services/unitSwitchDetection.ts` detects, per athlete, whether their legacy
 `exercise_sets` rows show a unit switch; `script/backfill-legacy-unit-rows.ts` stamps only
 the athletes `server/services/legacyUnitAudit.ts` clears as safe, re-checking the detector

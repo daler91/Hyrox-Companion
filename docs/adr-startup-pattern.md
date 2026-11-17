@@ -32,13 +32,13 @@ the per-entry rationale.
 3. Health endpoint — registered **before CORS** so platform probes, which send no `Origin`, always reach it
 4. Digital Asset Links route (`/.well-known/assetlinks.json`) — also ahead of CORS, auth and the static fallback, which would otherwise answer it with `index.html`
 5. CORS
-6. CSP nonce middleware — **must** precede helmet, which reads the nonce for `script-src`
+6. CSP nonce middleware (production only; development uses `'unsafe-inline'`) — **must** precede helmet, which reads the nonce for `script-src`
 7. `helmet` (CSP, HSTS, referrer policy)
 8. `Permissions-Policy`
 9. Body parsers — the default 100 kb `express.json`, which skips the few large-body paths (their parsers run inside the protected route stack, after auth and the rate limiter), then `urlencoded`
 10. `cookie-parser`
 11. HTTP request logger (`pino-http`)
-12. Request context enrichment (request id / user context)
+12. Request context enrichment (request id only; Clerk has not run yet at this point, so no user id is bound)
 13. Auth middleware mounting (Clerk) — inside `registerRoutes()`
 14. Native app version gate — inside `registerRoutes()`, ahead of CSRF so an outdated build gets its update prompt rather than an auth or CSRF error
 15. CSRF token issuance, then the CSRF protection mount — inside `registerRoutes()`. The Strava webhook and email-unsubscribe routes mount between the two, because their callers carry no token
@@ -49,6 +49,20 @@ the per-entry rationale.
 
 Items 1–12 are wired directly in `server/index.ts`; 13–16 inside `registerRoutes()`
 (`server/routes.ts`); 17–19 after it returns.
+
+Before item 1, `server/index.ts` runs the dev-auth-bypass guard (exits in production),
+`configureObservability()` and the startup config warnings; importing `server/env.ts` has
+already validated the environment and thrown on any failure. After item 12 the HTTP server
+starts listening, then the startup tasks run in named phases (`ssrf_guard` when
+`AI_TEXT_BASE_URL` is set, `db_maintenance`, `queue`, `cron`, `routes`, `ready`); items
+13–19 are mounted during the `routes` phase. A failure in any phase is logged as fatal and
+sent to Sentry, but the process keeps running: the health endpoints answer `503` with the
+failed phase instead of becoming ready. Shutdown (`registerShutdownHandlers()`,
+`server/bootstrap/lifecycle.ts`) runs on `SIGTERM`/`SIGINT`: stop cron, drain SSE streams,
+close the HTTP server, stop the queue, end both database pools, flush Sentry, with a 60 s
+forced exit. `registerProcessErrorHandlers()` (`server/bootstrap/observability.ts`) exits
+with code 1 after an uncaught exception or unhandled rejection, once Sentry has flushed
+(bounded at 2 s).
 
 ## Migration constraints
 

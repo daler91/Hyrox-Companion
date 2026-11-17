@@ -8,14 +8,16 @@ This is the curated companion to [`.env.example`](../.env.example). `.env.exampl
 
 ## TL;DR — minimum to boot
 
-You only need two variables to start the server locally:
+Only two variables are required by the schema in development:
 
 | Variable | Value |
 |---|---|
 | `DATABASE_URL` | Any reachable Postgres connection string (with `pgvector` installed). |
-| `ENCRYPTION_KEY` | 32+ char hex string. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `ENCRYPTION_KEY` | At least 32 characters. A 64-char hex string is used as the AES key directly; anything else is SHA-256 hashed into one. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 
-Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`) and, when Strava is configured, `STRAVA_STATE_SECRET`. In development/test, omitting it makes the CSRF middleware generate a random per-process fallback. Everything else is optional and gates a specific feature (Clerk auth, AI providers, Strava sync, Resend email, Web Push, Sentry, etc.).
+With only those two, the server listens but never becomes ready: route registration throws in `setupAuth()` (`server/clerkAuth.ts`) unless both Clerk keys are set or `ALLOW_DEV_AUTH_BYPASS=true` (honoured only when `NODE_ENV` is `development` or `test`). For a local boot without Clerk, add `ALLOW_DEV_AUTH_BYPASS=true`.
+
+Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`), both Clerk keys (the dev bypass is blocked there) and, when Strava is configured, `STRAVA_STATE_SECRET`. In development/test, omitting `CSRF_SECRET` makes the CSRF middleware generate a random per-process fallback, and an unset `STRAVA_STATE_SECRET` falls back the same way. Everything else is optional and gates a specific feature (AI providers, Strava sync, Resend email, Web Push, Sentry, etc.).
 
 ---
 
@@ -41,7 +43,7 @@ Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`)
 |---|---|---|---|
 | `DATABASE_URL` | **Required** | — | Server (`server/db.ts`), pg-boss queue. |
 | `VECTOR_DATABASE_URL` | Optional | falls back to `DATABASE_URL` | RAG ingest + retrieval and semantic food search embeddings (`server/vectorDb.ts`; tables created on boot by `server/maintenance.ts`). |
-| `ENCRYPTION_KEY` | **Required** | — | AES-256-GCM for Strava + Garmin tokens at rest (`server/crypto.ts`). |
+| `ENCRYPTION_KEY` | **Required** | — | AES-256-GCM for Strava + Garmin tokens at rest (`server/crypto.ts`). Also derives the HMAC key that signs email unsubscribe links (`server/emailUnsubscribeToken.ts`, which signs with `ENCRYPTION_KEY_V2` when set and verifies with either). |
 | `ENCRYPTION_KEY_V2` | Optional | — | Rotation key for `ENCRYPTION_KEY` (W6). When set, new ciphertext is tagged `v2` and encrypted with this key while `ENCRYPTION_KEY` keeps decrypting existing `v1` data (`server/crypto.ts`). |
 | `ENCRYPTION_REENCRYPT_ON_BOOT` | Optional | `"false"` | `"true"` (and `ENCRYPTION_KEY_V2` set) re-encrypts every stored Strava/Garmin credential to the active key version on boot (`server/services/keyRotation.ts`, invoked from `server/maintenance.ts`). |
 | `CSRF_SECRET` | Required in `production` | per-process random secret in dev/test | `csrf-csrf` middleware (`server/middleware/csrf.ts`). |
@@ -55,11 +57,16 @@ Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`)
 ### Safety invariants (enforced at startup in `server/env.ts`)
 
 - **Key separation**: `CSRF_SECRET` must differ from `ENCRYPTION_KEY` in every environment. If they match, the server refuses to boot.
-- **Weak-key rejection**: A small set of obvious placeholder keys (all-zeros, `changeme_...`, the CI test key, etc.) is explicitly rejected in production via the `WEAK_ENCRYPTION_KEYS` list in `server/env.ts:15-21`. The same check applies to `ENCRYPTION_KEY_V2`.
+- **Required in production**: `CSRF_SECRET` must be set when `NODE_ENV=production`, and so must `STRAVA_STATE_SECRET` whenever `STRAVA_CLIENT_ID` is set. Either missing is fatal.
+- **Weak-key rejection**: A small set of obvious placeholder keys (all-zeros, `changeme_...`, the CI test key, etc.) is explicitly rejected in production via the `WEAK_ENCRYPTION_KEYS` list in `server/env.ts:17-23`. The same check applies to `ENCRYPTION_KEY_V2`.
 - **Rotation-key separation**: when `ENCRYPTION_KEY_V2` is set it must differ from both `ENCRYPTION_KEY` (an identical rotation key is a no-op that tags ciphertext `v2` with no new material) and `CSRF_SECRET`. If it matches either, the server refuses to boot.
-- **Dev bypass lockout**: `ALLOW_DEV_AUTH_BYPASS=true` combined with `NODE_ENV=production` is a hard fatal — the server refuses to boot.
+- **Dev bypass lockout**: `ALLOW_DEV_AUTH_BYPASS=true` combined with `NODE_ENV=production` is a hard fatal — the server refuses to boot. `server/index.ts` repeats the check and exits, and `server/clerkAuth.ts` ignores the flag in production as a third guard.
+- **Paired variables**: `ANDROID_APP_PACKAGE` / `ANDROID_APP_CERT_SHA256` and `EDAMAM_APP_ID` / `EDAMAM_APP_KEY` must each be set together or not at all; a half-configured pair is fatal.
+- **SSRF guard on `AI_TEXT_BASE_URL`**: a URL whose host is a loopback alias such as `localhost`, or a loopback, private or link-local IP literal, fails validation. A hostname is resolved at startup (`assertResolvedHostIsPublic()` in `server/index.ts`); if any address is private the startup tasks abort and the server stays not-ready (health `503`). DNS errors are ignored.
+- **Format checks**: `FCM_SERVICE_ACCOUNT_JSON` must parse as a service account key with `project_id`, `client_email` and `private_key`; the URL, email, enum, regex and numeric-range rules in the tables on this page also fail startup when violated.
 - **Live-key / env mismatch**: a `CLERK_PUBLISHABLE_KEY` starting with `pk_live_` while `NODE_ENV` is not `production` is a hard fatal — it catches a deploy that provisioned live Clerk keys but forgot to set `NODE_ENV=production`.
 - **TRUST_PROXY is a three-valued enum**: `"0"` (off — use when Express is exposed directly, rare), `"1"` (trust exactly one hop, correct for Railway and most PaaS), or `"loopback"` (only local reverse proxies). Hardcoding `1` into other deployments where the number of trusted hops changes would let attacker-controlled `X-Forwarded-For` headers drive `req.ip`.
+- **Startup warnings (not fatal)**: in production, `server/index.ts` warns when `CRON_SECRET`, `INTERNAL_ANALYTICS_SECRET`, or `AI_GLOBAL_DAILY_LIMIT_CENTS` (unless `AI_FEATURES_ENABLED=false`) is unset, and `server/bootstrap/observability.ts` warns when `SENTRY_DSN` is unset. In every environment the server warns when `RESEND_API_KEY` is unset, and when `CSRF_SECRET` or `STRAVA_STATE_SECRET` is unset and a per-process random secret is used instead.
 
 ---
 
@@ -75,20 +82,20 @@ Leave `ENCRYPTION_REENCRYPT_ON_BOOT` at its `"false"` default the rest of the ti
 
 ### Runtime topology
 
-`APP_INSTANCE_COUNT` defaults to `1` and records the declared app replica count. Production values above `1` are supported after applying migrations: route rate limits use PostgreSQL-backed buckets, the Clerk seen-cache and AI/RAG hot caches use `server_runtime_cache`, and cron bodies use PostgreSQL advisory locks so duplicate schedulers skip work.
+`APP_INSTANCE_COUNT` defaults to `1` and records the declared app replica count. It is validated (a positive integer) but no code reads it: the shared-state mechanisms below are always on, whatever its value. Running more than one replica is supported after applying migrations: route rate limits use PostgreSQL-backed buckets, the Clerk seen-cache and AI/RAG hot caches use `server_runtime_cache`, and cron bodies use PostgreSQL advisory locks so duplicate schedulers skip work.
 
 ---
 
 ## Authentication (Clerk)
 
-Clerk is optional. When unset, you can run with `ALLOW_DEV_AUTH_BYPASS=true` for local development.
+Clerk is optional in development and test: when the keys are unset, you can run with `ALLOW_DEV_AUTH_BYPASS=true`. Clerk is mounted only when both server keys are set; with neither the keys nor the bypass, `setupAuth()` (`server/clerkAuth.ts`) throws during route registration and the server stays not-ready, so production needs both keys.
 
 | Variable | Req? | Default | Who reads it |
 |---|---|---|---|
 | `CLERK_PUBLISHABLE_KEY` | Optional | — | Server (`@clerk/express`). Must be set if Clerk is enabled at all. |
-| `CLERK_SECRET_KEY` | Optional | — | Server. Must be set if Clerk is enabled. |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Optional | — | **Client** (`client/src/App.tsx`). Browser-visible — do not put the secret key here. |
-| `ALLOW_DEV_AUTH_BYPASS` | Optional | — | Skip auth in dev. **Hard-blocked in production.** |
+| `CLERK_SECRET_KEY` | Optional | — | Server. Must be set if Clerk is enabled. Also used by account erasure to delete the Clerk user (`server/services/accountErasureService.ts`). |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Optional | — | **Client** (`client/src/App.tsx`, `client/src/lib/authBypass.ts`). A dev build without it skips Clerk entirely. Browser-visible — do not put the secret key here. |
+| `ALLOW_DEV_AUTH_BYPASS` | Optional | — | Skip auth in dev: only the exact value `"true"` enables it, and only when `NODE_ENV` is `development` or `test`. Requests then run as `dev-user`. When Clerk keys are also set, a request without a valid Clerk session still falls back to `dev-user` unless it sends `x-test-no-bypass: true`. **Hard-blocked in production.** |
 
 ---
 
@@ -98,7 +105,7 @@ Text AI defaults to Gemini for backwards compatibility. Operators can route chat
 
 | Variable | Req? | Default | Used by |
 |---|---|---|---|
-| `AI_FEATURES_ENABLED` | Optional | `true` | Runtime kill switch for **all** AI routes (chat, parsing, plan generation, RAG, coach suggestions). Set to `false` to disable AI provider traffic without redeploying or rotating keys. Enforced in `server/middleware/aibudget.ts`. |
+| `AI_FEATURES_ENABLED` | Optional | `true` | Runtime kill switch for **all** AI routes (chat, parsing, plan generation, RAG, coach suggestions). Set to `false` to disable AI provider traffic without redeploying or rotating keys. Enforced in `server/middleware/aibudget.ts` (`503 AI_FEATURES_DISABLED`), and checked again by the background AI services and the provider clients. |
 | `AI_GLOBAL_DAILY_LIMIT_CENTS` | Optional | — | Application-wide AI spend ceiling in cents over a rolling 24h window, across all users. The per-user cap ($2/day, `DAILY_LIMIT_CENTS`) bounds one athlete but not the bill — total spend otherwise scales linearly with sign-ups. When the ceiling is reached every AI route returns `503 AI_GLOBAL_BUDGET_EXCEEDED` until spend ages out of the window. Unset disables the check (per-user cap only) and logs a startup warning in production. Size it from (active athletes x realistic daily spend), not from the per-user cap x user count. |
 | `AI_TEXT_PROVIDER` | Optional | `gemini` | Text provider: `gemini`, `anthropic`, or `openai-compatible`. |
 | `AI_TEXT_MODEL` | Optional | - | Text model for both roles (fast and reasoning) wherever no role-specific override is set. Applies to every provider, so on Gemini it also overrides `GEMINI_MODEL` / `GEMINI_SUGGESTIONS_MODEL`. Anthropic and OpenAI-compatible providers have no built-in default model: without this or both role-specific overrides, model resolution throws (`resolveTextAiModel()` in `server/ai/providers/config.ts`). |
@@ -106,11 +113,11 @@ Text AI defaults to Gemini for backwards compatibility. Operators can route chat
 | `AI_TEXT_REASONING_MODEL` | Optional | `AI_TEXT_MODEL` | Coaching/planning model override. Falls back to `AI_TEXT_MODEL`, then (Gemini only) `GEMINI_SUGGESTIONS_MODEL`. |
 | `AI_TEXT_REASONING_EFFORT` | Optional | `high` | Reasoning effort hint: `none`, `low`, `medium`, `high`. Applied only where supported. |
 | `AI_CHAT_REASONING_EFFORT` | Optional | lower of `AI_TEXT_REASONING_EFFORT` and `medium` | Reasoning effort for coach chat replies only (`none`, `low`, `medium`, `high`). Unset, chat never thinks harder than `medium`, nor harder than the global effort; set it to `high` to match plan generation. |
-| `AI_TEXT_API_KEY` | Optional | - | Generic key fallback for Anthropic or OpenAI-compatible providers. |
+| `AI_TEXT_API_KEY` | Optional | - | Generic key for Anthropic or OpenAI-compatible providers. When set it takes precedence over `ANTHROPIC_API_KEY` and the profile-specific keys (`getTextAiConfig()` in `server/ai/providers/config.ts`). |
 | `AI_TEXT_OPENAI_COMPATIBLE_PROFILE` | Optional | `openai` | OpenAI-compatible profile: `openai`, `xai`, `groq`, `together`, `openrouter`, `deepseek`, or `custom`. |
-| `AI_TEXT_BASE_URL` | Optional | profile default | Base URL override for OpenAI-compatible providers. Required for `custom`. |
-| `OPENAI_API_KEY` / `XAI_API_KEY` / `GROQ_API_KEY` / `TOGETHER_API_KEY` / `OPENROUTER_API_KEY` / `DEEPSEEK_API_KEY` | Optional | - | Profile-specific OpenAI-compatible API keys. |
-| `ANTHROPIC_API_KEY` | Optional | - | Anthropic Messages API key. |
+| `AI_TEXT_BASE_URL` | Optional | profile default | Base URL override for OpenAI-compatible providers. Required for `custom`. Must not point at a loopback, private or link-local address (see [Safety invariants](#safety-invariants-enforced-at-startup-in-serverenvts)). |
+| `OPENAI_API_KEY` / `XAI_API_KEY` / `GROQ_API_KEY` / `TOGETHER_API_KEY` / `OPENROUTER_API_KEY` / `DEEPSEEK_API_KEY` | Optional | - | Profile-specific OpenAI-compatible API keys, used when `AI_TEXT_API_KEY` is unset. |
+| `ANTHROPIC_API_KEY` | Optional | - | Anthropic Messages API key, used when `AI_TEXT_API_KEY` is unset. |
 | `GEMINI_API_KEY` | Optional | - | Gemini text provider, RAG embeddings, semantic food search embeddings (`gemini-embedding-001`), and image parsing (photo-to-workout, nutrition meal photos and label scans). |
 | `GEMINI_MODEL` | Optional | `gemini-2.5-flash-lite` | Legacy Gemini fast text model. |
 | `GEMINI_SUGGESTIONS_MODEL` | Optional | `gemini-3.1-pro-preview` | Legacy Gemini reasoning text model. |
@@ -132,7 +139,7 @@ Create an app at [Strava Developers](https://www.strava.com/settings/api).
 | `STRAVA_CLIENT_ID` | Optional | — | OAuth client id. Required for the integration. |
 | `STRAVA_CLIENT_SECRET` | Optional | — | OAuth client secret. |
 | `STRAVA_STATE_SECRET` | **Required in `production`** when `STRAVA_CLIENT_ID` is set | auto-generated per process in dev/test | 32+ char secret used to sign OAuth `state`. The per-process fallback is fine for a single dev process but breaks in production: each replica signs with a different key, so a callback routed to another instance fails verification. The server refuses to boot without it rather than leaving an intermittent, load-balancer-dependent OAuth failure. |
-| `APP_URL` | Optional | `http://localhost:5000` | Base URL for the OAuth redirect (`${APP_URL}/api/v1/strava/callback`) and the webhook callback (`${APP_URL}/api/v1/strava/webhook`). The push subscription is only registered when this is a public `https://` origin. |
+| `APP_URL` | Optional | `http://localhost:5000` for the Strava redirects | Base URL for the OAuth redirect (`${APP_URL}/api/v1/strava/callback`) and the webhook callback (`${APP_URL}/api/v1/strava/webhook`). The push subscription is only registered when this is a public `https://` origin. Also added to the CORS allow-list (`server/index.ts`) and used as the base of links in emails and the Open Food Facts `User-Agent`, both of which fall back to `https://fitai.coach` when it is unset. |
 | `STRAVA_AUTO_SYNC_ENABLED` | Optional | `true` | Master switch for automatic sync (webhook push, polling fallback, post-connect import) and for the session-grading stream fetches (the `session-streams` job and its backfill cron). `false` leaves only the manual Sync button, and grades fall back to whole-run averages. |
 | `STRAVA_AUTO_SYNC_INTERVAL_MINUTES` | Optional | `60` | Polling fallback: how stale a connection's cursor may get before it is re-synced (minimum 5). Each connected athlete costs about `1440 / interval` Strava reads a day out of the app's 1,000/day budget; raise it as the athlete base grows. |
 | `STRAVA_WEBHOOKS_ENABLED` | Optional | `true` | `false` stops the server from registering (and acting on) the Strava push subscription; polling still runs. |
@@ -142,15 +149,15 @@ Create an app at [Strava Developers](https://www.strava.com/settings/api).
 
 | Variable | Req? | Default | Notes |
 |---|---|---|---|
-| `RESEND_API_KEY` | Optional | — | Without it, the cron still runs but the send step is a no-op (`sendEmail()` logs and returns `false`). |
-| `RESEND_FROM_EMAIL` | Optional | `fitai.coach <Timmy@fitai.coach>` | Sender address in `Display Name <address@example.com>` format. |
+| `RESEND_API_KEY` | Optional | — | Without it, the cron still runs but the send step is a no-op (`sendEmail()` logs an error and returns `false`), and startup logs a warning. |
+| `RESEND_FROM_EMAIL` | Optional | `fitai.coach <Timmy@fitai.coach>` | Sender address in `Display Name <address@example.com>` format. Not validated at startup. |
 
 ### Cron
 
 | Variable | Req? | Default | Notes |
 |---|---|---|---|
-| `CRON_SECRET` | Optional | — | `GET /api/v1/cron/emails` requires `x-cron-secret` to match (timing-safe compare). Used by external cron (Railway / GitHub Actions) to hit the endpoint instead of relying on the in-process node-cron. Call it **hourly**: the scan matches each athlete's emails against their local send hours. |
-| `INTERNAL_ANALYTICS_SECRET` | Optional | — | `GET /api/v1/analytics/internal/structured-exercise-health` requires `x-internal-analytics-secret` to match. Server-only; do not expose to Vite. |
+| `CRON_SECRET` | Optional | — | `GET /api/v1/cron/emails` requires `x-cron-secret` to match (timing-safe compare); unset, every call gets `401`. Used by external cron (Railway / GitHub Actions) to hit the endpoint instead of relying on the in-process node-cron. Call it **hourly**: the scan matches each athlete's emails against their local send hours. |
+| `INTERNAL_ANALYTICS_SECRET` | Optional | — | `GET /api/v1/analytics/internal/structured-exercise-health` requires `x-internal-analytics-secret` to match, in addition to a signed-in session; unset, every call gets `401`. Server-only; do not expose to Vite. |
 
 ### Garmin Connect
 
@@ -166,7 +173,7 @@ Edamam is the active branded/packaged + barcode source when configured; USDA and
 
 | Variable | Req? | Default | Notes |
 |---|---|---|---|
-| `USDA_API_KEY` | Optional | — | USDA FoodData Central live food search ([free key](https://fdc.nal.usda.gov/api-key-signup)). Absent ⇒ graceful degradation to cached-only results. |
+| `USDA_API_KEY` | Optional | — | USDA FoodData Central live food search and food detail ([free key](https://fdc.nal.usda.gov/api-key-signup)). Absent ⇒ USDA is skipped without a network call; search continues with the local cache, Edamam (when configured) and Open Food Facts. |
 | `EDAMAM_APP_ID` / `EDAMAM_APP_KEY` | Optional | — | Active branded/barcode source (nutrients returned per-100g). **Both or neither** — a half-configuration is a fatal boot error. |
 
 Open Food Facts needs no key (their policy requires a custom `User-Agent`) and keeps search live even when no keyed provider is configured.
@@ -175,7 +182,7 @@ Open Food Facts needs no key (their policy requires a custom `User-Agent`) and k
 
 ## Web Push (VAPID)
 
-Push is enabled only when all three are set (`isPushEnabled()` in `server/pushNotifications.ts`). When any is missing, `GET /api/v1/push/vapid-key` returns `404 PUSH_NOT_CONFIGURED`, so switching on the Settings toggle fails without subscribing, and every server-side send (`sendPushToUser()`) is a no-op. The other `/api/v1/push/*` routes do not check the configuration, and the Settings toggle is replaced by a "not supported" notice only when the browser itself lacks push support.
+Web push is enabled only when all three VAPID variables are set (`isWebPushEnabled()` in `server/pushNotifications.ts`). When any is missing, `GET /api/v1/push/vapid-key` returns `404 PUSH_NOT_CONFIGURED`, so switching on the Settings toggle fails without subscribing, and server-side sends (`sendPushToUser()`) skip browser subscriptions; native app pushes still go out when `FCM_SERVICE_ACCOUNT_JSON` is set. The other web push routes (`subscribe`, `unsubscribe`, `test`) do not check the configuration, and the Settings toggle is replaced by a "not supported" notice only when the browser itself lacks push support.
 
 ```sh
 npx web-push generate-vapid-keys
@@ -192,12 +199,12 @@ npx web-push generate-vapid-keys
 
 ## Error Tracking (Sentry)
 
-Sentry is fully optional. A missing DSN disables init without affecting anything else.
+Sentry is fully optional. A missing DSN disables init without affecting anything else; on the server it is logged at `warn` in production and `info` otherwise.
 
 | Variable | Req? | Default | Who reads it |
 |---|---|---|---|
 | `SENTRY_DSN` | Optional | — | Server (`@sentry/node` via `configureObservability()` in `server/bootstrap/observability.ts`). |
-| `VITE_SENTRY_DSN` | Optional | — | Client (`@sentry/react` in `client/src/main.tsx`). |
+| `VITE_SENTRY_DSN` | Optional | — | Client (`@sentry/react`, initialised in `client/src/lib/errorReporting.ts` from `client/src/main.tsx`, deferred until the privacy notice is acknowledged). |
 | `SENTRY_AUTH_TOKEN` | Optional (build-time) | — | Build-time only. Read by `@sentry/vite-plugin` in `vite.config.ts` and `@sentry/esbuild-plugin` in `script/build.ts`. When unset, both plugins are explicitly disabled. |
 | `SENTRY_ORG` | Optional (build-time) | — | Sentry organization slug. Same consumers as `SENTRY_AUTH_TOKEN`. |
 | `SENTRY_PROJECT_CLIENT` | Optional (build-time) | — | Sentry project slug for the browser bundle. Read by `@sentry/vite-plugin`. |
@@ -205,7 +212,7 @@ Sentry is fully optional. A missing DSN disables init without affecting anything
 
 The Sentry `environment` tag is automatically derived from `NODE_ENV` on the server and from Vite's `MODE` on the client — there is no separate env var for it.
 
-The `release` tag is set explicitly in both inits and resolves in this order: (1) `process.env.SENTRY_RELEASE` (server) or `import.meta.env.SENTRY_RELEASE` (client) — injected at build time by the Sentry plugin when the build-time vars above are all set; (2) `VITE_SENTRY_RELEASE` (client only, manual override); (3) `fitai-coach@${npm_package_version}` (server only). See [Integrations → Sentry Sourcemap Upload](./integrations.md#sourcemap-upload-and-release-tagging-build-time) for the full flow and Railway setup notes.
+The `release` tag is set explicitly in both inits. On the server it is `process.env.SENTRY_RELEASE`, else `fitai-coach@${npm_package_version}` (`server/bootstrap/observability.ts`). On the client it is `VITE_SENTRY_RELEASE` (manual override) if set, else `import.meta.env.SENTRY_RELEASE` (`client/src/lib/errorReporting.ts`). `SENTRY_RELEASE` is meant to be injected at build time by the Sentry plugin when the build-time vars above are set. See [Integrations → Sentry Sourcemap Upload](./integrations.md#sourcemap-upload-and-release-tagging-build-time) for the full flow and Railway setup notes.
 
 ---
 
@@ -216,7 +223,7 @@ The `release` tag is set explicitly in both inits and resolves in this order: (1
 | `NODE_ENV` | `development` | `development` \| `production` \| `test`. |
 | `PORT` | `5000` | HTTP listener port. |
 | `LOG_LEVEL` | `info` | Pino level: `trace` \| `debug` \| `info` \| `warn` \| `error` \| `fatal` \| `silent`. Any other value fails startup validation. |
-| `APP_INSTANCE_COUNT` | `1` | Declared app replica count. Values above `1` require the shared runtime-state migration and use Postgres-backed rate limits/cache entries. |
+| `APP_INSTANCE_COUNT` | `1` | Declared app replica count (positive integer). Validated only; no code reads it. Postgres-backed rate limits and cache entries are used at any value, so running more than one replica needs the shared runtime-state migration regardless. |
 | `ALLOW_DEV_AUTH_BYPASS` | — | Dev-only. See [Authentication (Clerk)](#authentication-clerk). |
 
 ---
@@ -227,10 +234,10 @@ Rollout toggles, all parsed as the literal strings `"true"` / `"false"` in `serv
 
 | Variable | Default | Notes |
 |---|---|---|
-| `EMOM_BUILDER_ENABLED` | `false` | Server-side gate for the EMOM workout builder. Keep aligned with the client `VITE_EMOM_BUILDER_ENABLED` flag for each deployment tier. |
-| `STRUCTURED_BLOCKS_ENABLED` | `true` | Enables the structured-blocks workout write path (`server/routes/structuredWriteGuard.ts`). |
-| `STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY` | `false` | Escape hatch: when `true`, forces the legacy write path even if `STRUCTURED_BLOCKS_ENABLED` is `true`. |
-| `NUTRITION_ENABLED` | `true` | Server gate for the nutrition module. When not `"true"`, the whole `/api/v1/nutrition` tree returns `404`. Keep aligned with the client `VITE_NUTRITION_ENABLED` flag per tier. |
+| `EMOM_BUILDER_ENABLED` | `false` | Server-side gate for the EMOM workout builder: when not `"true"`, a plan-day structure write that carries `structureBlocks` gets `403 EMOM_BUILDER_DISABLED` (`server/routes/plans.ts`). Keep aligned with the client `VITE_EMOM_BUILDER_ENABLED` flag for each deployment tier; the startup log compares the two, reading `VITE_EMOM_BUILDER_ENABLED` from the server's own environment. |
+| `STRUCTURED_BLOCKS_ENABLED` | `true` | Enables the structured-blocks write guard (`server/routes/structuredWriteGuard.ts`): `POST`/`PATCH /api/v1/workouts` with workout text but no exercise rows or structure blocks (and no linked plan day) is rejected with `422 STRUCTURED_ROWS_REQUIRED`. When off, such text-only writes are accepted and logged as a legacy fallback. |
+| `STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY` | `false` | Escape hatch: when `true`, forces the legacy write path (text-only writes accepted) even if `STRUCTURED_BLOCKS_ENABLED` is `true`. |
+| `NUTRITION_ENABLED` | `true` | Server gate for the nutrition module. When not `"true"`, the whole `/api/v1/nutrition` tree returns `404`, the nutrition reminder cron skips, and nutrition is left out of the AI coach context. Keep aligned with the client `VITE_NUTRITION_ENABLED` flag per tier. |
 | `NUTRITION_FUZZY_ENABLED` | `true` | `pg_trgm` trigram (typo / mid-word) arm of local food search; needs migration `0074`. `"false"` falls back to exact substring (kill switch / pre-migration). Synonyms and diacritic-insensitivity are unaffected. |
 | `AI_CHAT_TOOLS` | `false` | Function calling for the coach chat (`POST /api/v1/chat/stream`): the reply model can read the athlete's older sessions, an exercise's history, their personal records and their coaching notes (`server/services/chatTools.ts`), and raises plan-change proposals itself by calling `propose_plan_changes` instead of the keyword gate and intent classifier deciding. Off until it has been evaluated against the live models; the non-streamed `POST /api/v1/chat` never uses tools. See `docs/ai-and-rag.md`. |
 | `NUTRITION_SEMANTIC_ENABLED` | `false` | Semantic (embeddings) food search and its background backfill cron. Requires `AI_FEATURES_ENABLED != "false"` + `GEMINI_API_KEY`, and reuses the pgvector pool (`VECTOR_DATABASE_URL`, falls back to the main DB). Off the hot path — fires only when keyword/fuzzy results are thin; safe to leave off. |
@@ -247,8 +254,8 @@ Variables exposed to browser code must start with `VITE_` — Vite statically in
 |---|---|---|
 | `VITE_CLERK_PUBLISHABLE_KEY` | `.env` | Browser-safe Clerk key. Mirrors `CLERK_PUBLISHABLE_KEY`. |
 | `VITE_SENTRY_DSN` | `.env` | Browser-safe Sentry DSN. Mirrors `SENTRY_DSN`. |
-| `VITE_EMOM_BUILDER_ENABLED` | `.env` | Client-side EMOM builder gate (`"true"`/`"false"`, default `false`). Keep aligned with the server `EMOM_BUILDER_ENABLED` flag. |
-| `VITE_NUTRITION_ENABLED` | `.env` | Client-side nutrition module gate (`"true"`/`"false"`, default `true`). Gates the page route + sidebar nav. Mirror with the server `NUTRITION_ENABLED` flag. |
+| `VITE_EMOM_BUILDER_ENABLED` | `.env` | Client-side EMOM builder gate (default `false`; `true`, `1` or `yes`, case-insensitive, enable it — `client/src/lib/featureFlags.ts`). Keep aligned with the server `EMOM_BUILDER_ENABLED` flag. |
+| `VITE_NUTRITION_ENABLED` | `.env` | Client-side nutrition module gate (default `true` when unset; when set, only `true`, `1` or `yes`, case-insensitive, keep it on). Gates the page route + sidebar nav and the fuelling panels, analytics tab, onboarding step and reminder toggles. Mirror with the server `NUTRITION_ENABLED` flag. |
 | `MODE` | Vite built-in | `development` \| `production` — used as Sentry environment tag. |
 | `DEV` / `PROD` | Vite built-ins | Boolean guards used by `isDevPreview`, `RagDebugBadge`, etc. |
 
@@ -263,8 +270,9 @@ Read by a script or a test, never by the running server, so `server/env.ts` does
 | Variable | Read by | Notes |
 |---|---|---|
 | `RESTORE_DRILL_DATABASE_URL` | `script/restore-drill.ts` (`pnpm ops:restore-drill`) | The restored database the drill checks. The script refuses to run when it equals `DATABASE_URL` unless `--allow-primary` is passed. See [Backup, Restore & DR](operations/backup-restore.md). |
-| `RUN_COACH_HARNESS` | `script/coach-influence/harness.ts` (`pnpm coach:influence`) | Must be `1`, or the harness refuses to run: it calls the live model and costs money. |
+| `RUN_COACH_HARNESS` | `script/coach-influence/harness.ts` (`pnpm coach:influence`) | Must be `1`, or the harness refuses to run: it calls the live model and costs money. It also refuses without `GEMINI_API_KEY`. |
 | `COACH_HARNESS_RUNS` | `script/coach-influence/harness.ts` | Runs per condition. Default `3`. |
 | `RUN_AI_EVAL` | `test/evals/chatScenarios.eval.test.ts`, `server/services/aiEval.test.ts` | Must be `true` for the live-model evals to run; otherwise they are skipped. `pnpm eval:chat` sets it. |
 | `AI_EVAL_MODES` | `test/evals/chatScenarios.eval.test.ts` | Comma-separated chat modes to evaluate. Default `classic,tools`. |
-| `HEALTH_TIMEOUT_MS` | `script/wait-for-health.js` | How long CI waits for the started server to report healthy. Default `120000`. |
+| `HEALTH_TIMEOUT_MS` | `script/wait-for-health.js` | How long CI waits for the started server to report healthy (`GET /api/v1/health` on `PORT`, default `5000`, returning 2xx). Default `120000`. |
+| `CYPRESS_INSTALL_BINARY` / `CI` | `script/patch-cypress-deps.js` (`postinstall`) | `CYPRESS_INSTALL_BINARY=0` (or `NODE_ENV=production`) skips patching the Cypress binary. With `CI` set, a patch failure fails the install instead of only warning. |

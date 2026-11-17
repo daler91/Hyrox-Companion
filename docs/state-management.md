@@ -53,13 +53,14 @@ const queryClient = new QueryClient({
 `getQueryFn({ on401 })` creates a typed query function that:
 - Joins query key segments into a URL (e.g., `["/api/v1", "workouts"]` becomes `/api/v1/workouts`).
 - Includes credentials (`credentials: "include"`) for Clerk JWT auth.
-- Handles 401 responses based on the `on401` parameter:
-  - `"throw"` (default) -- Throws an error, triggering React Query's error state.
-  - `"returnNull"` -- Returns `null`, useful for optional auth checks.
+- Passes the query's abort `signal` to `fetch`, and throws through `throwIfResNotOk` on any other non-2xx response.
+- Handles 401 responses based on the required `on401` parameter:
+  - `"throw"` (what the shared `queryClient` passes) -- Throws an error, triggering React Query's error state.
+  - `"returnNull"` -- Returns `null`, useful for optional auth checks. No caller passes it today.
 
 ### Instant-paint Snapshots (placeholderData + localStorage)
 
-The expensive analytics surfaces (Coach Insights, Race Predictor) avoid a blank/spinner state on open by persisting their last result to `localStorage` and feeding it back as React Query `placeholderData`. The helpers live in `client/src/lib/analyticsSnapshot.ts`:
+The expensive analytics surfaces (Coach Insights, Race Predictor, the Overview's AI chart analysis in `useOverviewAnalysis`, and MAF Trend) avoid a blank/spinner state on open by persisting their last result to `localStorage` and feeding it back as React Query `placeholderData`. The helpers live in `client/src/lib/analyticsSnapshot.ts`:
 
 - `readAnalyticsSnapshot<T>(key)` / `writeAnalyticsSnapshot(key, value)` -- JSON get/set that swallow corrupt payloads and quota errors so a bad snapshot can never break the tab.
 - `useWriteAnalyticsSnapshot(key, data, isPlaceholderData)` -- persists `data` whenever it changes and is *real* (skips the placeholder it just read back, and no-ops when `key` is `null`, e.g. signed out).
@@ -100,7 +101,7 @@ class AiBudgetExceededError extends Error {
 
 ### CSRF Token Management
 
-The API client fetches a CSRF token from `GET /api/v1/csrf-token` on initialization and caches it in memory. The token is automatically attached as the `x-csrf-token` header on all mutating requests. If a 403 CSRF error is received (e.g., after a Clerk sign-in invalidates the old token), the client refetches the token and retries the request transparently.
+The API client fetches a CSRF token from `GET /api/v1/csrf-token` before the first mutating request (the fetch is bounded to 10 s) and caches it in memory; nothing is fetched at startup. The token is automatically attached as the `x-csrf-token` header on all mutating requests. If a 403 CSRF error is received (e.g., after a Clerk sign-in invalidates the old token), the client refetches the token and retries the request once, transparently.
 
 ### Domain Modules
 
@@ -108,16 +109,16 @@ Each API domain has a dedicated module in `client/src/lib/api/`:
 
 | Module | File | Functions |
 |--------|------|-----------|
-| Workouts | `workouts.ts` | `create()`, `latest()`, `get()`, `update()`, `updateBlockScore()`, `delete()`, `bulkDelete()`, `combine()`, `reparse()`, `reparseFromImage()`, `batchReparse()`, `history()`, `seedFromPlan()`, `assignPlanDay()`, device-link actions (`linkDeviceActivity()`, `unlinkDeviceActivity()`, `dismissDeviceLinkSuggestion()`), plus exercise-set CRUD (`addSet`/`updateSet`/`deleteSet` via `createExerciseSetMutationApi`) |
-| Plans | `plans.ts` | `list()`, `get()`, `import()`, `createSample()`, `rename()`, `updateGoal()`, `setRetirement()`, `deletePlan()`, `generate()`, `getGenerationStatus()`, `schedule()`, `updateDayWithoutPlan()`, `updateDayStatus()`, `deleteDay()`, `getDayExercises()`, `updateDayStructure()`, `addDayExercise()`/`updateDayExercise()`/`deleteDayExercise()`, `reparseDay()`, `reparseDayFromImage()` |
-| Coaching | `coaching.ts` | `chat` (`send()`, `sendStream()`, `saveMessage()`, `clearHistory()`, `setFeedback()`, `decideFactProposal()` (save or turn down a fact the coach offered), `getStoredCoachInsights()`, `regenerateCoachInsights()`), `coaching` materials (`list`/`create`/`delete`), `getRagStatus()`, `reEmbed()` |
+| Workouts | `workouts.ts` | `create()`, `latest()`, `get()`, `update()`, `updateBlockScore()`, `delete()`, `bulkDelete()`, `combine()`, `reparse()`, `reparseFromImage()`, `batchReparse()`, `history()`, `seedFromPlan()`, `assignPlanDay()`, device-link actions (`linkDeviceActivity()`, `unlinkDeviceActivity()`, `dismissDeviceLinkSuggestion()`), plus exercise-set CRUD and ordering (`addSet`/`updateSet`/`deleteSet`/`saveSetOrder` via `createExerciseSetMutationApi`) |
+| Plans | `plans.ts` | `list()`, `get()`, `import()`, `createSample()`, `rename()`, `updateGoal()`, `setRetirement()`, `deletePlan()`, `generate()`, `getGenerationStatus()`, `schedule()`, `updateDayWithoutPlan()`, `setDayPriority()`, `getMissedRecovery()`/`applyMissedRecovery()`, `updateDayStatus()`, `deleteDay()`, `getDayExercises()`, `updateDayStructure()`, `addDayExercise()`/`updateDayExercise()`/`deleteDayExercise()`/`saveDayExerciseOrder()`, `reparseDay()`, `reparseDayFromImage()` |
+| Coaching | `coaching.ts` | `chat` (`send()`, `sendStream()`, `saveMessage()`, `getHistory()`/`getHistoryPage()` (the saved conversation, newest page first with a cursor to the page before it), `clearHistory()`, `getWelcome()`, `setFeedback()`, `decideFactProposal()` (save or turn down a fact the coach offered), `getStoredCoachInsights()`, `regenerateCoachInsights()`), `coaching` materials (`list`/`listSummaries`/`create`/`delete`), `getRagStatus()`, `reEmbed()` |
 | Analytics | `analytics.ts` | `analytics` (`getPersonalRecords()`, `getExerciseAnalytics()`, `getTrainingOverview()` — returns a `TrainingOverview` — `getTrainingSummary()`, `getOverviewAnalysis()`/`regenerateOverviewAnalysis()`, `getRacePrediction()`, `getWeeklyReview()`/`setWeeklyReviewIntent()`, `getSessionGrades()`/`getWorkoutSessionGrade()`, `exportData()`), `timeline` (`getPage()` — one cursor page of [`GET /api/v1/timeline`](api-reference.md#get-apiv1timeline) — `getSuggestions()`, `applySuggestion()`) |
 | User | `user.ts` | `preferences.update()` (units, `userTimezone`, `weeklyGoal`, `mealSchedule`, `trainingConstraints: null` (removing the older injuries note), the email and push toggles, `showAdherenceInsights`, `aiCoachEnabled`, `coachAutoApplyPlanChanges`, `onboardingCompleted`, athlete profile / body composition, training-style and MAF fields), `strava.*` (`auth/disconnect/sync`), `garmin.*` (`connect/disconnect/sync`), `email.check()`. Reads of the current user and preferences go through the default query function, keyed by `QUERY_KEYS.authUser` / `QUERY_KEYS.preferences`, so they have no wrapper here |
 | Exercises | `exercises.ts` | `parse()`, `parseStructured()`, `parseFromImage()`, `parseStructuredFromImage()`, `getHistory()` |
 | MAF Tests | `mafTests.ts` | `tagWorkout()`, `updateTest()`, `untagWorkout()`, `list()` for MAF-test tagging and the MAF Trend tab |
-| Timeline Annotations | `timelineAnnotations.ts` | `list()`, `create()`, `delete()` for injury / illness / travel / rest bands |
+| Timeline Annotations | `timelineAnnotations.ts` | `list()`, `create()`, `update()`, `delete()` for injury / illness / travel / rest bands |
 | Athlete Facts | `athleteFacts.ts` | `list()`, `create()`, `update()`, `remove()`, `importNote()` for the athlete card; consumed through `client/src/hooks/useAthleteFacts.ts` (`QUERY_KEYS.athleteFacts`) |
-| Plan Proposals | `planProposals.ts` | `getPending()`, `apply()`, `dismiss()` for conversational plan-adjustment proposals |
+| Plan Proposals | `planProposals.ts` | `getPending()`, `get()`, `apply()`, `undo()`, `dismiss()` for conversational plan-adjustment proposals |
 | Recycle Bin | `recycleBin.ts` | `list()`, `restore()`, `restoreBatch()`, `purge()`, `empty()` for the 90-day soft-delete store |
 | Consent | `consent.ts` | `recordServerConsent()` — records a consent grant/revocation server-side |
 | Nutrition | `nutrition.ts` | The whole food-logging surface: search/recent/favourites, log CRUD + batch/repeat, custom foods and servings, recipes, barcode, the three AI parse calls, targets and per-meal overrides, micros, session fuelling and block view, insights. Consumed through `client/src/hooks/useNutrition.ts` — see [Nutrition & Fuelling § Client UI map](nutrition.md#6-client-ui-map) |
@@ -126,7 +127,7 @@ Each API domain has a dedicated module in `client/src/lib/api/`:
 
 ## Custom Hooks Catalog
 
-All hooks are in `client/src/hooks/`.
+The hooks below are in `client/src/hooks/` unless the File column gives another path; feature-specific hooks also sit beside the components and pages that use them (`client/src/components/**`, `client/src/pages/**`).
 
 ### Authentication and User
 
@@ -135,16 +136,16 @@ All hooks are in `client/src/hooks/`.
 | `useAuth` | `useAuth.ts` | Integrates Clerk auth with database user sync. Polls the `authUser` query every 2s while `isAutoCoaching` is true (max 5 min, pauses while the tab is hidden). Invalidates timeline queries when auto-coaching completes. Resets the cached CSRF token on sign-in state transitions. Also exports `useIsAutoCoaching`, `useIsAiCoachEnabled`, `useIsOnboardingCompleted`, and `useIsAuthUserLoaded` -- thin `select`-based subscribers to single auth-user fields. |
 | `useSignOut` | `useSignOut.ts` | Clerk sign-out. Calls `clearUserLocalData()` to purge the offline queue and workout drafts from local/session storage before signing out. `useConfirmedSignOut`, which the Log out button uses, asks first while offline writes are still queued. |
 | `useEmailCheck` | `useEmailCheck.ts` | Fire-and-forget email check once per authenticated session (gated on `isAuthenticated` and `isAppUserLoaded`). |
-| `useDetectTimezone` | `useDetectTimezone.ts` | Once authenticated, reads the browser's IANA timezone and PATCHes the stored `userTimezone` when it has changed (or is still the default `UTC`). The server schedules emails and anchors weeks from that value. Fire-and-forget; failures are swallowed. |
+| `useDetectTimezone` | `useDetectTimezone.ts` | Once authenticated, reads the browser's IANA timezone and PATCHes the stored `userTimezone` when the two differ (a new account's stored value is the default `UTC`), then invalidates the auth user. Runs once per mount. The server schedules emails and anchors weeks from that value. Fire-and-forget; failures are swallowed. |
 | `useMafCeiling` | `useMafCeiling.ts` | The athlete's MAF aerobic ceiling in bpm, or `null` when they don't train to one. Reads the auth user query every surface already holds, so it adds no fetch. |
 
 ### Data Loading
 
 | Hook | File | Purpose |
 |------|------|---------|
-| `useTimelineData` | `useTimelineData.ts` | Fetches plans, timeline entries, and personal records. Manages scroll position and "go to today" navigation. Reports a failed load as `isError` (with `retry`), never as an empty account, so `isNewUser` stays false. A first fetch paused offline counts as loading, and `isError` stays set while a retry runs, with `isRetrying` true. |
-| `useTimelineState` | `useTimelineState.ts` | Orchestrates timeline page state (filters, data, UI state). |
-| `useUnitPreferences` | `useUnitPreferences.ts` | Reads and caches user's weight/distance unit preferences. |
+| `useTimelineData` | `useTimelineData.ts` | Fetches plans, timeline entries, personal records and timeline annotations. The timeline is cursor-paged (`useInfiniteQuery`, keyed `[...QUERY_KEYS.timeline, selectedPlanId]`): the first page, then older ones through `loadOlderEntries`. Queued offline workout creates (`usePendingWorkoutEntries`) are appended to the entries. Manages scroll position and "go to today" navigation. Reports a failed load as `isError` (with `retry`), never as an empty account, so `isNewUser` stays false. A first fetch paused offline counts as loading, and `isError` stays set while a retry runs, with `isRetrying` true. |
+| `useTimelineState` | `useTimelineState.ts` | Orchestrates timeline page state: the selected plan, plus `useTimelineData`, `useTimelineFilters`, `useOnboarding`, `usePlanImport`, `useWorkoutActions` and `useCombineWorkouts`. |
+| `useUnitPreferences` | `useUnitPreferences.ts` | Reads the preferences query for the weight/distance units (default kg / km) and their labels, plus `showAdherenceInsights`. |
 | `useExerciseHistory` | `useExerciseHistory.ts` | Past logged sets of one exercise, for the "Last time" line. Keyed on the canonical exercise name so aliases share a cache entry; held with a long `staleTime` and marked stale by every workout and set write. Skipped for custom exercises. |
 | `usePendingWorkoutEntries` | `usePendingWorkoutEntries.ts` | Queued-but-unsynced workout creates as synthetic timeline entries, derived from the offline queue through `useSyncExternalStore` and refreshed on queue-change and sync-complete events. |
 
@@ -152,15 +153,15 @@ All hooks are in `client/src/hooks/`.
 
 | Hook | File | Purpose |
 |------|------|---------|
-| `useApiMutation` | `useApiMutation.ts` | Generic wrapper around React Query's `useMutation`. Adds toast notifications (success/error), automatic query invalidation, and optional callbacks. |
+| `useApiMutation` | `useApiMutation.ts` | Generic wrapper around React Query's `useMutation`. Adds toast notifications (success/error), automatic query invalidation, and optional callbacks. A string `errorToast` is the title over `humanizeApiError`'s description; a `RateLimitError` or `AiBudgetExceededError` gets its own toast in place of `errorToast`. |
 | `useWorkoutActions` | `useWorkoutActions.ts` | Timeline-entry action mutations: mark complete, skip, change status, delete workout/plan-day, and bulk delete (delegates to `workout-actions/useWorkoutActionMutations`). |
 | `useChatMutations` | `useChatMutations.ts` | Save chat message, clear chat history mutations. |
-| `useStravaMutations` | `useStravaMutations.ts` | Strava sync and disconnect mutations. |
-| `useGarminMutations` | `useGarminMutations.ts` | Garmin connect (email/password), disconnect, and manual sync mutations. Surfaces the `GARMIN_BUSY`, `GARMIN_SYNC_TOO_SOON`, and `GARMIN_CIRCUIT_OPEN` error codes as user-friendly toasts. |
-| `useCoachingMaterials` | `useCoachingMaterials.ts` | Coaching material CRUD with re-embed triggers. |
+| `useStravaMutations` | `useStravaMutations.ts` | Strava connect (fetches the OAuth URL and redirects to it), disconnect and sync mutations. A sync failure naming `STRAVA_REAUTH_REQUIRED` toasts "Strava reconnection needed". |
+| `useGarminMutations` | `useGarminMutations.ts` | Garmin connect (email/password), disconnect, and manual sync mutations. The hook reads no Garmin error codes itself; failures toast through `useApiMutation`, so a 4xx (the 409 `GARMIN_BUSY`) shows the server's own message, the 429 `GARMIN_SYNC_TOO_SOON` the generic "Too many requests" toast, and a 5xx (the 503 `GARMIN_CIRCUIT_OPEN`) the generic server-error line. |
+| `useCoachingMaterials` | `useCoachingMaterials.ts` | The coaching-material summaries list, with `useCreateCoachingMaterial`, `useDeleteCoachingMaterial`, `useRagStatus` and `useReEmbed` beside it. |
 | `useDeviceLinkMutations` | `useDeviceLinkMutations.ts` | The athlete's override of the sync's matcher, from the timeline card: merge a standalone device import into the planned session or logged workout it belongs to, split a linked recording back out, or wave off a suggestion. Success refetches everything the recording moved between. |
 
-Timeline annotation queries and mutations are composed directly from the `client/src/lib/api/timelineAnnotations.ts` module inside `useTimelineData` (read) and the `AnnotationsDialog` component (write), rather than via a dedicated hook — the annotations list is small and refetches cheaply on mutation. Account deletion is invoked from `client/src/components/settings/AccountDangerZone.tsx`, which calls the `DELETE /api/v1/account` endpoint behind a hold-to-confirm gesture, clears the React Query cache on success, and hands off to Clerk's sign-out flow.
+Timeline annotations are read in `useTimelineData` and written through `useTimelineAnnotationMutations` (create, update, delete) in `client/src/components/timeline/annotations/useTimelineAnnotationMutations.ts`, which `AnnotationsDialog` uses; the same file exports `useTimelineAnnotations` for the dialog's own list. Deleting an annotation from its timeline row goes through a mutation in `client/src/pages/timeline/useTimelinePageController.ts`. The annotations list is small and refetches cheaply on mutation. Account deletion is invoked from `client/src/components/settings/AccountDangerZone.tsx`, which calls the `DELETE /api/v1/account` endpoint from a confirm dialog that stays disabled until the athlete types `DELETE`. On success it calls `clearUserLocalData()`, toasts, and 1.5 s later sets `window.location.href = "/"`: the full reload drops all client state, and the session is no longer valid.
 
 ### Forms and Editors
 
@@ -173,10 +174,13 @@ Timeline annotation queries and mutations are composed directly from the `client
 
 | Hook | File | Purpose |
 |------|------|---------|
-| `useChatSession` | `useChatSession.ts` | One coach chat surface: the message buffer, `sendMessage` (SSE streaming with `requestAnimationFrame` batching, RAG info and safety-notice tracking) and failed sends (turns saved once the server accepts them, failure notes worded by `describeChatFailure`, and `retryMessage`). Composes the three hooks below; the SSE request lives in `chat/chatStream.ts` and the pure history, turn-saving and failure rules in `chat/chatSessionModel.ts`. |
+| `useChatSession` | `useChatSession.ts` | One coach chat surface: the message buffer, `sendMessage` (SSE streaming with `requestAnimationFrame` batching, RAG info and safety-notice tracking) and failed sends (turns saved once the server accepts them, failure notes worded by `describeChatFailure`, and `retryMessage`). Composes the `chat/` hooks below; the SSE request lives in `chat/chatStream.ts`, which reads the stream through `consumeSSEStream` (`client/src/lib/sseStream.ts`, where the `requestAnimationFrame` batching is), and the pure history, turn-saving and failure rules in `chat/chatSessionModel.ts`. Without `ReadableStream` it falls back to the non-streaming `POST /api/v1/chat`. |
 | `useChatHistory` | `chat/useChatHistory.ts` | Loads the saved conversation once into the chat buffer, keeping any message sent before it arrived (CL41), and clears it; the server saves the turns. |
 | `useChatAutoScroll` | `chat/useChatAutoScroll.ts` | Keeps the chat viewport pinned to the newest message while the athlete is at the bottom. |
 | `useBudgetWarning` | `chat/useBudgetWarning.ts` | One toast per session when a chat response carries `X-AI-Budget-Warning`. |
+| `useOlderChatHistory` | `chat/useOlderChatHistory.ts` | The "Load older messages" control: fetches the page before the oldest one shown, from the cursor the newest page carried, and puts it ahead of the saved messages in the buffer. |
+| `useMessageFeedback` | `chat/useMessageFeedback.ts` | The athlete's thumbs on a coach reply: shown at once, saved in the background (a 404 is tried once more after 1 s, since the reply may not be saved yet), and put back with a toast if the save fails. |
+| `useFactProposalDecision` | `chat/useFactProposalDecision.ts` | Save or turn down a fact the coach offered under a reply: shown at once, put back with a toast if the server refuses it, then invalidates the chat history and, on a save, `QUERY_KEYS.athleteFacts`. |
 | `usePlanProposal` | `usePlanProposal.ts` | The pending plan-adjustment proposal and its apply, dismiss and undo actions. Query-driven, so a pending proposal reappears after a reload. Also exports `useLiveProposal`, which keeps a proposal's card at its chat turn in step with its current status. |
 
 ### Analytics
@@ -189,14 +193,14 @@ Timeline annotation queries and mutations are composed directly from the `client
 
 | Hook | File | Purpose |
 |------|------|---------|
-| `usePlanGeneration` | `usePlanGeneration.ts` | Multi-step AI plan generation flow (input validation, API call, result handling). |
-| `usePlanImport` | `usePlanImport.ts` | CSV file import with validation and preview. |
+| `useGeneratePlan` | `usePlanGeneration.ts` | AI plan generation: `POST /api/v1/plans/generate` returns a stub plan, then the hook polls its generation status every 3 s until the plan is ready or failed, the status has been unreachable for 30 s, or 20 minutes have passed. A ready plan is loaded, plans and timeline are invalidated, and the caller's `onSuccess` runs. |
+| `usePlanImport` | `usePlanImport.ts` | CSV file import with validation and preview, plus the other plan mutations the Timeline uses: sample plan, rename, goal, retirement, delete and schedule. |
 
 ### UI State
 
 | Hook | File | Purpose |
 |------|------|---------|
-| `useTimelineFilters` | `useTimelineFilters.ts` | Filter state for timeline (plan selector, status filter, date range). |
+| `useTimelineFilters` | `useTimelineFilters.ts` | The timeline's status filter (held in `?status=` through `useUrlQueryState`), the past and future date groups it leaves, and the "show more" state that reveals more than the first 7 groups each way. The selected plan lives in `useTimelineState`. |
 | `useOnboarding` | `useOnboarding.ts` | Tracks durable onboarding completion with a local fallback that holds the signed-in athlete's id (`onboardingStorage.ts`), so another account on the device neither skips onboarding nor is marked complete by it. |
 | `useEnableAiCoach` | `useEnableAiCoach.ts` | Mutation that turns `aiCoachEnabled` on (the consent every AI route checks) and refreshes the auth user and preferences. Used by the AI plan generator's consent step. |
 | `useOnboardingWizard` | `useOnboardingWizard.ts` | Multi-step wizard state and navigation. The form is a draft over the athlete's saved preferences (`onboardingProfile.ts`), and each step writes only the fields that differ from what is saved, so "Run setup again" never resets an established athlete's settings. |
@@ -217,7 +221,7 @@ Timeline annotation queries and mutations are composed directly from the `client
 |------|------|---------|
 | `useVoiceInput` | `useVoiceInput.ts` | Web Speech API integration. Manages microphone permissions, speech recognition start/stop, transcript accumulation, and error handling. `stopListening` calls the recogniser's `stop()`, which still returns a final result for the audio captured so far; its optional `onStopped` callback runs once that result has been emitted, so a caller that needs the complete text (the log-workout stepper's Continue) waits for it. Words shown but never finalised are committed when the stopped recogniser ends, or after 2 s if it does not, and nothing it sends after that is taken. |
 
-Additional feature hooks not catalogued above include `useWorkoutDetail`, `usePlanDayExercises`, `useExerciseSetsForOwner`, `useMoveTimelineEntry`, `useLogWorkoutDraft`, `usePushNotifications`, and `useUrlQueryState`. `useMissedRecovery.ts` holds the missed-session recovery hooks: `useMissedRecoveryPreview` (uncached — the preview depends on today and the rest of the week, so it is refetched every time the sheet opens), `useApplyMissedRecovery` (invalidates the timeline, training overview, plans, weekly review and the day's cached exercise sets — shortening drops or scales them, and undoing it puts them back; a 404/409 refreshes the timeline and the open preview; an `undoing` variable lets the toast say where an undone move went) and `useSetSessionPriority` (optimistic tier change on the cached timeline entry, rolled back on error). Related hooks are also grouped under the `voice/`, `workout-form/`, and `workout-actions/` subdirectories of `client/src/hooks/`.
+Additional feature hooks not catalogued above include `useWorkoutDetail`, `usePlanDayExercises`, `useExerciseSetsForOwner` (with `useDebouncedSetPatches` and `useSetOrderSave` behind it), `useMoveTimelineEntry`, `useLogWorkoutDraft`, `usePushNotifications`, `useUrlQueryState`, `useDebouncedCallback`, `useFlushOnPageHide` (calls a flush on `visibilitychange` to hidden and on `pagehide`), `useNavigationBreadcrumb` (adds a Sentry navigation breadcrumb on each route or query-string change), `useOfflineQueueFlush` (see [Auto-flush](#auto-flush)), and the query-and-mutation sets in `useNutrition.ts`, `useAthleteFacts.ts`, `useRecycleBin.tsx` (which also exports `useUndoDeleteToast`), `useSessionGrades.ts` (`useSessionGrades`, and `useWorkoutSessionGrade`, which re-reads every 30 s, at most 10 times, while the grade's stream is pending) and `useWeeklyReview.ts` (`useWeeklyReview`, keyed by the week's Monday, and `useSetWeeklyReviewIntent`, which invalidates that week and the next). `useMissedRecovery.ts` holds the missed-session recovery hooks: `useMissedRecoveryPreview` (uncached — the preview depends on today and the rest of the week, so it is refetched every time the sheet opens), `useApplyMissedRecovery` (invalidates the timeline, training overview, plans, weekly review, every day's nutrition summary and the day's cached exercise sets — shortening drops or scales them, and undoing it puts them back; a 404/409 refreshes the timeline and the open preview; an `undoing` variable lets the toast say where an undone move went) and `useSetSessionPriority` (optimistic tier change on the cached timeline entry, rolled back on error). Related hooks and their helpers are also grouped under the `chat/`, `voice/`, `workout-editor/`, `workout-form/`, and `workout-actions/` subdirectories of `client/src/hooks/`.
 
 ### Hook Dependency Tree
 
@@ -260,10 +264,10 @@ All other mutations use direct server requests.
 
 ### Design
 
-- **Queue storage:** `localStorage` under the key `fitai-offline-queue`.
-- **Max queue size:** 100 mutations (oldest evicted when full).
+- **Queue storage:** `localStorage` under the key `fitai-offline-queue`, with the owning user's id beside it under `fitai-offline-queue-owner`. Each entry holds `id`, `method`, `url`, `body`, `timestamp`, `retryCount` and `serverErrorCount`.
+- **Max queue size:** 100 mutations (oldest evicted when full, announced as `queue_overflow`).
 - **Max age:** 7 days -- stale mutations are dropped during flush.
-- **Max retries:** 5 definitive rejections per mutation -- dropped after exceeding. Only a 4xx that a retry won't change counts: not a 401 (session lapsed while offline), 408, 429, a 409 `IDEMPOTENT_REQUEST_IN_PROGRESS` or a 403 `EBADCSRFTOKEN`. Network errors, timeouts and 5xx keep the mutation's count, so a flaky connection can't drop it; the max age still bounds those. A plain 500 counts toward a separate cap of 20 instead (502/503/504 never count): because a replay stops at a failed entry, a write the server fails every time would otherwise hold everything queued behind it for the full 7 days.
+- **Max retries:** 5 definitive rejections per mutation -- the flush after the fifth drops it instead of sending it again. Only a 4xx that a retry won't change counts: not a 401 (session lapsed while offline), 408, 429, a 409 `IDEMPOTENT_REQUEST_IN_PROGRESS` or a 403 `EBADCSRFTOKEN`. Network errors, timeouts and 5xx keep the mutation's count, so a flaky connection can't drop it; the max age still bounds those. A plain 500 counts toward a separate cap of 20 instead (502/503/504 never count): because a replay stops at a failed entry, a write the server fails every time would otherwise hold everything queued behind it for the full 7 days.
 - **Ordering:** Replay goes one mutation at a time, oldest first, and stops at the first one that fails. The mutations behind it stay queued in order, so a newer edit to the same record can never land before an older one.
 - **Replay timeout:** Each replay request is abandoned after 30 s and counts as a failure with no answer (it keeps its retry count), so a request the server never answers can't hold the run, and every flush that joins it, until a reload. The retry reuses the idempotency key, so a write the server did commit is not applied twice (CL57).
 - **Idempotency:** Each queue-backed write generates a crypto-backed unique ID before the first request, sends it as `X-Idempotency-Key`, and reuses it if the body is queued for replay. The server enforces idempotency via the `idempotencyMiddleware`, which caches responses in the `idempotency_keys` database table with a 7-day TTL.
@@ -275,19 +279,22 @@ All other mutations use direct server requests.
 |----------|-------------|
 | `enqueueMutation(method, url, body, options?)` | Adds a mutation to the queue (`options.id` overrides the generated ID). Returns the mutation ID. |
 | `getPendingCount()` | Returns the number of queued mutations. |
-| `flushQueue()` | Replays pending mutations in order, stopping at the first failure. Returns `{ synced, failed, dropped }`. |
-| `clearOfflineQueue()` | Removes queued mutation bodies from localStorage and notifies listeners. |
+| `getPendingMutations()` | Read-only snapshot of the queued mutations, for the timeline's pending-entry overlay (`usePendingWorkoutEntries`). |
+| `flushQueue()` | Replays pending mutations in order, stopping at the first failure. Returns `{ synced, failed, dropped }`. A call made while a flush is running joins that run; if the run ends without a failure, one follow-up flush sends what was queued meanwhile. |
+| `reconcileQueueOwner(userId)` | Stamps the signed-in user as the queue's owner, first dropping a queue another user left (announced as `wrong_account`). A `null` user is ignored. |
+| `releaseQueueOwner()` | Holds the timer and focus retries until the next `reconcileQueueOwner`. |
+| `clearOfflineQueue()` | Removes the queued mutation bodies and the owner stamp from localStorage, cancels a pending retry and notifies listeners. |
 | `createOfflineMutationId()` | Generates a crypto-backed unique mutation ID (`crypto.randomUUID()` with a `getRandomValues` fallback). |
-| `onMutationDropped(cb)` | Registers a callback fired whenever a mutation is permanently dropped. Returns an unsubscribe function. Used by `useOfflineDropNotifier`. |
+| `onMutationDropped(cb)` | Registers a callback fired whenever a mutation is permanently dropped, with the reason: `max_retries`, `max_age`, `queue_overflow`, `storage_full` or `wrong_account`. Returns an unsubscribe function. Used by `useOfflineDropNotifier`. |
 
 ### Auto-flush
 
-When the browser fires the `online` event, `flushQueue()` runs automatically. A device that never went offline gets no `online` event (a save queued after a timeout on slow wifi, say), so while mutations are pending and the browser reports online the queue also retries on a timer (5s, doubling after each replay that stopped on a failure, capped at 5 minutes) and when the app regains focus or becomes visible. These automatic retries run only while `reconcileQueueOwner` has confirmed the signed-in user: `useOfflineQueueFlush` releases that confirmation (`releaseQueueOwner()`) when the user signs out or switches, and `clearOfflineQueue()` cancels any pending retry. Queue writes dispatch the `OFFLINE_QUEUE_CHANGE_EVENT` (`"offline-queue-change"`); replays that synced or dropped at least one mutation dispatch the `OFFLINE_SYNC_COMPLETE_EVENT` (`"offline-sync-complete"`) for the UI to react. Both event names are exported constants.
+When the browser fires the `online` event, `flushQueue()` runs automatically and the retry backoff starts again from 5s. `useOfflineQueueFlush(userId)`, mounted in `AuthenticatedLayout`, covers a tab that was closed offline and reopened online: on mount and whenever the user id changes it calls `reconcileQueueOwner(userId)` and then flushes if the browser is online and writes are pending. A device that never went offline gets no `online` event (a save queued after a timeout on slow wifi, say), so while mutations are pending and the browser reports online the queue also retries on a timer (5s, doubling after each replay that stopped on a failure, capped at 5 minutes) and when the app regains focus or becomes visible. The timer and focus/visibility retries run only while `reconcileQueueOwner` has confirmed the signed-in user: `useOfflineQueueFlush` releases that confirmation (`releaseQueueOwner()`) when the user signs out or switches, and `clearOfflineQueue()` cancels any pending retry. The `online` handler does not check the confirmation. Queue writes dispatch the `OFFLINE_QUEUE_CHANGE_EVENT` (`"offline-queue-change"`); replays that synced or dropped at least one mutation dispatch the `OFFLINE_SYNC_COMPLETE_EVENT` (`"offline-sync-complete"`) for the UI to react. Its detail lists the URL and method of each request that synced; `OfflineIndicator` passes them to `invalidateForSyncedRequests` (`client/src/lib/offlineInvalidation.ts`), which invalidates the workout reads, the nutrition reads, or both, by URL. Both event names are exported constants.
 
 ### Error Handling
 
-- `QuotaExceededError` on save: Evicts the oldest half of the queue, retries once, then clears entirely if still failing.
-- Corrupted localStorage: Returns empty queue (gets overwritten on next save).
+- `QuotaExceededError` on save: Evicts the oldest half of the queue, retries once, then clears entirely if still failing. Every evicted mutation is announced as dropped (`storage_full`).
+- Corrupted localStorage: Returns empty queue (gets overwritten on next save). One stored entry of the wrong shape rejects the whole stored queue.
 - Individual mutation failures: the replay stops there and keeps that mutation and everything after it for the next retry. A definitive rejection increments its `retryCount` and a plain 500 its `serverErrorCount`; any other failure leaves both unchanged. A replay still in flight when the queue is cleared (sign-out) or dropped for another athlete doesn't write its leftovers back.
 
 ### Offline Queue Lifecycle
@@ -304,7 +311,7 @@ sequenceDiagram
     alt Online
         Hook->>Server: API request
         Server->>Hook: Response
-    else Offline
+    else Offline, or the request fails with a connectivity error
         Hook->>Queue: enqueueMutation(method, url, body, { id })
         Queue->>Storage: Save with unique ID + timestamp
         Queue->>User: Queued (offline indicator)
@@ -355,11 +362,12 @@ The Log Workout page autosaves a working draft to `localStorage` so an accidenta
 | Function | Description |
 |----------|-------------|
 | `getTodayString()` / `getYesterdayString()` | The local calendar date as `YYYY-MM-DD` |
+| `getLatestLoggableDateString()` | Tomorrow's local date, the latest day a workout can be logged on or moved to |
 | `toISODateString(date)` | Converts a Date to its local `YYYY-MM-DD` |
 | `getStartOfWeek(date, weekStartsOn = 1)` / `getEndOfWeek(...)` | Monday / Sunday of the given week (Monday-start by default, audit L7) |
 | `getStartOfWeekString(...)` / `getEndOfWeekString(...)` | The same, as `YYYY-MM-DD` |
 | `isDateInRange(date, start, end)` | Inclusive range check on `YYYY-MM-DD` strings |
-| `formatTime(date)` | A Date's local time as `HH:MM` (`toLocaleTimeString`) |
+| `formatTime(date)` | A Date's local time with two-digit hour and minute, in the browser's locale format (`toLocaleTimeString`) |
 | `getCurrentTimeString()` | `formatTime(new Date())` |
 
 ### Exercise Utilities
@@ -368,12 +376,13 @@ The Log Workout page autosaves a working draft to `localStorage` so an accidenta
 
 | Function | Description |
 |----------|-------------|
-| `groupExerciseSets(sets)` | Groups exercise sets by exercise name |
-| `formatExerciseSummary(sets)` | Human-readable exercise description |
-| `getExerciseLabel(set)` | Returns display name (handles custom exercises) |
-| Color/style mappings | Per-category styling (colors, icons) |
+| `groupExerciseSets(sets)` | Sorts sets by `sortOrder` and groups consecutive ones that share an exercise (and, inside a structure block, a block step) |
+| `formatExerciseSummary(group, weightUnit, distanceUnit)` | One group as a line: its label, then sets × reps, weight, distance and time where present (`Back Squat 3x10 40kg`), in the athlete's units |
+| `getExerciseLabel(name, customLabel?)` | Returns display name: the custom label when there is a usable one, else the exercise definition's label |
+| `exerciseSetsToStructured(sets, options?)` | Stored sets as the editor's `StructuredExercise` blocks (`{ names, data }`) |
+| `categoryChipColors`, `categoryLabels` | Per-category chip colour classes and display labels |
 
-Performance: Uses `Set`-based lookups for O(1) membership checks instead of `Array.includes()`.
+Performance: `getUniqueWeights` uses a `Set` for O(1) membership checks instead of `Array.includes()`.
 
 ### Stats Utilities
 
@@ -381,7 +390,7 @@ Performance: Uses `Set`-based lookups for O(1) membership checks instead of `Arr
 
 | Function | Description |
 |----------|-------------|
-| `calculateStats(timeline)` | One pass over the timeline entries → `TrainingStats` for the Coach panel: `workoutsThisWeek` / `completedThisWeek` (Monday-start week, matching the server), `plannedUpcoming`, and a `completionRate` over the finished days of the last 4 weeks (`COMPLETION_RATE_WINDOW_DAYS`, which the Timeline's first page holds, so "Load older workouts" does not move it; the panel labels it "4wk rate") — today and `excused` days are left out, and it is `null` when nothing came due in the window |
+| `calculateStats(timeline)` | One pass over the timeline entries → `TrainingStats` for the Coach panel: `workoutsThisWeek` / `completedThisWeek` (Monday-start week, matching the server), `plannedUpcoming`, and a `completionRate` over the finished days of the last 4 weeks (`COMPLETION_RATE_WINDOW_DAYS`, which the Timeline's first page holds, so "Load older workouts" does not move it; the panel labels it "4wk rate") — today, `excused` days and missed sessions the athlete let go are left out, and it is `null` when nothing came due in the window |
 | `formatSecondsToMmSs(seconds)` | A split as `M:SS` (272 → `4:32`) |
 | `formatSecondsToClock(seconds)` | Re-exported from `shared/formatClock.ts`: a duration as `H:MM:SS` |
 
@@ -400,46 +409,40 @@ Throughout the codebase, multiple data transformations are combined into single 
 Exercise name lookups use `Set` instead of `Array.includes()` for O(1) membership checks:
 
 ```typescript
-const validNames = new Set(VALID_EXERCISE_NAMES);
-// O(1) instead of O(n)
-if (validNames.has(name)) { ... }
+// server/prompts.ts
+export const VALID_EXERCISE_NAMES = new Set<string>(exerciseNames);
+
+// server/gemini/exerciseParser/mapping.ts -- O(1) instead of O(n)
+const isKnown = VALID_EXERCISE_NAMES.has(exercise.exerciseName) && exercise.exerciseName !== "custom";
 ```
 
 ### requestAnimationFrame Batching
 
-The `useChatSession` hook batches SSE text chunks using `requestAnimationFrame` to prevent excessive React re-renders during streaming:
+The coach chat batches SSE text chunks using `requestAnimationFrame` to prevent excessive React re-renders during streaming. The batching is in `consumeSSEStream` (`client/src/lib/sseStream.ts`), which `useChatSession` reaches through `streamChatReply` (`client/src/hooks/chat/chatStream.ts`): each chunk read from the stream is folded into an accumulator, and the consumer's `onFlush` runs at most once per animation frame with the text so far.
 
 ```typescript
-// Buffer chunks, flush on next animation frame
-pendingTextRef.current += chunk;
-if (!rafIdRef.current) {
-  rafIdRef.current = requestAnimationFrame(() => {
-    setMessages(prev => /* append buffered text */);
-    rafIdRef.current = null;
-  });
+// Each read adds to the accumulator, then asks for a flush
+for (const event of events) {
+  processSSELines(event.split("\n"), acc, options.metaKey, options.extraKeys);
 }
+scheduleFlush();
 ```
 
 ### requestAnimationFrame Batching Detail
 
-The `useChatSession` hook uses rAF batching to prevent excessive React re-renders during SSE streaming:
+`consumeSSEStream` schedules one flush per frame, and `createMessageUpdater` (`client/src/hooks/chat/chatSessionModel.ts`) writes each flushed snapshot into the assistant message:
 
 ```typescript
-// From client/src/hooks/useChatSession.ts
-const acc = { content: "", ragInfo: undefined };
+// From client/src/lib/sseStream.ts
+const acc = { content: "", meta: undefined, extras: {} };
+let rafId = 0;
 let dirty = false;
+let aborted = false;
 
 const flush = () => {
-  if (!dirty) return;
+  if (!dirty || aborted) return;
   dirty = false;
-  const snapshot = { content: acc.content, ragInfo: acc.ragInfo };
-  setMessages((prev) =>
-    prev.map((m) =>
-      m.id === assistantMessageId
-        ? { ...m, content: snapshot.content, ...(snapshot.ragInfo ? { ragInfo: snapshot.ragInfo } : {}) }
-        : m,
-    ),
-  );
+  options.onFlush({ content: acc.content, meta: acc.meta, extras: acc.extras });
 };
 
 const scheduleFlush = () => {
@@ -448,20 +451,46 @@ const scheduleFlush = () => {
     rafId = requestAnimationFrame(flush);
   }
 };
+
+// From client/src/hooks/chat/chatSessionModel.ts
+setMessages((prev) =>
+  prev.map((m) =>
+    m.id === assistantMessageId
+      ? { ...m, content: snapshot.content, ...(snapshot.meta ? { ragInfo: snapshot.meta } : {}), ...streamExtras(snapshot.extras) }
+      : m,
+  ),
+);
 ```
 
-Without batching, each SSE chunk (arriving every ~50ms) would trigger a React state update + re-render. With rAF batching, multiple chunks are accumulated and flushed once per animation frame (~16ms), reducing renders by 3-5x.
+Without batching, each chunk read from the stream would trigger a React state update + re-render. With rAF batching, the chunks that arrive within one animation frame are flushed together. When the stream ends the pending frame is cancelled and one last flush runs; an aborted stream (Stop, or the chat surface unmounting) skips it, and `streamChatReply` drops flushes from a superseded send.
 
 ### Parallel Data Fetching
 
-Independent data fetches use `Promise.all()` to run concurrently:
+Independent data fetches use `Promise.all()` to run concurrently. On the server, `buildTrainingContext` (`server/services/ai/index.ts`) reads everything the coach's context needs in one batch:
 
 ```typescript
-const [trainingContext, coachingContext] = await Promise.all([
-  buildTrainingContext(userId),
-  retrieveCoachingContext(userId, query),
+const [
+  timeline,
+  activePlanRecord,
+  upcomingDays,
+  loadWorkoutLogs,
+  loadExerciseSets,
+  loadTags,
+  annotations,
+  activeFacts,
+] = await Promise.all([
+  storage.timeline.getTimeline(userId, undefined, AI_CONTEXT_TIMELINE_LIMIT),
+  storage.plans.getActivePlan(userId),
+  storage.timeline.getUpcomingPlannedDays(userId, 7),
+  storage.analytics.getWorkoutLogsByDateRange(userId, loadHistoryStart, today),
+  storage.analytics.getAllExerciseSetsWithDates(userId, loadHistoryStart, today),
+  storage.analytics.getExerciseLoadTags(),
+  storage.timelineAnnotations.list(userId),
+  storage.athleteFacts.listActive(userId),
 ]);
 ```
+
+On the client, mutation handlers invalidate their query keys the same way (`useApiMutation` awaits `Promise.all` over `invalidateQueries`).
 
 ### Query Stale Time
 

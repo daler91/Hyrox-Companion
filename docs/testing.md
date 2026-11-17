@@ -88,8 +88,14 @@ plugins: [react()]                        // @vitejs/plugin-react for JSX/TSX
 environment: 'jsdom'                      // DOM simulation for component tests
 setupFiles: ['./vitest.setup.ts']         // Global setup
 globals: true                             // describe/it/expect available globally
-exclude: ['**/*.integration.test.ts', ...] // Integration tests run separately
+env: { NUTRITION_ENABLED: 'true', VITE_NUTRITION_ENABLED: 'true' } // the shipped flag state
+exclude: ['**/*.integration.test.ts', '**/smoke.test.ts', '**/node_modules/**', '**/dist/**', '**/cypress/**']
+testTimeout: 15000                        // headroom for CPU contention (see Timeouts)
 ```
+
+The suite runs with nutrition on, as it ships. A test about the flag-off state
+pins it itself; don't flip the config default to make a flag-conditional test
+pass.
 
 **Path aliases** mirror the Vite dev config:
 
@@ -120,7 +126,9 @@ setupFiles: ["./vitest.integration.setup.ts"];
 fileParallelism: false; // Sequential execution to avoid DB conflicts
 ```
 
-The integration setup file (`vitest.integration.setup.ts`) deletes Clerk env vars so the app falls back to dev auth bypass, and falls back to a dummy `DATABASE_URL` when none is provided by CI.
+It keeps the unit config's `@` and `@shared` aliases and `globals: true`, and excludes `node_modules` and `dist`.
+
+The integration setup file (`vitest.integration.setup.ts`) sets a test `ENCRYPTION_KEY` and `SESSION_SECRET`, deletes the Clerk env vars so the app falls back to dev auth bypass, and falls back to a dummy `DATABASE_URL` when none is provided by CI.
 
 ---
 
@@ -151,14 +159,17 @@ When several suites need the same large shape (the ~30-field `ExerciseSet` row o
 the `TimelineEntry` shape), define the factory **once** in a shared
 `testFixtures.ts` module and import it, rather than copy-pasting the builder into
 each `*.test.ts`. For example, `server/services/ai/testFixtures.ts` exports
-`makeExerciseSet` and `makeTimelineEntry`, consumed by both `trainingStats.test.ts`
-and `coachingInsights.test.ts`:
+`makeExerciseSet`, `makeTimelineEntry` and `makeTimelineDays`, consumed by
+`trainingStats.test.ts`, `coachingInsights.test.ts` and the `index*.test.ts`
+suites beside them:
 
 ```ts
 import { makeExerciseSet as makeSet, makeTimelineEntry as makeEntry } from "./testFixtures";
 ```
 
-Besides keeping the builders in one place, this avoids tripping SonarCloud's
+Keep each builder in one such module: `testFixtures.ts` is not a `*.test.ts`
+file and not under `__tests__/`, so SonarCloud analyses it as production source,
+and a second copy of a builder in another helper like it would trip the
 duplication gate (see [SonarCloud Quality Gate](#sonarcloud-quality-gate)).
 
 ### Schema validation tests
@@ -296,8 +307,9 @@ Current a11y coverage includes:
 - `client/src/components/onboarding/__tests__/GoalStep.a11y.test.tsx`
 - `client/src/components/onboarding/__tests__/CoachStep.test.tsx`, `WelcomeStep.test.tsx` and `PlanStep.test.tsx` (axe checks alongside their behaviour tests)
 - `client/src/components/settings/preferences/__tests__/PreferenceRows.a11y.test.tsx`
+- axe checks inside behaviour tests that do not use the `.a11y` suffix: `client/src/pages/__tests__/Landing.test.tsx`, `client/src/components/onboarding/__tests__/GoalStep.raceDate.test.tsx`, `client/src/components/analytics/training-overview/__tests__/BodySystemLoadCard.test.tsx`, `client/src/components/timeline/__tests__/TimelineWorkoutCard.deviceLink.test.tsx`, `client/src/components/timeline/missed-recovery/MissedRecoveryDialog.test.tsx`, `client/src/components/settings/data-tools/RecycleBinCard.test.tsx`, `client/src/components/settings/preferences/__tests__/EmailNotificationsCard.test.tsx` and `client/src/components/workout-detail/__tests__/SessionGradeCard.test.tsx`
 
-Adding a new a11y test is part of the PR checklist for any user-facing component change. The tests run as part of the normal `pnpm test` Vitest pool — there is no separate command or workflow.
+Add an a11y test with any new user-facing component (the repository has no PR template, so nothing enforces this). The tests run as part of the normal `pnpm test` Vitest pool — there is no separate command or workflow.
 
 ---
 
@@ -329,7 +341,13 @@ export function createTestApp(router: express.Router) {
 - `../../services/*` -- Mocks service-layer functions
 - `../../queue` -- Mocks the background job queue
 
-**Rate limiting:** `clearRateLimitBuckets()` is called in `beforeEach` to reset rate limit state.
+`testUtils.ts` also exports factories for the hoisted `vi.mock()` calls, so each test file keeps the call but not the boilerplate: `mockClerkAuthModule()`, `mockTypesModule()` and `mockAiBudgetModule()`, `mockStorageModule(shape)` (a `vi.fn()` for each listed storage method), and the `TEST_USER_ID` constant (`"test_user_id"`):
+
+```ts
+vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
+```
+
+**Rate limiting:** `clearRateLimitBuckets()` (from `server/routeUtils.ts`, or through `resetRouteTestState()` in `testUtils.ts`) is called in `beforeEach` to reset rate limit state.
 
 ### Full integration tests (`server/routes/tests/`)
 
@@ -337,7 +355,8 @@ Integration tests run against a **real PostgreSQL database** (PostgreSQL 16 with
 
 **Helper setup** (`server/routes/tests/helpers.ts`):
 
-- `setupIntegrationTest()` -- Lifecycle hook that creates the full Express app, clears the database before each test, and inserts a test user (`dev-user`) to satisfy foreign key constraints.
+- `createTestApp()` -- Builds the app with `cookie-parser` and the full route tree (`registerRoutes`), stubs `queue.send` and `queue.work` with `vi.fn()`, and mounts a test error handler that logs the error and replies `{ error, code, details }`.
+- `setupIntegrationTest()` -- Lifecycle hook that creates the app once (`beforeAll`), clears the database before each test, inserts a test user (`testUserId`, `dev-user`) to satisfy foreign key constraints, and clears the database and closes the server afterwards.
 - `clearDatabase()` -- Deletes all rows from `exerciseSets`, `workoutLogs`, `planDays`, `trainingPlans`, and `users` tables.
 - Auth bypass via `ALLOW_DEV_AUTH_BYPASS=true` env var and the `dev-user` user ID.
 
@@ -355,7 +374,8 @@ about the SQL Drizzle actually generates — ownership joins, cascade ordering,
 windowing, unique constraints. These suites run the real `storage.*` methods
 against the same Postgres the HTTP integration tests use (same config, same
 `fileParallelism: false`), with `server/storage/__tests__/integrationDb.ts`
-providing an FK-safe `resetIntegrationDb()` and seed helpers. Add one here
+providing an FK-safe `resetIntegrationDb()` and seed helpers (`seedUser`,
+`seedWorkoutLog`, `seedExerciseSet`, `seedCustomFood`, `seedFoodLogEntry`). Add one here
 whenever a storage method's correctness rests on a predicate, join, or
 constraint rather than on branch logic.
 
@@ -368,6 +388,9 @@ constraint rather than on branch logic.
 | `server/storage/__tests__/completedDates.integration.test.ts`  | `getCompletedWorkoutDates`: distinct dates of logged workouts that count as training (a synced walk does not) and of completed plan days with no log (a late-logged day counts on its log's date only, C44), parity with the full timeline's completed training |
 | `server/storage/__tests__/recycleBin.integration.test.ts`      | Recycle bin: capture inside the delete transaction, restore with the original ids and re-links (plan day, MAF analysis, plan-day status), all-or-nothing batch restore, device-sync dedupe while binned, per-user isolation |
 
+The table describes six of the suites; `ls server/storage/__tests__/*.integration.test.ts`
+lists all of them (31 on 2026-11-17).
+
 Run them locally against any Postgres with the `vector` extension:
 `CREATE EXTENSION IF NOT EXISTS vector; pnpm exec drizzle-kit push; DATABASE_URL=… pnpm exec vitest run --config vitest.integration.config.ts`.
 
@@ -379,7 +402,9 @@ Run them locally against any Postgres with the `vector` extension:
 
 ```ts
 projectId: "dy8p9y"; // Cypress Cloud project for recording/parallelism
-baseUrl: "http://localhost:5000"; // Local dev server
+allowCypressEnv: false;
+// under e2e:
+baseUrl: "http://localhost:5000"; // the server the specs run against
 specPattern: "cypress/e2e/**/*.cy.ts";
 supportFile: "cypress/support/e2e.ts";
 video: true;
@@ -411,7 +436,8 @@ defaultCommandTimeout: 10000; // 10 seconds
 **`cypress/support/e2e.ts`** -- Global setup:
 
 - Imports custom commands from `./commands`.
-- Suppresses uncaught exceptions from `clerk.example.com` (Clerk SDK in test mode).
+- Suppresses uncaught exceptions whose message mentions `clerk.example.com` (Clerk SDK in test mode).
+- Sets the privacy-consent key (`fitai-privacy-consent-v1`) in `localStorage` on every `window:before:load`, so the consent banner does not overlay the bottom of the viewport.
 - Intercepts all requests to `https://clerk.example.com/**` with a `200 {}` response in `beforeEach`, preventing Clerk from interfering with tests.
 
 **`cypress/support/commands.ts`** -- Custom commands:
@@ -423,15 +449,18 @@ defaultCommandTimeout: 10000; // 10 seconds
 
 **`cypress/support/authIntercepts.ts`** -- Authentication bypass:
 
-The `setupAuthIntercepts()` function stubs all authenticated API endpoints so tests can run without a real backend or real auth. It intercepts:
+The `setupAuthIntercepts()` function stubs the API endpoints the authenticated screens read on load, so tests can run without real auth or data. It intercepts:
 
-- `GET /api/v1/auth/user` -- Returns a mock user
+- `GET /api/v1/csrf-token` -- Returns a fixed CSRF token (alias `@csrfToken`)
+- `GET /api/v1/auth/user` -- Returns a mock user, id `FIXTURE_ATHLETE_ID` (`test-user-123`) (alias `@authUser`)
 - `GET /api/v1/preferences` -- Returns default preferences (configurable via `overrides`)
-- `GET /api/v1/timeline*`, `GET /api/v1/plans`, `GET /api/v1/workouts*`
+- `GET /api/v1/timeline*`, `GET /api/v1/timeline-annotations*`, `GET /api/v1/plans`, `GET /api/v1/workouts*`
 - `GET /api/v1/personal-records*`, `GET /api/v1/exercise-analytics*`, `GET /api/v1/training-overview*`
 - `GET /api/v1/strava/status`, `GET /api/v1/exercise-history*`, `GET /api/v1/custom-exercises*`, `GET /api/v1/chat/history`
 
-All intercepted endpoints return sensible defaults that can be overridden per-test:
+The same file exports `skipOnboardingOnLoad(win)`, passed as `cy.visit`'s `onBeforeLoad` so the onboarding wizard does not auto-open over the screen under test.
+
+The timeline, timeline annotations, plans, workouts, personal records, exercise analytics, training overview, Strava status and preferences responses can be overridden per test; the rest return fixed defaults:
 
 ```ts
 setupAuthIntercepts({
@@ -446,6 +475,8 @@ setupAuthIntercepts({
   },
 });
 ```
+
+**`cypress/support/logWorkoutHelpers.ts`** -- Log-workout spec helpers: `stubParseExercisesEmpty()` (stubs both parse endpoints under the `@parseExercises` alias), `stubSaveWorkout(responseOverride?)` (stubs `POST /api/v1/workouts` as `@saveWorkout`) and `visitLogWorkoutPage()` (the pattern below, plus `cy.ensureConsentDismissed()`).
 
 ### Test pattern
 
@@ -492,7 +523,7 @@ The smoke test uses a **separate Vitest config** (`vitest.smoke.config.ts`):
 - **Workout CRUD lifecycle**: create → list → fetch by id → update → delete → `404`
 - **Plans & analytics**: `/plans`, `/personal-records`, `/exercise-analytics`, `/training-overview` (asserting its four top-level keys) and `/timeline`
 - **Export**: `?format=json` and `?format=csv`
-- **Error handling**: an unknown `/api/v1/*` path falls through to the SPA; an invalid workout payload returns `400`
+- **Error handling**: an unknown client route falls through to the SPA; an unknown `/api/v1/*` path returns a JSON `404` (`{ error: "API route not found", code: "NOT_FOUND" }`), not the SPA shell; an invalid workout payload returns `400`
 - **Strava**: `/api/v1/strava/status` reports `connected: false`
 
 ### Running Smoke Tests
@@ -566,23 +597,24 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 - **Name:** Cypress Tests
 - **Triggers:** Every push **and** every pull request, so a fork/PR branch gets the same end-to-end gate as a push to a branch in this repository. Secrets are unavailable on fork PRs, so every secret-backed value has an inert fallback the suite can run against.
 - **Database:** PostgreSQL 16 with pgvector on port 5432. The runner's preinstalled PostgreSQL 16 is started by the shared `.github/actions/setup-postgres-pgvector` step, which installs `postgresql-16-pgvector` from the PostgreSQL project's apt repository (apt.postgresql.org, the one the runner image installs PostgreSQL from) and refreshes only that repository, so an outage of Ubuntu's archive mirrors can't fail the job. It is not pulled as a `pgvector/pgvector:pg16` service container, whose unauthenticated Docker Hub pulls were failing runs with `toomanyrequests`
-- **Parallelism:** Decided once by a `plan` job: with a `CYPRESS_RECORD_KEY`, two containers split the specs; without it, a single container runs everything (two unrecorded containers would each run the full suite).
+- **Parallelism:** Decided once by a `plan` job: with a `CYPRESS_RECORD_KEY`, two containers split the specs; without it, a single container runs everything (two unrecorded containers would each run the full suite). The `cypress-run` job is pinned to `ubuntu-24.04`, the image that ships the PostgreSQL 16 it starts.
 - **Steps:**
-  1. Install dependencies and Cypress binary (cached), then patch the Cypress bundled dependencies
+  1. Install dependencies with `--ignore-scripts`, install the Cypress binary on a cache miss (cached under `~/.cache/Cypress`, keyed on `pnpm-lock.yaml`), then patch the Cypress bundled dependencies (`node script/patch-cypress-deps.js`)
   2. Build the application (`pnpm run build`)
-  3. Verify client-bundle invariants (`pnpm check:bundle`)
+  3. Verify client-bundle invariants (`pnpm check:bundle`, `script/bundle-check.ts`; the build itself only warns on them)
   4. Enable pgvector extension
   5. Push database schema with `drizzle-kit push` — this comes **before** the suites below, which need the schema to exist
-  6. Run integration tests: `pnpm exec vitest run --config vitest.integration.config.ts`
-  7. Run the smoke test: `pnpm exec vitest run --config vitest.smoke.config.ts`
-  8. Start the built server in test mode (`NODE_ENV=test`, `ALLOW_DEV_AUTH_BYPASS=true`)
-  9. Wait for server health check at `/api/v1/health`
+  6. Run integration tests: `pnpm exec vitest run --config vitest.integration.config.ts` (container 1 only)
+  7. Run the smoke test: `pnpm exec vitest run --config vitest.smoke.config.ts` (container 1 only)
+  8. Start the built server in test mode (`NODE_ENV=test`, `ALLOW_DEV_AUTH_BYPASS=true`, `PORT=5000`, and a per-run `CRON_SECRET`)
+  9. Wait for server health check at `/api/v1/health` (`node script/wait-for-health.js`, 120 s by default via `HEALTH_TIMEOUT_MS`)
   10. Run Cypress, recording to Cypress Cloud only when `CYPRESS_RECORD_KEY` is set
+- **Secrets:** all optional. `CYPRESS_RECORD_KEY` turns on recording and the two-container split; `GEMINI_API_KEY`, `SENTRY_DSN`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` and `VITE_SENTRY_DSN` are passed through when present, and the server boots without them.
 
 ### 3. Check Migrations (`migrations.yml`)
 
 - **Name:** Check Migrations
-- **Triggers:** Push to `main`, pull request
+- **Triggers:** Push to `main`, pull request (opened/synchronize/reopened)
 - **Jobs:**
   - `check-migrations` -- runs `pnpm run db:check` for internal consistency, then `pnpm run db:generate` followed by `git diff --exit-code migrations/` to verify migrations are up to date with the schema.
   - `fresh-db-migrate` -- applies the **real** migration SQL to a fresh PostgreSQL (16 with pgvector, installed on the runner the same way as in `cypress.yml`), so a migration that fails at apply time on a fresh database is caught: the job above never applies SQL, and `cypress.yml` provisions its database with `drizzle-kit push`. It runs `pnpm run db:migrate` twice (the second run must be an idempotent no-op), checks that the applied count in `__drizzle_migrations` equals the entries in `migrations/meta/_journal.json`, and probes the critical tables (`users`, `workout_logs`, `plan_days`, `foods`, `analytics_results`, `user_training_style`, `maf_profile`, `maf_test_results`, `maf_workout_analysis`).
@@ -591,13 +623,13 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 
 - **Name:** Post-Migration Verification
 - **Triggers:** Manual (`workflow_dispatch`)
-- **Steps:** Applies migrations to Neon database via `pnpm run db:migrate`, then runs `post-migration.integration.test.ts` against the real Neon database to verify schema correctness.
+- **Steps:** Applies migrations to Neon database via `pnpm run db:migrate`, then runs `post-migration.integration.test.ts` against the real Neon database to verify schema correctness. The database URL comes from the `NEON_DATABASE_URL` secret.
 - **A database built by `drizzle-kit push`** (empty ledger): dispatch with `ledger: push` and `sql_files` naming the migration files to apply. It skips `drizzle-kit migrate`, which fails at 0000 on such a database, applies each named file with `psql` in its own transaction, and skips the test's migration-ledger count (D24). Production is not one: it applies its migrations at boot and its ledger is populated, so use the `migrate` default there, and never run `drizzle-kit push` against it (`docs/operations/pending-manual-steps.md`).
 
 ### 5. Build (`build.yml`)
 
 - **Name:** Build
-- **Triggers:** Push to `main`, pull request
+- **Triggers:** Push to `main`, pull request (opened/synchronize/reopened)
 - **Job:** `lint-and-typecheck`, which runs five gates in order:
   1. **ESLint** -- `pnpm eslint .`
   2. **TypeScript** -- `pnpm check`, the repo-wide typecheck (TS 7 native compiler)
@@ -610,33 +642,33 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 ### 6. OpenAPI Breaking Changes (`openapi-breaking.yml`)
 
 - **Name:** OpenAPI Breaking Changes
-- **Triggers:** Pull request (opened/synchronize/reopened/labeled/unlabeled) touching `docs/openapi.json` or the checker
-- **Steps:** Checkout, install, fetch the base branch, then `pnpm openapi:breaking <base openapi.json> docs/openapi.json` (`script/openapiBreaking.ts`). It fails on a change that would break an installed native app build: a removed operation or success response; a response field removed, retyped, no longer always present or newly nullable; a request that gains a required field or parameter, loses an enum value or tightens a length. A response enum gaining a value, or a changed pattern or union, is printed as a warning without failing.
+- **Triggers:** Pull request (opened/synchronize/reopened/labeled/unlabeled) touching `docs/openapi.json`, the checker (`script/openapiBreaking.ts`, `script/openapi-breaking.ts`) or the workflow
+- **Steps:** Checkout, install, fetch the base branch, then `pnpm openapi:breaking <base openapi.json> docs/openapi.json` (the CLI `script/openapi-breaking.ts` over `script/openapiBreaking.ts`); it passes without comparing when the base branch has no `docs/openapi.json`. It fails on a change that would break an installed native app build: a removed operation or success response; a response field removed, retyped, no longer always present or newly nullable; a request that gains a required field or parameter, loses an enum value or tightens a length. A response enum gaining a value, or a changed pattern or union, is printed as a warning without failing.
 - **Override:** the job is skipped on a PR labelled `openapi-breaking-ok`, for a deliberate break shipped with a raised `MIN_APP_VERSION_*`. Label changes re-run only this workflow.
 - **Related:** `test/docs/openapiCoverage.test.ts` (in the unit suite) keeps every registered `/api` route either documented, on the shrink-only `test/docs/openapiUndocumented.ts` list, or excluded as not a client endpoint.
 
 ### 7. Mobile Core (`mobile.yml`)
 
 - **Name:** Mobile Core
-- **Triggers:** Push to `main` and pull requests touching `mobile/**`, `docs/openapi.json`, `shared/**`, `script/kotlin-models/**`, `script/kotlin-catalogue/**`, `script/mobile-fixtures/**` or the workflow
+- **Triggers:** Push to `main` and pull requests touching `mobile/**`, `docs/openapi.json`, `shared/**`, `script/kotlin-models/**`, `script/kotlin-catalogue/**`, `script/mobile-fixtures/**` or the workflow (a push to `main` touching `mobile-release.yml` also runs it); also run by hand (`workflow_dispatch`) for a fresh test build
 - **Steps:** two jobs, both in `mobile/` with the runner's JDK 21 and a Gradle download cache. See [`mobile/README.md`](../mobile/README.md).
   - *Kotlin core (JVM)*: `./gradlew :core:jvmTest :composeApp:jvmTest`. It compiles the Kotlin API models generated from `docs/openapi.json` and runs `ApiContractTest` (every endpoint's sample request and response JSON decodes, the forward-compatibility samples included), the runtime tests, the golden-fixture tests of the Kotlin ports of `shared/` logic, the shared UI's view-model tests, `ContrastTest` (WCAG AA for every token pair, both themes), and the Compose UI tests that render the whole app on the desktop JVM (`AppUiTest`, `AccessibilityUiTest`: labels and 48 dp touch targets).
-  - *Android app*: builds the debug APK and the release bundle (R8), runs the Robolectric tests and checks the design-system screenshots against the committed references (`verifyRoborazziAndroidHostTest`; the differences are uploaded as `screenshot-diffs` when they fail), then Android lint, ktlint and detekt.
+  - *Android app*: builds the debug APK and an unsigned release bundle (R8), runs the Robolectric tests and checks the design-system screenshots against the committed references (`verifyRoborazziAndroidHostTest`; the differences are uploaded as `screenshot-diffs` when they fail), then Android lint, ktlint and detekt. The debug APK is kept for 14 days as the `fitai-test-<run number>.apk` artifact, a test build to install on a phone. It signs in with the `CLERK_PUBLISHABLE_KEY` repository variable (the build warns, and sign-in fails, without it) and needs the `FIREBASE_APP_ID`, `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID` and `FIREBASE_SENDER_ID` variables for push; the optional `ANDROID_TEST_KEYSTORE_BASE64` secret signs every test build with the same debug key, so each installs over the last.
 - **Related:** in the unit suite, `script/kotlin-models/generate.test.ts`, `script/kotlin-catalogue/catalogue.test.ts` and `script/mobile-fixtures/fixtures.test.ts` fail while the committed models, exercise catalogue or fixtures differ from what their sources generate; run `pnpm mobile:models`, `pnpm mobile:catalogue` or `pnpm mobile:fixtures`.
 
 ### 8. Mobile release and on-demand checks
 
-- **Mobile Release** (`mobile-release.yml`) -- On a `mobile-v<major>.<minor>.<patch>` tag: runs the JVM tests, builds the signed release bundle and uploads it to Play's internal track (Gradle Play Publisher), keeping the bundle and its R8 mapping as an artifact. Uses the `play-store` environment.
-- **Mobile Promote** (`mobile-promote.yml`) -- Run by hand: moves a release between Play tracks (internal → closed test → production), production as a staged rollout by user fraction.
-- **Mobile Performance** (`mobile-performance.yml`) -- Run by hand, on an emulator: generates the Baseline Profile (uploaded to be committed) and runs the Macrobenchmark startup and frame-timing benchmarks, checking them against `mobile/baselineprofile/budgets.json` with `pnpm mobile:perf-budgets` (`script/mobile-perf/`).
-- **Mobile E2E** (`mobile-e2e.yml`) -- Run by hand: the debug app against staging on an emulator, driven by the Maestro flows in `mobile/maestro/` (sign-in with a Clerk test account, every tab, logging a workout, sign-out).
+- **Mobile Release** (`mobile-release.yml`) -- On a `mobile-v<major>.<minor>.<patch>` tag: runs the JVM tests, builds the signed release bundle and uploads it to Play's internal track (Gradle Play Publisher), keeping the bundle and its R8 mapping as an artifact. Uses the `play-store` environment, with the `ANDROID_UPLOAD_KEYSTORE_BASE64`, `ANDROID_UPLOAD_KEYSTORE_PASSWORD`, `ANDROID_UPLOAD_KEY_ALIAS`, `ANDROID_UPLOAD_KEY_PASSWORD` and `ANDROID_PUBLISHER_CREDENTIALS` secrets and the `CLERK_PUBLISHABLE_KEY` and `FIREBASE_*` variables. A tag that is not `mobile-v<major>.<minor>.<patch>`, or a minor or patch above 999, fails the run.
+- **Mobile Promote** (`mobile-promote.yml`) -- Run by hand: moves a release between Play tracks (internal → `alpha`, the closed test → production), production as a staged rollout by user fraction. Uses the `play-store` environment and its `ANDROID_PUBLISHER_CREDENTIALS` secret.
+- **Mobile Performance** (`mobile-performance.yml`) -- Run by hand, on an emulator (a Gradle Managed Device, Pixel 6 / API 34): generates the Baseline Profile (uploaded as the `baseline-profile` artifact, to be committed) and runs the Macrobenchmark startup and frame-timing benchmarks, checking them against `mobile/baselineprofile/budgets.json` with `pnpm mobile:perf-budgets` (`script/mobile-perf/`). The `STAGING_CLERK_PUBLISHABLE_KEY`, `STAGING_API_BASE_URL` and `FITAI_TEST_EMAIL` variables are optional; without them both steps stop at the sign-in screen and the jank benchmark is skipped.
+- **Mobile E2E** (`mobile-e2e.yml`) -- Run by hand: the debug app against staging on an emulator (API 34), driven by the Maestro flows in `mobile/maestro/` (sign-in with a Clerk test account, every tab, logging a workout, sign-out). It fails at once unless the `STAGING_CLERK_PUBLISHABLE_KEY`, `STAGING_API_BASE_URL` and `FITAI_TEST_EMAIL` repository variables are set; the JUnit report and screenshots are uploaded as the `maestro` artifact.
 
 ### 9. Other workflows
 
 - **Secret Scan** (`gitleaks.yml`) -- Gitleaks secret scanning on push to `main` and on pull request. Scans **incrementally** -- only the commits the push or PR introduces -- so it blocks new secrets without re-flagging already-revoked ones buried in old history. Added after a former `.replit` config leaked an `ENCRYPTION_KEY`; that key has since been rotated through the keyring.
-- **DevSkim** (`devskim.yml`) -- Static security analysis
-- **Bearer** (`bearer.yml`) -- Static security and privacy analysis
-- **Dependency Review** (`dependency-review.yml`) -- Reviews dependency changes in PRs
+- **DevSkim** (`devskim.yml`) -- Static security analysis (DevSkim CLI 1.0.70) on push to `main`, pull requests into `main` and weekly on Saturday; results are uploaded as SARIF to the Security tab. It ignores `pnpm-lock.yaml`, `mobile/core/src/commonTest/resources/`, `mobile/gradle/verification-metadata.xml` and `mobile/core/schemas/`.
+- **Bearer** (`bearer.yml`) -- Static security and privacy analysis on push to `main`, pull requests into `main` and weekly on Saturday, using the `BEARER_TOKEN` secret. It runs with `exit-code: 0`, so findings go to the Security tab as SARIF and never fail the run.
+- **Dependency Review** (`dependency-review.yml`) -- Reviews dependency changes in PRs into `main`, comments a summary on the PR, and fails on a newly introduced dependency with a moderate-or-higher advisory (`fail-on-severity: moderate`)
 
 ---
 
@@ -649,11 +681,14 @@ only to a CI-based scan, and the scan job for one is commented out in
 `build.yml`. The gate runs on the PR diff ("new code") and reports back as the
 **SonarCloud Code Analysis** check. These conditions most often affect test-only PRs:
 
-- **Duplication on New Code ≤ 3%.** Copy-pasting a large fixture factory (for
-  example the ~30-field `ExerciseSet` or `TimelineEntry` builder) into multiple
-  sibling `*.test.ts` files trips this gate. Extract the builder into a single
-  shared module instead — see [Shared fixtures](#shared-fixtures-across-sibling-suites)
-  and `server/services/ai/testFixtures.ts`.
+- **Duplication on New Code ≤ 3%.** `*.test.ts`/`*.test.tsx` files and anything
+  under `__tests__/` or `test/support/` are excluded from analysis, so
+  duplication between test files does not count. A test helper that lives
+  anywhere else (for example `server/services/ai/testFixtures.ts`) is analysed
+  as production source: copy-pasting a large fixture factory (the ~30-field
+  `ExerciseSet` or `TimelineEntry` builder) into a second such module trips
+  this gate. Keep one shared builder — see
+  [Shared fixtures](#shared-fixtures-across-sibling-suites).
 - **No commented-out code (`S125`).** Keep explanatory comments in prose.
   Comments that read as code — method chains like `select().from().where()`, or
   `last3 = [8, 8, 8]` — can be flagged as commented-out code; describe the intent
@@ -661,13 +696,19 @@ only to a CI-based scan, and the scan job for one is commented out in
 - **Coverage on New Code** and **Security Hotspots reviewed.** New production code
   should ship with tests, and any flagged hotspots must be triaged.
 
-`.sonarcloud.properties` sets a single property,
-`sonar.exclusions=migrations/**,**/*.sql`, so Drizzle SQL migrations are
-excluded (the PL/SQL analyzer would otherwise flag them with Oracle-only rules);
-neither file excludes any other generated artifact. The test-file declaration
-(`sonar.test.inclusions=**/*.test.ts,**/*.test.tsx`) and the
-`coverage/lcov.info` report path live only in `sonar-project.properties`, so
-they take effect only if the project switches to the CI scanner. A failing
+`.sonarcloud.properties` sets `sonar.exclusions` to Drizzle SQL migrations
+(`migrations/**`, `**/*.sql`; the PL/SQL analyzer would otherwise flag them with
+Oracle-only rules), test files (`**/*.test.ts`, `**/*.test.tsx`,
+`**/__tests__/**`, `**/test/support/**`), the Kotlin generated from
+`docs/openapi.json` and the exercise catalogue (`mobile/**/generated/**`) and
+the Kotlin test source sets (`mobile/**/src/*Test/**`). It also declares the
+same test patterns through `sonar.tests`/`sonar.test.inclusions`, and
+`sonar.cpd.exclusions` drops three curated data tables
+(`server/prompts/exerciseSelection.ts`, `server/services/ai/exerciseKnowledge.ts`,
+`client/src/pages/landing/landingCopy.ts`) from duplication detection only. The
+`coverage/lcov.info` report path (`sonar.javascript.lcov.reportPaths`) lives
+only in `sonar-project.properties`, so it takes effect only if the project
+switches to the CI scanner. A failing
 gate posts a "Quality Gate failed" comment listing the failed conditions; a
 passing gate may still list non-blocking new issues worth cleaning up.
 
@@ -804,7 +845,7 @@ CI runs this on every PR and the thresholds are merge-gating.
 
 ### Running Cypress locally
 
-1. Build and start the app:
+1. Build and start the app, with `DATABASE_URL` and `ENCRYPTION_KEY` exported as for the integration tests (`node dist/index.js` does not read `.env`) and the schema pushed:
    ```bash
    pnpm run build
    NODE_ENV=test ALLOW_DEV_AUTH_BYPASS=true node dist/index.js
@@ -925,6 +966,9 @@ project-root/
       queryClient.test.ts            # React Query client tests
       statsUtils.test.ts             # Statistics utility tests
       utils.test.ts                  # General utility tests
+    test/
+      factories/                     # makeExerciseSet / makeTimelineEntry / makeFood
+      support/                       # Shared mocks and render harnesses
 
   cypress/
     e2e/                             # E2E spec files
@@ -944,9 +988,12 @@ project-root/
       commands.ts                    # Custom Cypress commands (getBySel, ensureConsentDismissed, log-workout stepper helpers)
       e2e.ts                         # Global hooks and Clerk intercepts
       authIntercepts.ts              # API stub helper for authenticated tests
+      logWorkoutHelpers.ts           # Log-workout parse/save stubs and page visit
 test/
+  factories.ts                       # Shared createMock* builders
   audit/
     criticals.audit.test.ts          # Characterisation tests for the calculation audit
+  build/                             # Bundle-check, font-asset and service-worker caching tests
   docs/
     docsSync.test.ts                 # Pins doc catalogues to the code they enumerate
   evals/
@@ -961,7 +1008,8 @@ test/
 - **`__tests__/` directories:** Used when a directory contains multiple test files for a module group (e.g., `server/routes/__tests__/`, `client/src/hooks/__tests__/`).
 - **Integration tests:** Named with the `.integration.test.ts` suffix and excluded from the unit test config.
 - **Cypress specs:** Named with the `.cy.ts` suffix in `cypress/e2e/`.
-- **Test data factories:** Helper functions like `makeSet()` and `makeWorkoutLog()` are defined at the top of test files to build test data with sensible defaults and per-test overrides.
+- **Test data factories:** Builders take a partial `overrides` object over sensible defaults. Shared ones live in `test/factories.ts` (`createMockUser()`, `createMockWorkoutLog()`, `createMockTimelineEntry()`, `createMockTrainingPlan()`, `createMockPlanDay()`, `createMockTrainingContext()` and others), `client/src/test/factories/` (`makeExerciseSet()`, `makeTimelineEntry()`, `makeFood()`) and `server/services/ai/testFixtures.ts`; a builder only one file needs, such as `makeSet()` in `analyticsService.test.ts`, stays at the top of that file.
+- **Client test support:** `client/src/test/support/` holds shared mocks and render harnesses for component and hook tests (for example `renderWithClient()`, `createWrapper()` and `makeToastMock()` in `mutationHookMocks.tsx`, `installRadixPointerMocks()`, `mockDeviceTimezone()`).
 - **`data-testid` attributes:** Used in React components for Cypress selectors via `cy.getBySel()`.
 
 ---

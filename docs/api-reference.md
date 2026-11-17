@@ -8,9 +8,9 @@ fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints req
 
 **Base URL:** `/api/v1`
 **Content-Type:** `application/json` (requests and responses)
-**Authentication:** Clerk JWT via `credentials: "include"` (cookie-based)
+**Authentication:** Clerk JWT via `credentials: "include"` (cookie-based) on the web; the native app sends its Clerk session token as `Authorization: Bearer`
 
-**Machine-readable spec:** a committed OpenAPI 3.0 snapshot lives at [`docs/openapi.json`](openapi.json). It is regenerated from the same Zod registry that powers Swagger UI (`shared/openapi.ts`) via `pnpm docs:openapi` and is CI-gated — the `Build` workflow fails if the committed file drifts from the schemas. Use it for client-code generation, contract testing, or importing into tools like Postman / Insomnia. Path definitions live in per-area modules under `shared/openapiRoutes/`, which share the bearer security scheme, the two error envelopes (`ErrorResponse`, `ValidationErrorResponse`) and the native app's `426 AppUpdateRequiredResponse` (`shared/openapiRoutes/common.ts`). Every client endpoint below is registered; `test/docs/openapiCoverage.test.ts` fails CI when a new route is not, and lists the routes deliberately left out (webhooks, unsubscribe links, health probes, operator and debug endpoints) with the reason for each. Entities several areas return — `ExerciseSetRow`, `WorkoutStructureBlock`, `ParsedExercise`, `CoachNoteInputs`, `PlanProposal` — are registered once in `shared/openapiRoutes/entities.ts`. On pull requests, `openapi-breaking.yml` fails a change that would break installed app builds ([Testing → OpenAPI Breaking Changes](testing.md#6-openapi-breaking-changes-openapi-breakingyml)).
+**Machine-readable spec:** a committed OpenAPI 3.0 snapshot lives at [`docs/openapi.json`](openapi.json). It is regenerated from the same Zod registry that powers Swagger UI (`shared/openapi.ts`) via `pnpm docs:openapi` and is CI-gated — the `Build` workflow fails if the committed file drifts from the schemas. Use it for client-code generation, contract testing, or importing into tools like Postman / Insomnia. Path definitions live in per-area modules under `shared/openapiRoutes/`, which share the bearer security scheme, the two error envelopes (`ErrorResponse`, `ValidationErrorResponse`) and the native app's `426 AppUpdateRequiredResponse` (`shared/openapiRoutes/common.ts`). Every client endpoint below is registered; `test/docs/openapiCoverage.test.ts` fails CI when a new route is not, and lists the routes deliberately left out (webhooks, unsubscribe links, health probes, operator and debug endpoints) with the reason for each. Entities several areas return — `ExerciseSetRow`, `WorkoutStructureBlock`, `ParsedExercise`, `CoachNoteInputs`, `PlanProposal`, `SessionMafCompliance` — are registered once in `shared/openapiRoutes/entities.ts`. On pull requests, `openapi-breaking.yml` fails a change that would break installed app builds ([Testing → OpenAPI Breaking Changes](testing.md#6-openapi-breaking-changes-openapi-breakingyml)).
 
 ---
 
@@ -64,6 +64,7 @@ There are two standard error body shapes, both carrying a machine-readable `code
   - `details` is only included on 4xx responses whose error carries it.
   - A 500 always returns `"Internal Server Error"` to prevent leaking internals.
   - An error from another service is a `502` with `EXTERNAL_API_ERROR` and a generic message; its own status and text are not passed on.
+  - A body the JSON parser refuses keeps its own status: malformed JSON is `400 BAD_REQUEST`, and a body over the route's size limit is `413 PAYLOAD_TOO_LARGE` with a fixed message. A bad percent-escape in a path parameter is `400 BAD_REQUEST` (`"Malformed URL"`).
 
 - **Validation middleware** (`validateBody` / `validateQuery` / `validateParams` in `server/routeUtils.ts`) — a failed Zod parse returns `400` with `message` in place of `error` (see [Request Validation](#request-validation)).
 
@@ -121,11 +122,12 @@ RateLimit-Reset: 45
 | ------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 400    | `BAD_REQUEST`, `VALIDATION_ERROR`, `INVALID_CSV`, `NO_SESSIONS_AFTER_START`                             | Invalid input                                                                                                                                                     |
 | 401    | `UNAUTHORIZED`                                                                                          | Missing or invalid auth                                                                                                                                           |
-| 403    | `EBADCSRFTOKEN`, `FORBIDDEN`, `AI_COACH_DISABLED`                                                       | Rejected rather than unauthenticated — every CSRF failure lands here as `EBADCSRFTOKEN`; `FORBIDDEN` is a Strava webhook verify-token mismatch                    |
+| 403    | `EBADCSRFTOKEN`, `FORBIDDEN`, `AI_COACH_DISABLED`, `EMOM_BUILDER_DISABLED`                              | Rejected rather than unauthenticated — every CSRF failure lands here as `EBADCSRFTOKEN`; `FORBIDDEN` is a Strava verify-token mismatch or refused native connect  |
 | 404    | `NOT_FOUND`                                                                                             | Resource not found                                                                                                                                                |
-| 409    | `PLAN_OVERLAP`, `PLAN_GENERATION_IN_PROGRESS`, `IDEMPOTENT_REQUEST_IN_PROGRESS`, `RECYCLE_BIN_CONFLICT` | Conflicts with current state                                                                                                                                      |
-| 412    | `PRECONDITION_FAILED`                                                                                   | A precondition on the request was not met                                                                                                                         |
+| 409    | `PLAN_OVERLAP`, `PLAN_GENERATION_IN_PROGRESS`, `IDEMPOTENT_REQUEST_IN_PROGRESS`, `RECYCLE_BIN_CONFLICT` | Conflicts with current state; most route-level conflicts (a stale set `expectedVersion`, a changed set list, a missed-session decision) use plain `CONFLICT`      |
+| 412    | `PRECONDITION_FAILED`                                                                                   | A `limit` above a paginated route's maximum (`parsePagination`); the body also carries `maxLimit`                                                                 |
 | 413    | `PAYLOAD_TOO_LARGE`                                                                                     | Body exceeded the route's size limit                                                                                                                              |
+| 422    | `STRUCTURED_ROWS_REQUIRED`, `PARSE_WRITE_THROUGH_REQUIRED`                                              | A text-only workout write while structured rows are required, or a reparse that produced no saved exercise sets                                                   |
 | 429    | `RATE_LIMITED`, `AI_BUDGET_EXCEEDED`                                                                    | Rate limit exceeded (includes `Retry-After` header), or this user's AI spend budget is spent                                                                      |
 | 500    | `INTERNAL_SERVER_ERROR`                                                                                 | Server error                                                                                                                                                      |
 | 502    | `EXTERNAL_API_ERROR`                                                                                    | A service the request depends on (an AI provider, Strava) failed; its own status and message are not passed on                                                    |
@@ -143,7 +145,7 @@ not cause and cannot clear by waiting out their own allowance. See
 Rate limits are applied per-user (keyed by Clerk userId, falling back to the client IP when the request carries no Clerk session) and namespaced by limiter — category, cap and window — so limits are independent across route groups. Two limiters that share a category but not a cap or window (`workoutSet` at 120/min for set edits and 60/min for adding a set) keep separate counters; routes with the same category, cap and window share one.
 
 - **Default window:** 60 seconds
-- **Strava routes:** 15-minute window
+- **Strava and Garmin routes, and the email unsubscribe link:** 15-minute window (the Strava webhook receiver keeps the default)
 - **Response on limit:** `429` with `RATE_LIMITED` code and a `Retry-After` header set to the full window length in seconds
 - **Headers:** `RateLimit-Policy`, `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset` (seconds until the window resets) — the IETF draft-6 set that express-rate-limit sends for `standardHeaders: true`; legacy `X-RateLimit-*` headers are off
 - **Storage:** PostgreSQL-backed `rate_limit_buckets`, shared across app replicas outside tests
@@ -166,7 +168,7 @@ Retrieve a CSRF token for use in subsequent mutating requests.
 
 - **Auth:** Not strictly required (works pre-login, bound to IP; after login, bound to userId)
 - **Response:** `{ csrfToken: string }`
-- **Side effects:** Sets a signed `__Host-fitai.x-csrf` cookie (production) or `fitai.x-csrf` (development)
+- **Side effects:** Sets a signed, `HttpOnly`, `SameSite=Strict` cookie: `__Host-fitai.x-csrf` (production, `Secure`) or `fitai.x-csrf` (any other environment)
 
 The returned token must be sent as the `x-csrf-token` header on all mutating requests. Missing or invalid tokens result in `403 { "error": "invalid csrf token", "code": "EBADCSRFTOKEN" }` — csrf-csrf's error, rendered by the global error handler.
 
@@ -174,7 +176,7 @@ Requests authenticated with a Clerk session token in an `Authorization: Bearer` 
 
 ### Native app headers
 
-The native app sends `X-App-Platform` (`android` or `ios`) and `X-App-Version` (`MAJOR.MINOR.PATCH`) on every request. Both are logged on the access line (validated values only). When the operator sets `MIN_APP_VERSION_ANDROID` / `MIN_APP_VERSION_IOS`, an older build — or one with a missing or malformed version — gets, on any `/api/v1` route and ahead of auth and CSRF:
+The native app sends `X-App-Platform` (`android` or `ios`) and `X-App-Version` (`MAJOR.MINOR.PATCH`) on every request. Both are logged on the access line (validated values only). When the operator sets `MIN_APP_VERSION_ANDROID` / `MIN_APP_VERSION_IOS`, an older build — or one with a missing or malformed version — gets, on any `/api/v1` route but the two health probes (which mount earlier) and ahead of auth and CSRF:
 
 ```json
 426 { "error": "This version of the app is no longer supported. Update it to keep going.", "code": "APP_UPDATE_REQUIRED", "minimumVersion": "1.4.0" }
@@ -189,7 +191,7 @@ Requests without a recognised `X-App-Platform` (the web app) are never affected.
 Mutating endpoints support the `X-Idempotency-Key` header for safe request replay.
 
 - **Header:** `X-Idempotency-Key` (optional, max 255 characters — a longer key gets `400 BAD_REQUEST`)
-- **Behavior:** When present on a mutating request (POST/PUT/PATCH/DELETE) behind `protectedMutationGuards`, the server atomically claims `(userId, key)` — not scoped to the route — before the handler runs. Only a 2xx JSON response is cached, for 7 days; repeat requests with the same key return it without re-executing the handler. A non-2xx response releases the claim, so a retry re-executes.
+- **Behavior:** When present on a mutating request (POST/PUT/PATCH/DELETE) behind `protectedMutationGuards`, the server atomically claims `(userId, key)` — not scoped to the route — before the handler runs. Only a 2xx JSON response is cached, for 7 days; repeat requests with the same key return its status and body without re-executing the handler. Because the key is not scoped to the route, reusing a key on a different route replays the first route's response. A non-2xx response releases the claim, so a retry re-executes. If the claim itself fails (a store error), the request runs without idempotency rather than failing.
 - **Concurrent duplicates:** a request that arrives while the first is still running gets `409 IDEMPOTENT_REQUEST_IN_PROGRESS`, including after the first request's client disconnected: the handler keeps running, and the replay gets the stored response once it finishes. An abandoned claim expires after 60 seconds.
 - **Large responses:** a 2xx body over 64 KB is cached as the sentinel `{ "idempotencyReplayed": true }` rather than in full.
 - **Use case:** The client's offline queue sends this header when replaying mutations that were queued while offline, preventing duplicate state changes.
@@ -206,8 +208,10 @@ For builder-backed routes, middleware runs in this order:
 
 1. `protectedMutationGuards` (auth + idempotency guard chain)
 2. route-local limiter (`rateLimiter(...)`)
-3. route-specific middleware list (typically `validateBody(...)`, `validateParams(...)`, and optional feature guards)
-4. handler (wrapped with `asyncHandler` for async routes)
+3. `largeJsonBodyParser` — parses the body of the few large-body routes (plan import 1 MB, coaching materials 2 MB, chat 5 MB, image parses 10 MB) after auth and the limiter; a no-op elsewhere
+4. `aiConsentCheck` then `aiBudgetCheck`, on routes that set `aiConsent` / `aiBudget`
+5. route-specific validation and middleware lists (typically `validateBody(...)`, `validateParams(...)`, and optional feature guards)
+6. handler (wrapped with `asyncHandler` for async routes)
 
 This ordering guarantees auth/idempotency and cost guards execute before validation or business logic, while still letting validation produce the canonical `VALIDATION_ERROR` shape. CSRF is enforced separately at router registration (`app.use("/api/v1", csrfProtection)`).
 
@@ -248,7 +252,7 @@ Unauthenticated, like the few other routes listed in the [Overview](#overview). 
 
 - **Auth:** None
 - **Response:** `200` `{ status: "ok", vectorSchema, uptimeMs, timestamp }`
-- **Errors:** `503` with `status` of `"starting"` (still booting, plus `phase`), `"degraded"` (`db` / `vectorDb` booleans), or `"error"`
+- **Errors:** `503` with `status` of `"starting"` (still booting, plus `phase`), `"degraded"` (`db` / `vectorDb` booleans), or `"error"` (boot failed, with `error: "startup_error"` and `phase`; or the probe itself threw)
 
 ---
 
@@ -258,11 +262,11 @@ Unauthenticated, like the few other routes listed in the [Overview](#overview). 
 
 ### GET /api/v1/auth/user
 
-Returns the current authenticated user's profile. Creates the user in the database if they don't exist yet (first-call sync from Clerk).
+Returns the current authenticated user's profile. The row itself is created by the auth guard (`isAuthenticated` → `ensureUserExists` in `server/clerkAuth.ts`) on the first authenticated request to any route, with name, email and image copied from Clerk when Clerk answers.
 
 - **Auth:** Required
 - **Rate limit:** `auth` category, 60/min — the client polls this route every 2 s (30/min) while the auto-coach runs
-- **Response:** `User` object (id, email, firstName, lastName, profileImageUrl, preferences)
+- **Response:** the whole `users` row: id, email, firstName, lastName, profileImageUrl, and the preference and profile columns (units, `userTimezone`, email toggles, `aiCoachEnabled`, `isAutoCoaching`, training style, onboarding state, and so on). There is no nested `preferences` object.
 
 ---
 
@@ -280,10 +284,10 @@ Permanently delete the authenticated user's account and all associated data (GDP
 - **Response:** `{ "success": true }` (or `404 { "error": "User not found", "code": "NOT_FOUND" }`)
 - **Side effects, in order** (via `eraseAccount()` in `server/services/accountErasureService.ts`, resumable past its Clerk-delete point of no return — see the [runbook](operations/account-erasure.md)):
   1. **`users.erasure_requested_at` is stamped** before anything irreversible, then the user's private custom-food ids are captured.
-  2. **RAG chunks and private-food embeddings are purged from the vector DB** (`document_chunks`, `food_embeddings` — neither is reachable by a main-DB FK cascade).
+  2. **RAG chunks and private-food embeddings are purged from the vector DB** (`document_chunks`, `food_embeddings` — neither is reachable by a main-DB FK cascade), then the user's cached RAG retrievals in `server_runtime_cache`. A failure here withdraws the stamp and fails the request, since nothing irreversible has happened yet.
   3. **Clerk identity is deleted.** If Clerk returns HTTP 404, the identity is treated as already-deleted (idempotent retry); any other error aborts the request so the DB row is not orphaned. Without this ordering, `ensureUserExists` on the next authenticated request would silently re-provision the account.
   4. **Best-effort Strava deauthorization** — `POST https://www.strava.com/oauth/deauthorize` is called with the stored access token. Failures are logged and ignored (non-fatal).
-  5. **DB user row and private custom foods are deleted in one transaction.** FK `ON DELETE CASCADE` cleans up: `workout_logs`, `exercise_sets`, `training_plans`, `plan_days`, `chat_messages`, `coaching_materials`, `strava_connections`, `garmin_connections`, `custom_exercises`, `push_subscriptions`, `ai_usage_logs`, `idempotency_keys`, and `timeline_annotations`. Public custom foods survive by explicit opt-in.
+  5. **DB user row and private custom foods are deleted in one transaction.** FK `ON DELETE CASCADE` cleans up the user's child rows (about 30 tables reference `users` with a cascade), among them `workout_logs`, `exercise_sets`, `training_plans`, `plan_days`, `chat_messages`, `coaching_materials`, `strava_connections`, `garmin_connections`, `custom_exercises`, `push_subscriptions`, `ai_usage_logs`, `idempotency_keys`, and `timeline_annotations`. Public custom foods survive by explicit opt-in.
   6. **Best-effort purge** of the user's rate-limit buckets, then their queued pg-boss jobs.
   7. **Auth seen-cache eviction** — `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache. A Clerk session minted before step 3 still authenticates until it expires, so before step 5 the erasure writes a 10-minute `auth-erased` tombstone (`rememberUserErased`) and `ensureUserExists` answers such a session with 401 instead of re-provisioning the account.
 - **Stranded runs:** if a run dies after step 3, `runStrandedErasureSweep` (hourly cron) finds the still-stamped row and finishes it — the athlete can no longer authenticate to retry themselves.
@@ -300,17 +304,18 @@ List workout logs for the current user with pagination.
 
 - **Auth:** Required
 - **Rate limit:** `workoutList` category, 60/min
-- **Query params:** `limit` (default 50, max capped), `offset` (default 0)
-- **Response:** `WorkoutLog[]`
+- **Query params:** `limit` (default 50, max 200), `offset` (default 0)
+- **Response:** `WorkoutLog[]`, newest `date` first (rows only; no exercise sets)
+- **Errors:** `400 BAD_REQUEST` for a non-numeric or sub-1 `limit` or a negative `offset`; `412 PRECONDITION_FAILED` (with `maxLimit`) for a `limit` above 200 — it is refused, not clamped
 
 ### GET /api/v1/workouts/latest
 
-Get the most recent workout log for the current user.
+Get the most recent workout log (latest `date`) for the current user. Unlike `GET /api/v1/workouts/:id`, it does not derive missing sets from structure and carries no `suggestedRpe`.
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 60/min
 - **Response:** `WorkoutLog` with `exerciseSets` and `structureBlocks`
-- **404:** No workouts found
+- **404:** No workouts found (`"No workouts found"`)
 
 ### GET /api/v1/workouts/:id
 
@@ -318,8 +323,8 @@ Get a single workout log by ID. If the workout has structure blocks but no exerc
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 60/min
-- **Response:** `WorkoutLog` with `exerciseSets`, `structureBlocks` and `suggestedRpe`
-- **`suggestedRpe`:** the RPE (1–10) the log's average heart rate suggests, which the review sheet marks in its RPE picker for the athlete to confirm. It is never saved on its own. `null` without heart rate, for lifting, yoga and Pilates, or when the athlete has neither a max HR nor an age on file. It is returned whether or not `rpe` is set; the client shows it only while `rpe` is empty. The athlete's profile is read only for a log that could get one. See [Heart-rate RPE suggestion](integrations.md) in the Strava section.
+- **Response:** `WorkoutLog` with `exerciseSets`, `structureBlocks` and `suggestedRpe`, plus `avgCadenceUnit` (when the log has a cadence) and `mafCompliance` (a log with a running set and an average heart rate, when the athlete has a MAF ceiling)
+- **`suggestedRpe`:** the RPE (1–10) the log's average heart rate suggests, which the review sheet marks in its RPE picker for the athlete to confirm. It is never saved on its own. `null` without heart rate, for lifting, yoga and Pilates, or when the athlete has neither a max HR nor an age on file. It is returned whether or not `rpe` is set; the client shows it only while `rpe` is empty. The athlete's profile is read only for a log with an average heart rate. See [Heart-rate RPE suggestion](integrations.md) in the Strava section.
 - **404:** Workout not found
 
 ### POST /api/v1/workouts
@@ -330,9 +335,14 @@ Create a new workout log, optionally with parsed exercises and/or structure bloc
 - **Rate limit:** `workout` category, 40/min
 - **Body:** `InsertWorkoutLog` fields + optional `exercises: ParsedExercise[]` + `structureBlocks`
 - **Validation:** `createWorkoutRouteSchema` (`insertWorkoutLogSchema` extended with `exercisesPayloadSchema` + `structureBlocksPayloadSchema`). `date` must be a real calendar day; reps, planned reps and set numbers are whole numbers; step numbers and minute indices are unique within a structure block. A value its column would refuse is a `400` naming the field, not a `500` that rolls back the save (C50, `docs/CODEBASE_ANALYSIS_2026-10-03.md`).
-- **Server-owned fields:** `source`, `stravaActivityId`, `garminActivityId` and `startedAt` are stripped from the body. They mark a workout as a device import and are written only by the activity sync and the device-link routes, so accepting them from a client would let a manual log present itself as a Strava or Garmin recording. `planId` is likewise always derived: the server resolves plan linkage from `planDayId` (ownership-checked) or from the plan covering the workout's date, and a client-supplied `planId` is discarded.
-- **Side effects:** If user has AI coach enabled, sets `isAutoCoaching` flag and queues an `auto-coach` job. A text-only write guard (`rejectTextOnlyWriteIfNeeded`) may reject the request when structured exercise data is required.
-- **Response:** Created `WorkoutLog` with expanded `exerciseSets`
+- **Date:** at most the athlete's own tomorrow (in their `userTimezone`); a later date is `400` "Workout date cannot be in the future".
+- **`mainWorkout`:** optional; left out or blank, the server writes a summary of `exercises` in the athlete's units.
+- **Server-owned fields:** `source`, `stravaActivityId`, `garminActivityId`, `healthConnectId` and `startedAt` are stripped from the body, as are the device-link, adherence and `prescribed*` columns. The provenance fields mark a workout as a device import and are written only by the activity syncs and the device-link routes, so accepting them from a client would let a manual log present itself as a Strava or Garmin recording. `planId` is likewise always derived: the server resolves plan linkage from `planDayId` (ownership-checked; a day that is not the caller's is silently dropped) or from the plan covering the workout's date (auto-matching that plan's day on the same date), and a client-supplied `planId` is discarded.
+- **Plan-day logs:** a log with a `planDayId` marks the day completed and records its adherence snapshot. Sent without `exercises` or `structureBlocks`, it copies the day's prescribed sets and structure into the log. If the day already has a log, such a create answers with that existing log when it is a plain "Done" (the day's own focus and text, nothing else), and is refused with `409 CONFLICT` otherwise.
+- **Legacy parse:** with no `exercises`, no `structureBlocks` and no `planDayId`, and a text AI provider configured, the server parses `mainWorkout`/`accessory` itself — only if the athlete has AI coaching on, AI is enabled and their budget allows; otherwise the log saves with its text and no sets. A parse that returns nothing is `400`.
+- **Text-only guard:** while the structured-blocks gate is on (`STRUCTURED_BLOCKS_ENABLED=true`, the default, and `STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY` not `true`), a body with `mainWorkout`/`accessory` text but no `exercises`, no `structureBlocks` and no `planDayId` is refused with `422 STRUCTURED_ROWS_REQUIRED` (`rejectTextOnlyWriteIfNeeded`), so the legacy parse above is reached only when the gate is off.
+- **Side effects:** If user has AI coach enabled, sets `isAutoCoaching` flag and queues an `auto-coach` job (the flag is cleared again if nothing is queued). The athlete's cached analytics slices are dropped.
+- **Response:** `200` with the created `WorkoutLog` and its `exerciseSets` (when it has any), plus `newPersonalRecords` when the sets set new PRs
 
 **Request example:**
 
@@ -414,12 +424,14 @@ Update an existing workout log.
 - **Auth:** Required
 - **Rate limit:** `workout` category, 40/min
 - **Body:** Partial `UpdateWorkoutLog` fields + optional `exercises: ParsedExercise[]` + `structureBlocks` + optional `relinks: StructureSetRelink[]` (only beside `structureBlocks`, never with `exercises`; a non-empty `relinks` otherwise returns `400`)
-- **Validation:** `updateWorkoutRouteSchema`
-- **Response:** Updated `WorkoutLog`
+- **Validation:** `updateWorkoutRouteSchema`. As on create, a `date` past the athlete's own tomorrow is `400`; a one-sided heart-rate change is checked against the stored value (max below average is `400`).
+- **Response:** Updated `WorkoutLog` (with `exerciseSets` when the body carried `exercises`)
+- **Errors:** `400` (validation, `relinks` misuse), `404` (workout not found, or a relink naming another owner's set), `422 STRUCTURED_ROWS_REQUIRED` — the same text-only guard as `POST`, so while the gate is on a body that changes `mainWorkout`/`accessory` text must also carry `exercises` or `structureBlocks`
+- **Side effects:** a changed `date` queues a debounced `auto-coach` run; any successful update drops the athlete's cached analytics slices
 
 A body with only `structureBlocks` (the workout sheet's block builder) replaces the log's structure blocks and leaves its columns unchanged.
 
-A body with `exercises` replaces every logged set, so, as after a single set edit, a plan-linked log's adherence columns (`compliancePct` and the set counts) are recomputed against its plan day and the auto-coach is re-queued before the response (C32, `docs/CODEBASE_ANALYSIS_2026-10-03.md`).
+A body with `exercises` replaces every logged set, so, as after a single set edit, a plan-linked log's adherence columns (`compliancePct` and the set counts) are recomputed against its plan day and, when the athlete has AI coaching on, the auto-coach is re-queued before the response (C32, `docs/CODEBASE_ANALYSIS_2026-10-03.md`).
 
 `relinks` (at most 500, each `setId` once) moves the exercise rows that follow the steps a `structureBlocks` save renumbers, in the same transaction, before the blocks are replaced (CL15, `docs/CODEBASE_ANALYSIS_2026-10-03.md`). Each is `{ setId, fromBlockId, fromStepNumber, blockId, stepNumber, intervalMinute?, cycleNumber? }`; `blockId` and `stepNumber` both `null` unlink a row whose step was removed, which also clears its interval minute, cycle, step role and group. A relink naming a set that belongs to another workout or plan day fails the whole save with `404` and nothing is written. A relink naming a set that no longer exists (deleted after the client computed it) is skipped and the save goes through. A row no longer on `fromBlockId`/`fromStepNumber` was moved by a newer write and is left alone, so a replay moves nothing twice. `intervalMinute` and `cycleNumber` keep their stored values unless sent. Saves of one workout's blocks are serialized by a row lock on the log.
 
@@ -434,11 +446,11 @@ fields listed under `POST /api/v1/workouts` are stripped here too.
 
 ### DELETE /api/v1/workouts/:id
 
-Delete a workout log and its exercise sets. The record graph is snapshotted into the [recycle bin](#recycle-bin-routes) first, so the delete can be undone for 90 days.
+Delete a workout log and its exercise sets. The record graph is snapshotted into the [recycle bin](#recycle-bin-routes) first, so the delete can be undone for 90 days. A plan day the log was linked to has its status re-derived from the logs left on it.
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 40/min
-- **Response:** `{ success: true, recycleBinItemId: string }` — pass the id to `POST /api/v1/recycle-bin/:id/restore` to undo
+- **Response:** `{ success: true, recycleBinItemId: string }` — pass the id to `POST /api/v1/recycle-bin/:id/restore` to undo (or `404` when the workout is not the caller's)
 
 ### POST /api/v1/workouts/:id/sets
 
@@ -447,7 +459,8 @@ Add a single exercise set to a workout log.
 - **Auth:** Required (user must own the workout)
 - **Rate limit:** `workoutSet` category, 60/min
 - **Body:** `addExerciseSetBodySchema`
-- **Response:** `201` Created exercise set (or 404 when the workout doesn't belong to the user)
+- **Response:** `201` Created exercise set, appended after the workout's last set (or 404 when the workout doesn't belong to the user)
+- **Side effects:** as for every set write on a workout log (add, edit, delete): the athlete's cached analytics slices are dropped, a plan-linked log's adherence columns are recomputed and, when AI coaching is on, the auto-coach is re-queued, all before the response
 
 ### PATCH /api/v1/workouts/:id/sets/:setId
 
@@ -455,8 +468,8 @@ Update a single exercise set on a workout log.
 
 - **Auth:** Required (user must own the workout)
 - **Rate limit:** `workoutSet` category, 120/min
-- **Body:** `patchExerciseSetBodySchema`
-- **Response:** Updated exercise set (or 404)
+- **Body:** `patchExerciseSetBodySchema`. Optional `expectedVersion` makes the write conditional on the set's stored `version`; without it the update is last-write-wins. Every successful update bumps `version`.
+- **Response:** Updated exercise set (or 404 when the set is not on this workout). `409 CONFLICT` when `expectedVersion` is stale, with `details: { currentVersion, expectedVersion }`; nothing is written.
 
 ### PATCH /api/v1/workouts/:id/set-order
 
@@ -473,15 +486,15 @@ Delete a single exercise set from a workout log.
 
 - **Auth:** Required (user must own the workout)
 - **Rate limit:** `workoutSet` category, 60/min
-- **Response:** `{ success: true }` (or 404)
+- **Response:** `{ success: true }`, also when the set no longer exists (or is not the caller's), so a repeated delete succeeds; `404` only when the set is the caller's but belongs to a different workout or plan day
 
 ### POST /api/v1/workouts/:id/seed-from-plan
 
-Seed a workout log's exercise sets from its linked plan day.
+Seed a workout log's exercise sets from its linked plan day. Copies the day's prescribed sets only when the log has no sets yet; it never returns `404`.
 
 - **Auth:** Required
 - **Rate limit:** `workoutSet` category, 20/min
-- **Response:** `{ seededCount: number }`
+- **Response:** `{ seededCount: number }` — `0` when the workout is not found, has no plan day, already has sets, or the day has none
 
 ### PATCH /api/v1/workouts/:id/plan-day
 
@@ -491,7 +504,8 @@ Attach workout log `:id` to a plan day, move it to a different one, or detach it
 - **Rate limit:** `workout` category, 40/min
 - **Body:** `{ planDayId: string | null }` — `null` detaches
 - **Response:** the updated `WorkoutLog`
-- **Errors:** `400` (validation), `404` (workout not found)
+- **Errors:** `400` (validation), `404` (workout not found, or `"Plan day not found"` for a day that is not the caller's)
+- **Side effects:** linking recomputes the log's adherence columns against the day and re-derives the day's status; detaching clears them. A day the log leaves has its status re-derived too. A Strava-recorded log linked to a day queues a session-stream fetch for grading.
 
 This is the **only** way to change a workout's plan linkage. The target day is
 resolved with `getPlanDay(planDayId, userId)`, so a day belonging to another
@@ -506,7 +520,7 @@ Merge a standalone Strava import (`:id`) into the plan day or the manually logge
 - **Rate limit:** `workout` category, 40/min
 - **Body:** exactly one of `{ planDayId: string }` or `{ workoutLogId: string }`
 - **Response:** the merged `WorkoutLog`
-- **Errors:** `400` (no target, both targets, or unknown fields), `404` (import or plan day not found), `409` (not a Strava import, already linked, or the target already carries a device activity)
+- **Errors:** `400` (no target, both targets, unknown fields, or `workoutLogId` naming the import itself), `404` (import or plan day not found), `409` (not a Strava import, already linked, the target workout not found, or the target already carries a device activity)
 
 ### DELETE /api/v1/workouts/:id/device-link
 
@@ -532,8 +546,8 @@ Set or clear the score on a single structure block of a workout log.
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 40/min
-- **Body:** `{ score: StructureBlockScore | null }`
-- **Response:** `{ structureBlocks }` (or 404)
+- **Body:** `{ score: StructureBlockScore | null }` — `null` clears it
+- **Response:** `{ structureBlocks }`, the workout's blocks after the write (or 404 when the block is not on this workout of the caller's); `400` when the score's `type` does not match the block's format
 
 ### GET /api/v1/workouts/:id/history
 
@@ -549,21 +563,22 @@ Delete multiple workout logs and/or plan days in a single request.
 
 - **Auth:** Required
 - **Rate limit:** `workoutBulkDelete` category, 20/min
-- **Body:** `{ workoutLogIds: string[], planDayIds: string[] }` — each capped at 100 entries, at least one id required
-- **Response:** `{ success: true, deletedWorkoutLogIds, deletedPlanDayIds, deletedCount, batchId: string, recycleBinItemIds: string[] }` (or 404 when a target is not found). Every deleted record lands in the [recycle bin](#recycle-bin-routes) under the one `batchId`, so `POST /api/v1/recycle-bin/batches/:batchId/restore` undoes the whole bulk delete.
+- **Body:** `{ workoutLogIds: string[], planDayIds: string[] }` — both optional (default `[]`), at least one id and at most 100 across the two lists; repeated ids are counted once
+- **Response:** `{ success: true, deletedWorkoutLogIds, deletedPlanDayIds, deletedCount, batchId: string, recycleBinItemIds: string[] }` (or `404` when any target is missing or not the caller's — the delete is all-or-nothing, so nothing is deleted). Plan days that deleted logs were linked to have their status re-derived. Every deleted record lands in the [recycle bin](#recycle-bin-routes) under the one `batchId`, so `POST /api/v1/recycle-bin/batches/:batchId/restore` undoes the whole bulk delete.
 
 ### POST /api/v1/workouts/combine
 
-Combine multiple workout logs into a single new workout, deleting the sources. The sources' exercise sets are moved onto the merged workout before the delete, so the sources do **not** go to the recycle bin — combine is permanent.
+Combine multiple workout logs into a single new workout, deleting the sources, in one transaction. The sources' exercise sets are moved onto the merged workout (renumbered in date order) before the delete, so a manually logged source does **not** go to the recycle bin and its delete cannot be undone. A device-imported source (Strava, Garmin or Health Connect) is snapshotted into the recycle bin first, so the bin row keeps its activity id and the next sync does not re-import it.
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 10/min
-- **Body:** `{ newWorkout: InsertWorkoutLog, deleteWorkoutIds: string[] (1-10), skipPlanDayIds?: string[] (max 10) }`
+- **Body:** `{ newWorkout: InsertWorkoutLog, deleteWorkoutIds: string[] (1-10), skipPlanDayIds?: string[] (max 10) }` — `newWorkout` takes the same client-facing fields as `POST /api/v1/workouts` (no `planId` or device provenance); its `planId` is derived from its `planDayId`
 - **Response:** `201` Created `WorkoutLog`
+- **Errors:** `404` when a source or the kept `planDayId` is not the caller's; `400` when a source is linked to a plan day that is neither the kept one nor in `skipPlanDayIds`. Days in `skipPlanDayIds` (other than the kept one) are marked `skipped`.
 
 ### GET /api/v1/workouts/unstructured
 
-List workouts that have no parsed exercise sets (candidates for reparsing). A plan-day log a Strava auto link created (`autoLinkedLogStillPrescription()` in `server/storage/workouts.ts`), linked still or since unlinked, is left out whatever its text: its main text is the plan's prescription, not what was done. (One an auto link made before migration `0120` carries no `auto_link_recording_only` marker, so it is left out only while its link stands.)
+List workouts that have no parsed exercise sets and a non-blank `mainWorkout` (candidates for reparsing), unpaginated and in no set order. A plan-day log a Strava auto link created (`autoLinkedLogStillPrescription()` in `server/storage/workouts.ts`), linked still or since unlinked, is left out whatever its text: its main text is the plan's prescription, not what was done. (One an auto link made before migration `0120` carries no `auto_link_recording_only` marker, so it is left out only while its link stands.)
 
 - **Auth:** Required
 - **Rate limit:** `workoutList` category, 60/min
@@ -571,17 +586,17 @@ List workouts that have no parsed exercise sets (candidates for reparsing). A pl
 
 ### POST /api/v1/workouts/:id/reparse
 
-Re-parse a single workout's text into structured exercise sets using the configured text AI provider. Writes the parsed sets through; responds `422 PARSE_WRITE_THROUGH_REQUIRED` when parsing produces no persisted sets. A successful reparse replaces every logged set, so it then recomputes a plan-linked log's adherence columns and re-queues the auto-coach, as a set edit does (C32); `/reparse-from-image` does the same.
+Re-parse a single workout's text into structured exercise sets using the configured text AI provider. The text parsed is the log's stored prescription (`prescribedMainWorkout`/`prescribedAccessory`, falling back to `mainWorkout`/`accessory`), or the body's replacement for either. Writes the parsed sets through; responds `422 PARSE_WRITE_THROUGH_REQUIRED` when parsing produces no persisted sets. A successful reparse replaces every logged set, so it then recomputes a plan-linked log's adherence columns and, when AI coaching is on, re-queues the auto-coach, as a set edit does (C32); `/reparse-from-image` does the same.
 
 - **Auth:** Required (user must own the workout)
 - **Rate limit:** `reparse` category, 5/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Body:** Optional `{ prescribedMainWorkout?: string | null, prescribedAccessory?: string | null }`
-- **Response:** `{ exercises: ParsedExercise[], saved: boolean, setCount: number, rejectedCount: number, rejectionReasons: string[] }`
+- **Body:** Optional `{ prescribedMainWorkout?: string | null, prescribedAccessory?: string | null }` (each at most 50,000 characters; unknown keys are `400`). A field sent here replaces the stored prescription text, and is saved only when the parse succeeds.
+- **Response:** `{ exercises: ParsedExercise[], saved: true, setCount: number, rejectedCount: number, rejectionReasons: string[] }` (or `404` when the workout is not the caller's)
 
 ### POST /api/v1/workouts/batch-reparse
 
-Re-parse all unstructured workouts for the current user. A plan-day log a Strava auto link created, linked still or since unlinked, is skipped whatever its text, as in `GET /api/v1/workouts/unstructured`, so the prescription is never parsed in as performed sets.
+Re-parse all unstructured workouts for the current user — the same set `GET /api/v1/workouts/unstructured` lists, with no cap on how many, in chunks of five with at most three AI calls in flight. A plan-day log a Strava auto link created, linked still or since unlinked, is skipped whatever its text, as in `GET /api/v1/workouts/unstructured`, so the prescription is never parsed in as performed sets.
 
 - **Auth:** Required
 - **Rate limit:** `batchReparse` category, 2/min
@@ -595,16 +610,17 @@ List assisted-migration backfill reviews for the current user.
 - **Auth:** Required
 - **Rate limit:** `migrationReviews` category, 20/min
 - **Query:** `ownerType?` (`workoutLog` | `planDay`), `ownerId?` — must be supplied together
-- **Response:** Backfill review list
+- **Response:** Backfill review rows, most recently updated first — up to 100, or at most the one row for the given owner
 
 ### POST /api/v1/workouts/migration/backfill
 
-Run an assisted-migration backfill pass for the current user. It parses set-less logs from the last 90 days and set-less upcoming plan days from their main workout and accessory, with whitespace trimmed (the characters JavaScript's `trim()` removes), skipping a log or day with no text left and a plan-day log a Strava auto link created (as in `GET /api/v1/workouts/unstructured`). A pass reads at most 25 logs, most recent first, and 25 plan days, soonest first, and parses the set-less ones among them one at a time (`runAssistedMigrationBackfill()` in `server/services/assistedMigrationService.ts`).
+Run an assisted-migration backfill pass for the current user. It parses set-less logs from the last 90 days and set-less plan days scheduled after today (both dates by the server's UTC day) from their main workout and accessory, with whitespace trimmed (the characters JavaScript's `trim()` removes), skipping a log or day with no text left and a plan-day log a Strava auto link created (as in `GET /api/v1/workouts/unstructured`). A pass reads at most 25 logs, most recent first, and 25 plan days, soonest first, and parses the set-less ones among them one at a time (`runAssistedMigrationBackfill()` in `server/services/assistedMigrationService.ts`).
 
 - **Auth:** Required
 - **Rate limit:** `migrationBackfill` category, 2/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Response:** Backfill result summary
+- **Response:** `{ queued: number, processed: number }` — candidates sent to the parser, and how many got sets
+- **Side effects:** parsed rows are written in kg/km and stamped so. Each candidate gets a review row: `resolved` (`auto_resolved`) when every parsed exercise has confidence 70 or more, otherwise `needs_manual_review` (`low_confidence_conversion`, `parse_returned_no_rows` or `parse_error`).
 
 ### POST /api/v1/workouts/migration/reviews/resolve
 
@@ -612,8 +628,8 @@ Resolve a single assisted-migration backfill review.
 
 - **Auth:** Required
 - **Rate limit:** `migrationReviewResolve` category, 20/min
-- **Body:** `{ ownerType: "workoutLog" | "planDay", ownerId: string, action: "accept" | "reject" | "edit", reason?: string | null }`
-- **Response:** `{ ok: true }` (or 404 when the target is not found)
+- **Body:** `{ ownerType: "workoutLog" | "planDay", ownerId: string (max 128), action: "accept" | "reject" | "edit", reason?: string | null (max 500) }`
+- **Response:** `{ ok: true }` (or 404 when the workout or plan day is not the caller's). `accept` and `edit` set the review `resolved`, `reject` sets it `needs_manual_review`; the review row is created if there is none, and `reason` replaces the stored one.
 
 ---
 
@@ -635,9 +651,9 @@ Create or upsert a custom exercise.
 
 - **Auth:** Required
 - **Rate limit:** `customExercise` category, 20/min
-- **Body:** `{ name: string, category?: string }` (`category` defaults to `"conditioning"`)
+- **Body:** `{ name: string, category?: string }` — `name` trimmed, 1–100 characters; `category` at most 50, defaulting to `"conditioning"`
 - **Validation:** `createCustomExerciseSchema` (`insertCustomExerciseSchema` without `userId`)
-- **Response:** `CustomExercise`
+- **Response:** `200` with the `CustomExercise`. A name the athlete already has (same exact name) is updated in place, and its category is overwritten — with `"conditioning"` when the body leaves `category` out.
 
 ---
 
@@ -651,9 +667,9 @@ Tag an already-logged run as a MAF test.
 
 - **Auth:** Required
 - **Rate limit:** `mafTest` category, 20/min
-- **Body:** `{ protocolType?: string (≤120), notes?: string (≤2000), metrics?: { avgHeartRate?, maxHeartRate?, durationSeconds?, distanceMeters? } }` — every metric is nullable and optional; an omitted field keeps the auto-pulled value, an explicit `null` clears it. `maxHeartRate` may not be below `avgHeartRate`.
-- **Response:** `201` with the test record on first tag; `200` with the same record when an already-tagged workout is returned idempotently
-- **Errors:** `400` (validation), `404` (workout not found)
+- **Body:** `{ protocolType?: string (≤120), notes?: string (≤2000), metrics?: { avgHeartRate?, maxHeartRate?, durationSeconds?, distanceMeters? } }` — every metric is nullable and optional; an omitted field keeps the auto-pulled value, an explicit `null` clears it. `maxHeartRate` may not be below `avgHeartRate`. Without `protocolType`, one is inferred from the duration.
+- **Response:** `{ testResult, analysis }` (`analysis` is `null` without an average heart rate) — `201` on first tag; `200` with the existing record, untouched and ignoring the body, when the workout is already tagged
+- **Errors:** `400` (validation, or `VALIDATION_ERROR` when the athlete is not on the MAF Method training style with a computed ceiling), `404` (workout not found)
 
 ### PATCH /api/v1/workouts/:id/maf-test
 
@@ -661,9 +677,9 @@ Apply manual HR / duration / distance corrections to a tagged test and recompute
 
 - **Auth:** Required
 - **Rate limit:** `mafTest` category, 20/min
-- **Body:** same shape as the `POST`
+- **Body:** same shape as the `POST`; omitted metrics keep their stored values, and clearing `avgHeartRate` drops the compliance analysis
 - **Response:** `{ testResult, analysis }`
-- **Errors:** `400` (validation), `404` (workout not tagged)
+- **Errors:** `400` (validation, or not on the MAF Method style with a computed ceiling), `404` (workout not tagged)
 
 ### DELETE /api/v1/workouts/:id/maf-test
 
@@ -680,13 +696,13 @@ MAF test history and compliance trend, for the trend charts and the coach.
 
 - **Auth:** Required
 - **Rate limit:** `mafTest` category, 60/min
-- **Response:** `{ tests, analysis, workoutDates }` — up to 200 rows each; `workoutDates` maps each tagged workout's id to its date (YYYY-MM-DD), which the charts date a test by instead of when it was tagged
+- **Response:** `{ tests, analysis, workoutDates }` — up to 200 rows each, most recently tagged first; `workoutDates` maps each tagged workout's id to its date (YYYY-MM-DD), which the charts date a test by instead of when it was tagged
 
 ---
 
 ## Training Plan Routes
 
-**File:** `server/routes/plans.ts`
+**Files:** `server/routes/plans.ts`; the missed-session recovery routes are in `server/routes/planRecovery.ts`
 
 ### GET /api/v1/plans
 
@@ -694,7 +710,7 @@ List all training plans for the current user.
 
 - **Auth:** Required
 - **Rate limit:** `planRead` category, 60/min
-- **Response:** `TrainingPlan[]`
+- **Response:** `TrainingPlan[]` — every plan, including pending and failed generations: live plans before retired ones, then latest `startDate` first (unscheduled plans last)
 
 ### GET /api/v1/plans/:id
 
@@ -702,7 +718,7 @@ Get a training plan with all its days.
 
 - **Auth:** Required
 - **Rate limit:** `planRead` category, 60/min
-- **Response:** `TrainingPlanWithDays`
+- **Response:** `TrainingPlanWithDays` — days ordered by week, then Monday to Sunday (or 404)
 
 ### POST /api/v1/plans/import
 
@@ -712,9 +728,9 @@ Import a training plan from CSV content.
 - **Rate limit:** `planImport` category, 5/min
 - **Body:** `{ csvContent: string, fileName?: string, planName?: string }`
 - **Body limit:** 1MB (elevated from default 100kb, so any CSV the schema accepts fits once JSON-encoded)
-- **Validation:** `importPlanRequestSchema` (csvContent max 100,000 chars)
-- **Response:** `TrainingPlanWithDays`
-- **Errors:** `400` `INVALID_CSV` — the CSV's own row problem when the import names one (a Week below 1, an unrecognised Day, a span over 52 weeks, no rows with both a Week and a Day), otherwise a generic "Failed to parse CSV content" message
+- **Validation:** `importPlanRequestSchema` (csvContent 1–100,000 chars; `fileName` and `planName` at most 255)
+- **Response:** `200` with the `TrainingPlanWithDays`, unscheduled (follow with [`POST /api/v1/plans/:planId/schedule`](#post-apiv1plansplanidschedule)). The plan is named `planName`, else `fileName` without `.csv`, else "Imported Plan". Nothing is written until every row has passed the checks below.
+- **Errors:** `400` `INVALID_CSV` — the CSV's own row problem when the import names one (no rows, a Week below 1, no valid week numbers, an unrecognised Day, a span over 52 weeks, no rows with both a Week and a Day), otherwise a generic "Failed to parse CSV content" message
 
 ### POST /api/v1/plans/sample
 
@@ -733,12 +749,12 @@ Kick off an **asynchronous** AI training-plan generation. The request creates a 
 - **Auth:** Required
 - **Rate limit:** `planGenerate` category, 3/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Body:** `GeneratePlanInput` — `{ goal, totalWeeks (1-24), daysPerWeek (2-7), experienceLevel, raceDate?, startDate?, restDays?, focusAreas?, injuries? }`
+- **Body:** `GeneratePlanInput` — `{ goal: string (1-500), experienceLevel: "beginner" | "intermediate" | "advanced", startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD", endDateIsRaceDate?: boolean (default true), daysPerWeek?: number (2-7, default 5), restDays?: weekday names, focusAreas?: string[] (max 10, each max 100), injuries?: string (max 500), supersedePlanIds?: string[] (max 5) }`. There is no weeks or race-date field: the plan's length is derived from the `startDate` to `endDate` span and must come to 1-24 weeks, and `endDateIsRaceDate` says whether `endDate` is the race the plan peaks for (it is then stored as the plan's `raceDate`, and the span is counted through the week that holds the race). `endDate` must be after `startDate`.
 - **Validation:** `generatePlanInputSchema`
-- **Response:** `202 Accepted` with the pending `TrainingPlan` stub. Poll [`GET /api/v1/plans/:id/generation-status`](#get-apiv1plansidgeneration-status) for progress.
+- **Response:** `202 Accepted` with the pending `TrainingPlan` stub (named `AI Plan: <goal>`, with `days: []`). Poll [`GET /api/v1/plans/:id/generation-status`](#get-apiv1plansidgeneration-status) for progress. If the job cannot be enqueued, the stub is marked `failed` (so it does not hold the in-flight slot) and the request fails with a `500`.
 - **`supersedePlanIds?: string[]`** (max 5): plans the athlete is switching away from. They are retired **only** once this plan generates successfully, atomically with the flip to `ready`, and effective from the later of the new plan's start date and today. A failed or timed-out generation retires nothing, so the athlete is never left without an active plan.
 - **`injuries?: string`** (max 500): the wizard's box. When present it goes on the [athlete card](#athlete-fact-routes) before the job is queued, a fact per sentence or line (category `constraint`, source `plan_generation`); a sentence already on the card is re-confirmed, and the older free-text note (`users.training_constraints`) the box arrives prefilled with is cleared once all of it fits. An empty string adds nothing and still clears the note. Best effort: a failed card write is logged and never fails the request. The plan is written around the card's active facts plus any sentence of the box the 20-fact cap left off; a sentence matching a retired fact stays out. Without `injuries` (an older client), the older note is read instead.
-- **`409 PLAN_GENERATION_IN_PROGRESS`:** Returned when the user already has a generation in flight (`hasInFlightPlanGeneration`), so rapid re-submits (triple-clicks, retries) can't enqueue parallel jobs that each burn AI budget and race to write the same user's plans.
+- **`409 PLAN_GENERATION_IN_PROGRESS`:** Returned when the user already has a generation in flight (`hasInFlightPlanGeneration`, backed by the `uq_training_plans_user_in_flight` unique index for two requests that race past the check), so rapid re-submits (triple-clicks, retries) can't enqueue parallel jobs that each burn AI budget and race to write the same user's plans.
 
 ### GET /api/v1/plans/:id/generation-status
 
@@ -748,7 +764,8 @@ Poll the status of an asynchronous plan generation.
 - **Rate limit:** `planStatus` category, 60/min
 - **Response:** `{ planId: string, generationStatus: "pending" | "generating" | "ready" | "failed", error?: string }` (404 when the plan is not found)
 - **`error` is a client-safe message, never a raw exception.** Only messages from
-  the app's own `AppError` (already written for users) are surfaced; anything
+  the app's own `AppError` (already written for users) and the server's own fixed
+  messages (the job could not be started, AI processing was turned off) are surfaced; anything
   else — provider, database driver or HTTP-layer text, which can name internal
   hosts, models or query fragments — is replaced with a generic
   "Plan generation failed unexpectedly. Please try again." The full error still
@@ -760,8 +777,8 @@ Rename a training plan.
 
 - **Auth:** Required
 - **Rate limit:** `planUpdate` category, 20/min
-- **Body:** `{ name: string }` (1-255 chars)
-- **Response:** Updated `TrainingPlan`
+- **Body:** `{ name: string }` (trimmed, 1-255 chars)
+- **Response:** Updated `TrainingPlan` (or 404)
 
 ### PATCH /api/v1/plans/:id/goal
 
@@ -769,8 +786,8 @@ Update a training plan's goal.
 
 - **Auth:** Required
 - **Rate limit:** `planUpdate` category, 20/min
-- **Body:** `{ goal: string | null }` (max 500 chars)
-- **Response:** Updated `TrainingPlan`
+- **Body:** `{ goal: string | null }` (max 500 chars; `goal` is required, `null` clears it)
+- **Response:** Updated `TrainingPlan` (or 404)
 
 ### PATCH /api/v1/plans/:id/retirement
 
@@ -796,8 +813,12 @@ Update a plan day. Despite the path, `:planId` is not checked: the day is looked
 - **Auth:** Required
 - **Rate limit:** `planDayUpdate` category, 20/min
 - **Body:** Partial plan day (focus, mainWorkout, accessory, notes, scheduledDate, expectedDurationMin, expectedRpe, plannedTimeOfDayMin, priority); `scheduledDate` is a real `YYYY-MM-DD` calendar day or `null`
-- **Validation:** `updatePlanDayRouteSchema`
-- **Response:** Updated `PlanDay`
+- **Validation:** `updatePlanDayRouteSchema` (`expectedDurationMin` 1–600, `expectedRpe` 1–10, `plannedTimeOfDayMin` 0–1439)
+- **Response:** Updated `PlanDay` (or `404 "Day not found"`)
+
+A new `scheduledDate` also rewrites the day's `weekNumber` and `dayName` to
+match (on a plan that has a start date), and is recorded as the athlete's own move for the coach's record of plan
+changes. `weekNumber` and `dayName` themselves are stripped from the body.
 
 `priority` is the session's tier — `"key" | "supporting" | "optional"`, or
 `null` to go back to the tier inferred from the day's title.
@@ -819,7 +840,7 @@ Update a plan day (`updatePlanDayWithCleanup` in `server/services/planService.ts
 - **Auth:** Required
 - **Rate limit:** `planDayUpdate` category, 20/min
 - **Body:** Same client-writable fields as the scoped route above (`updatePlanDayRouteSchema`)
-- **Response:** Updated `PlanDay`
+- **Response:** Updated `PlanDay` (or `404 "Day not found"`)
 
 Moving a missed session to today or later makes it planned again and records
 it as folded (`recovery: "folded"`, `missedOn` = the date it was missed, and a
@@ -834,14 +855,25 @@ Update only the status, scheduled date and/or skip reason of a plan day.
 - **Auth:** Required
 - **Rate limit:** `planDayStatus` category, 20/min
 - **Body:** `{ status?: "planned" | "completed" | "missed" | "skipped", scheduledDate?: string | null, skipReason?: "ill" | "injured" | "schedule" | "low_energy" | null }` (`scheduledDate` a real `YYYY-MM-DD` calendar day)
-- **Response:** Updated `PlanDay`
+- **Response:** Updated `PlanDay` (or `404`)
+- **Transitions:** `planned` → `completed` / `skipped` / `missed`; `completed` →
+  `planned` / `skipped`; `missed` → `completed` / `planned`; `skipped` →
+  `planned` / `completed`; the same status again is always allowed. Any other
+  change is `400 VALIDATION_ERROR` ("Invalid plan-day status transition").
 - **Notes:** `skipReason` is only meaningful alongside `status: "skipped"` — any
-  other status clears it. Omitting the key leaves an existing reason untouched;
-  sending `null` clears it explicitly. Sending only `scheduledDate` (no `status`)
-  takes the reschedule path and skips the status-transition check.
-  A status change away from `missed` clears a let-go (`recovery: "let_go"`), and
-  moving a missed day to today or later folds it, as on
-  `PATCH /api/v1/plans/days/:dayId`.
+  other status clears it. With `status: "skipped"`, omitting the key leaves an
+  existing reason untouched and sending `null` clears it; without a `status` the
+  key is ignored. Sending `scheduledDate` without `status` takes the reschedule
+  path and skips the status-transition check; on that path, moving a missed day to
+  today or later folds it, as on `PATCH /api/v1/plans/days/:dayId` (a date sent
+  with a `status` does not fold).
+  A status change away from `missed` clears a let-go (`recovery: "let_go"`).
+- **Leaving `completed`** (reopening) copies the newest linked workout log's text
+  and sets back onto the day and hard-deletes that log (it does not go to the
+  recycle bin); a Strava recording on it gets its own standalone row back, and any
+  other logs linked to the day are unlinked, keeping their data.
+- **Side effects:** a change of date is recorded as the athlete's move; a status
+  of `completed` or a change of date queues an `auto-coach` run.
 
 ### GET /api/v1/plans/days/:dayId/recovery
 
@@ -901,7 +933,7 @@ Carry out the athlete's choice for a missed session
 - **Response:** `{ day: PlanDay }`
 - **`400`:** `targetDate` is not one of the preview's targets
 - **`404`:** Plan day not found
-- **`409 CONFLICT`:** Same as the preview; also when the chosen option is
+- **`409 CONFLICT`:** Same as the preview for `fold`, `shorten` and `let_go` (`reopen` skips those checks); also when the chosen option is
   unavailable, when `reopen` targets a day with no decision to take back (or a
   moved session that has since been logged or missed again), or when the day
   changed (status, date or recovery) between reading and writing
@@ -941,7 +973,7 @@ Delete a training plan and all its days (cascade). The plan, its days and their 
 
 - **Auth:** Required
 - **Rate limit:** `planDelete` category, 10/min
-- **Response:** `{ success: true, recycleBinItemId: string }`
+- **Response:** `{ success: true, recycleBinItemId: string }` (or 404)
 
 ### DELETE /api/v1/plans/days/:dayId
 
@@ -949,11 +981,11 @@ Delete a single plan day. Snapshotted into the [recycle bin](#recycle-bin-routes
 
 - **Auth:** Required
 - **Rate limit:** `planDayDelete` category, 10/min
-- **Response:** `{ success: true, recycleBinItemId: string }`
+- **Response:** `{ success: true, recycleBinItemId: string }` (or 404)
 
 ### POST /api/v1/plans/:planId/schedule
 
-Schedule a plan by assigning dates to its days from a given start date. Week 1 is the Monday-anchored week that contains `startDate`, so every day keeps its weekday. No session is placed before `startDate`: a week-1 day that would land earlier is left unscheduled (`scheduledDate: null`, off the timeline) instead of back-dated into the past, where it would read as missed. A day the athlete already completed, skipped or logged a workout against keeps its date. The plan's own `startDate` is week 1's Monday; its `endDate` is the last scheduled day.
+Schedule a plan by assigning dates to its days from a given start date. Week 1 is the Monday-anchored week that contains `startDate`, so every day keeps its weekday. No session is placed before `startDate`: a week-1 day that would land earlier is left unscheduled (`scheduledDate: null`, off the timeline) instead of back-dated into the past, where it would read as missed. A day the athlete already completed, skipped or logged a workout against always gets a date, even one before `startDate`, so it stays on the timeline. Weeks count from the plan's lowest week number. A missed or skipped day that moves to a new date on or after the athlete's today goes back to `planned`. The plan's own `startDate` is week 1's Monday; its `endDate` is the last scheduled day. A plan with no days returns success and writes nothing.
 
 - **Auth:** Required
 - **Rate limit:** `planSchedule` category, 10/min
@@ -986,7 +1018,7 @@ Update a single exercise set on a plan day.
 - **Auth:** Required
 - **Rate limit:** `planDaySet` category, 120/min
 - **Body:** `patchExerciseSetBodySchema`
-- **Response:** Updated exercise set (or 404)
+- **Response:** Updated exercise set (or 404); `409 CONFLICT` on a stale `expectedVersion`, as on [`PATCH /api/v1/workouts/:id/sets/:setId`](#patch-apiv1workoutsidsetssetid). Plan-day set writes are the prescription, so unlike workout-log set writes they recompute nothing downstream.
 
 ### PATCH /api/v1/plans/days/:dayId/set-order
 
@@ -1003,7 +1035,7 @@ Delete a single exercise set from a plan day.
 
 - **Auth:** Required
 - **Rate limit:** `planDaySet` category, 60/min
-- **Response:** `{ success: true }` (or 404)
+- **Response:** `{ success: true }`, also when the set no longer exists; `404` only when the set is the caller's but on a different plan day or workout
 
 ### PATCH /api/v1/plans/days/:dayId/structure
 
@@ -1023,8 +1055,9 @@ Re-parse a plan day's `mainWorkout`/`accessory` text into structured exercise se
 - **Auth:** Required
 - **Rate limit:** `planDayReparse` category, 5/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Body:** Optional `{ mainWorkout?: string | null, accessory?: string | null }`
+- **Body:** Optional `{ mainWorkout?: string | null, accessory?: string | null }` (unknown keys are `400`). A field sent here is parsed in place of the day's stored text and written to the day when the parse returns a result (a `null` `mainWorkout` is stored as `""`).
 - **Response:** `{ exercises, saved: true, setCount, rejectedCount, rejectionReasons }` (or 404)
+- **AI errors:** answered by the route rather than the global handler — an `AppError` keeps its status and code (`AI_UNAVAILABLE` becomes `502 AI_UPSTREAM_FAILURE`); a raw provider error is classified as `429 AI_QUOTA_EXCEEDED`, `400 AI_INVALID_INPUT`, `502 AI_UPSTREAM_FAILURE` (provider unavailable) or `502 AI_ERROR`; a non-AI failure is `500 INTERNAL_ERROR` ("Failed to parse plan day"). The photo route below does the same.
 
 ### POST /api/v1/plans/days/:dayId/reparse-from-image
 
@@ -1033,12 +1066,12 @@ Photo sibling of `/reparse` — re-parse a plan day's prescribed exercises from 
 - **Auth:** Required
 - **Rate limit:** `planDayReparse` category, 5/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Body:** `{ imageBase64, mimeType }`
+- **Body:** `{ imageBase64, mimeType }` (image at most 10 MB; the route's JSON body limit is 10 MB)
 - **Response:** Same shape as `/reparse` (or 404)
 
 ### POST /api/v1/plans/days/:dayId/coach-note/regenerate
 
-Manually refresh the AI coach note (`ai_rationale`) for a planned day. The service enforces a 30-second cooldown.
+Manually refresh the AI coach note (`ai_rationale`) for a planned day. The service enforces a 30-second cooldown, counted from the note's `aiNoteUpdatedAt`, which the auto-coach also writes. A day that is not the caller's is `404`.
 
 - **Auth:** Required
 - **Rate limit:** `coachNoteRegenerate` category, 10/min
@@ -1079,7 +1112,7 @@ Partially update an annotation. The handler fetches the existing row, merges the
 - **Rate limit:** `annotations` category, 20/min
 - **Body:** Partial `{ startDate?, endDate?, type?, note? }`
 - **Validation:** `updateTimelineAnnotationSchema`
-- **Response:** `TimelineAnnotation` (or 404 when the id doesn't belong to the user)
+- **Response:** `TimelineAnnotation` (or 404 when the id doesn't belong to the user); `400 VALIDATION_ERROR` when the merged `endDate` falls before the merged `startDate`
 
 ### DELETE /api/v1/timeline-annotations/:id
 
@@ -1103,7 +1136,7 @@ Every fact the athlete has, retired ones included, oldest first.
 
 - **Auth:** Required
 - **Rate limit:** `athleteFacts` category, 60/min
-- **Response:** `AthleteFact[]`
+- **Response:** `AthleteFact[]`, with the active-fact cap (20) in the `X-Max-Active-Facts` header
 
 ### POST /api/v1/athlete-facts
 
@@ -1149,7 +1182,7 @@ Deleted workout logs, plan days and training plans are snapshotted into the `rec
 
 The client uses these in two places: an **Undo** action on the delete toast (single item or bulk-delete batch) and the **Recycle bin** tab under Settings (`?tab=recycle-bin`).
 
-While a device-imported workout sits in the bin, the Strava and Garmin syncs treat its activity id as already imported, so the next sync does not re-create the workout the athlete just deleted. After _Delete forever_ or expiry the activity can be imported again if it is still inside the provider's fetch window.
+While a device-imported workout sits in the bin, the Strava, Garmin and Health Connect syncs treat its activity id as already imported, so the next sync does not re-create the workout the athlete just deleted. After _Delete forever_ or expiry the activity can be imported again if it is still inside the provider's fetch window.
 
 ### GET /api/v1/recycle-bin
 
@@ -1169,7 +1202,7 @@ Restore one item and remove it from the bin.
 - **Errors:**
   - `404` — unknown, expired, or another user's item; or, for a plan day, the parent plan has been deleted (restore the plan first)
   - `409 PLAN_OVERLAP` — restoring a live training plan whose dates overlap another live plan (archive that plan first, same rule as [`PATCH /api/v1/plans/:id/retirement`](#patch-apiv1plansidretirement))
-  - `409 RECYCLE_BIN_CONFLICT` — a record with the same id or the same Strava/Garmin activity id already exists (a race with a concurrent sync)
+  - `409 RECYCLE_BIN_CONFLICT` — a record with the same id or the same Strava, Garmin or Health Connect activity id already exists (a race with a concurrent sync)
 
 ### POST /api/v1/recycle-bin/batches/:batchId/restore
 
@@ -1202,7 +1235,7 @@ Empty the bin.
 
 **File:** `server/routes/analytics.ts`
 
-All analytics endpoints support optional date filtering via query parameters: `?from=YYYY-MM-DD&to=YYYY-MM-DD`.
+`GET /personal-records`, `GET /exercise-analytics` and `GET /training-overview` take optional date filtering via query parameters: `?from=YYYY-MM-DD&to=YYYY-MM-DD`. A malformed date is `400 BAD_REQUEST`; a `to` after the athlete's local today (in their `userTimezone`) is clamped to today. These three read training workouts only.
 
 **Coalesced request cache.** Exercise sets, the column-slim sets behind personal records, and workout logs used by these routes pass through three in-memory promise caches (`getExerciseSetsCoalesced`, `getPersonalRecordSetsCoalesced` and `getWorkoutLogsCoalesced`, each built by `createCoalescedCache()` in `server/services/analyticsRouteCache.ts`) keyed by `userId + from + to`. The cache holds the _pending_ promise, so three concurrent requests for the same user/window trigger a single database query. Parameters:
 
@@ -1213,7 +1246,7 @@ All analytics endpoints support optional date filtering via query parameters: `?
 | Eviction              | Expired entries first, then oldest-by-timestamp once over the size cap | `evictStale()` (same file)               |
 | Failure behavior      | The rejected promise is evicted so the next caller retries immediately | `.catch` in `createCoalescedCache()`     |
 
-Every workout write drops the athlete's entries from this process's caches before it answers (`invalidateAnalyticsCachesForUser()`), so the refetch that follows a save reads the write rather than the pre-write cache: create, update, plan-day assignment, delete, bulk delete, combine, seed-from-plan, reparse (single, from an image, batch), the assisted-migration backfill, device link and unlink, recycle-bin restore, set edits, reopening a completed plan day, deleting a plan or a plan day, and Strava and Garmin syncs that wrote anything (D10, `docs/CODEBASE_ANALYSIS_2026-10-03.md`). Other app instances keep their own copies until the TTL runs out.
+Every workout write drops the athlete's entries from this process's caches before it answers (`invalidateAnalyticsCachesForUser()`), so the refetch that follows a save reads the write rather than the pre-write cache: create, update, plan-day assignment, delete, bulk delete, combine, seed-from-plan, reparse (single, from an image, batch), the assisted-migration backfill, device link and unlink, recycle-bin restore, set edits, reopening a completed plan day, deleting a plan or a plan day, and Strava, Garmin and Health Connect syncs that wrote anything (D10, `docs/CODEBASE_ANALYSIS_2026-10-03.md`). Other app instances keep their own copies until the TTL runs out.
 
 ### GET /api/v1/personal-records
 
@@ -1266,12 +1299,19 @@ Calculate weekly training summaries, category totals, station coverage, and week
     workoutDates: string[],
     categoryTotals: { /* per-category totals */ },
     stationCoverage: { /* Hyrox station coverage */ },
+    movementPatternCoverage: MovementPatternCoverage[],
+    muscleGroupCoverage: MuscleGroupCoverage[],
+    currentStreak: number,
+    weeklyCompletedWorkouts: number,
+    weeklyGoal: number,
     currentStats: {
       totalWorkouts: number,
       avgPerWeek: number,
       totalDuration: number,
       avgDuration: number,
       avgRpe: number | null,
+      totalRunningMeters: number,
+      avgCompliancePct: number | null,
     },
     // Omitted when no meaningful previous window exists — e.g. the user
     // picked "all time" so `from` is absent.
@@ -1281,6 +1321,8 @@ Calculate weekly training summaries, category totals, station coverage, and week
       totalDuration: number,
       avgDuration: number,
       avgRpe: number | null,
+      totalRunningMeters: number,
+      avgCompliancePct: number | null,
     },
     // UTSS, ACWR, Form, monotony and the governor's restrictions over the
     // trailing 70-day load window ending on `to` (or today).
@@ -1294,16 +1336,16 @@ Calculate weekly training summaries, category totals, station coverage, and week
 
 - **Previous-window derivation (`computePreviousWindow`):** The previous period is the equal-length, non-overlapping range ending the day before `from`. If `to` is omitted, the current window's upper bound is pinned to midnight UTC of today (not wall-clock `now`) so the previous window doesn't drift across the day. Returns `null` when `from` is absent, and the route responds without `previousStats`.
 - The client's `DeltaIndicator` component renders the percentage change between `currentStats` and `previousStats` for each of the six stat cards.
-- **Load by body system (`bodySystemLoad`):** each session's load is its RPE × minutes (Foster session-RPE). A session with no RPE uses its heart-rate equivalent, then the default effort of what was logged; one with no duration uses an estimate from its sets; both are counted in `estimatedSessions`. The load is split by each exercise's profile, weighted by its share of the session's time, and each system is compared with the mean of the up-to-four full weeks before this one (`ratio` bands 0.8 / 1.3 / 1.5). `sixWeekHigh` needs six weeks of history and a week at least 20% above the usual one. A parallel model: it never feeds UTSS or the governor. Types in `shared/schema/types/analytics.ts`; model in `server/services/trainingLoad/bodySystemLoad.ts`.
+- **Load by body system (`bodySystemLoad`):** each session's load is its RPE × minutes (Foster session-RPE). A session with no RPE uses its heart-rate equivalent, then the default effort of what was logged; one with no duration uses an estimate from its sets; both are counted in `estimatedSessions`. The load is split by each exercise's profile, weighted by its share of the session's time, and each system is compared with the mean of the up-to-four full weeks before this one, once at least two of them are full (`ratio` bands 0.8 / 1.3 / 1.5). `sixWeekHigh` needs six full weeks of history and a week heavier than each of the five before it and at least 20% above the usual one. A parallel model: it never feeds UTSS or the governor. Types in `shared/schema/types/analytics.ts`; model in `server/services/trainingLoad/bodySystemLoad.ts`.
 
 ### GET /api/v1/weekly-review
 
-The athlete's own Monday→Sunday week: completion against plan, prior-week comparison, PRs, annotations, and the intent they set for this week and last. Not persisted and not AI-gated — four bounded queries over data the weekly summary email already reads. See [weekly-review-spec.md](weekly-review-spec.md).
+The athlete's own Monday→Sunday week: completion against plan, prior-week comparison, PRs, annotations, and the intent they set for this week and last. Not persisted and not AI-gated — the same reads the weekly summary email makes (this week's and last week's training logs and plan days, the athlete's PR sets, annotations and both weeks' intents), run in parallel. See [weekly-review-spec.md](weekly-review-spec.md).
 
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 20/min
 - **Query:** `week` (optional) — any date inside the wanted week; defaults to the last completed week. The week is resolved in the athlete's `userTimezone` (falling back to UTC) and the payload reports the zone it was actually resolved in.
-- **Session grades:** each `sessions[]` entry carries `grade: SessionGradeChip | null` — `{ intent, purpose, verdict, confidence, headline, streamStatus }` for a graded run (see [session grades](#get-apiv1session-grades)), `null` otherwise — and the review carries `gradeSummary: { graded, onTarget, driftedHarder, easyTooHard } | null`. Both are computed only for this route; the weekly email builds the review without them. A grading failure drops the chips, never the review.
+- **Session grades:** each `sessions[]` entry carries `grade: SessionGradeChip | null` — `{ intent, purpose, verdict, confidence, headline, streamStatus }` for a graded run (see [session grades](#get-apiv1session-grades)), `null` otherwise — and the review carries `gradeSummary: { graded, onTarget, driftedHarder, easyTooHard } | null`. Both are computed only for this route; the weekly email builds the review without them. A grading failure omits `grade` and `gradeSummary`, never the review; `gradeSummary` is `null` when no run in the week has a definite verdict.
 - **Errors:** `400` (`Invalid 'week' date format`)
 
 ### POST /api/v1/weekly-review/intent
@@ -1312,7 +1354,7 @@ Write or clear the athlete's intent for a week. `POST` rather than `PUT` despite
 
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 20/min
-- **Body:** `{ week: string, intent?: string | null }` — the date is anchored server-side to its Monday, since the unique index is on `(user_id, week_start)`. A blank or `null` intent clears the week's line.
+- **Body:** `{ week: string, intent?: string | null }` (`intent` max 280 chars) — the date is anchored server-side to its Monday, since the unique index is on `(user_id, week_start)`. A blank or `null` intent clears the week's line.
 - **Response:** `{ weekStart, intent }`
 - **Errors:** `400` (validation)
 
@@ -1346,7 +1388,7 @@ Predict the athlete's HYROX finish time from their logged history. **Stored-firs
 - **Rate limit:** `race-prediction` category, 12/min
 - **AI gates:** None — the service degrades to a deterministic estimate when AI is disabled, unconsented, or over budget, and only calls the model when consent + budget allow.
 - **Query:** `refresh?` — `refresh=1` forces regeneration and persistence
-- **Response:** `RacePredictionResponse & { generatedAt: string, stale: boolean }` — on a stored read, `stale` is `true` when a training workout was logged after `generatedAt` (a walk or other session that does not count as training leaves it fresh, as the prediction never reads it); a freshly generated prediction returns `stale: false`.
+- **Response:** `RacePredictionResponse & { generatedAt: string, stale: boolean }` — on a stored read, `stale` is `true` when the athlete's training-log history has changed since the prediction was generated: the latest training-log date or the number of training logs differs from the one recorded with it (a new, deleted or back-dated training workout; editing a workout in place does not count, and a walk or other session that does not count as training leaves it fresh, as the prediction never reads it); a freshly generated prediction returns `stale: false`.
 
 ---
 
@@ -1360,6 +1402,7 @@ Parse free-text or voice input into structured exercise data using the configure
 
 - **Auth:** Required
 - **Rate limit:** `parse` category, 5/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Body:** `{ text: string }` (1-2000 chars)
 - **Validation:** `parseExercisesRequestSchema`
 - **Response:** `ParsedExercise[]` with confidence scores and category classification
@@ -1450,10 +1493,11 @@ Send a message to the AI coach and receive a complete response.
 
 - **Auth:** Required
 - **Rate limit:** `chat` category, 10/min
-- **Body:** `{ message: string (1-4000 chars, CHAT_MESSAGE_MAX_LENGTH), photo?: { mimeType, imageBase64 }, userMessageId?: uuid, assistantMessageId?: uuid, replaceAssistantId?: uuid, focusPlanDayId?: string, focusWorkoutLogId?: string, history?: ChatMessage[] }`.
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
+- **Body:** `{ message: string (1-4000 chars, CHAT_MESSAGE_MAX_LENGTH), photo?: { mimeType, imageBase64 }, userMessageId?: uuid, assistantMessageId?: uuid, replaceAssistantId?: uuid, focusPlanDayId?: string, focusWorkoutLogId?: string, history?: ChatMessage[], planEditing?: boolean (default true) }`. `planEditing` is accepted but has no effect here: this route always answers in prose and never raises a plan-change proposal or a fact offer (both are `POST /api/v1/chat/stream` only).
   - **`photo`** (I20) is one image with the message: `mimeType` `image/jpeg`, `image/png` or `image/webp`, `imageBase64` at most `CHAT_PHOTO_MAX_BASE64_CHARS` (4 MiB of base64, about 3 MB of image), whose first bytes must match the declared type. The two chat send routes accept a 5 MB body for it. Gemini vision reads it into words for the coach (`server/services/chatPhoto.ts`) alongside the context build; the coach reads that reading after the message, marked as data, and the athlete's turn keeps it as `attachment: { kind: "photo", reading }`. The image itself is never stored. A photo that can't be read refuses the send with `502 CHAT_PHOTO_UNREADABLE` before anything is saved.
   - **The message ids** hand the conversation to the server, and the current client always sends them. They must come together and differ. The server reads the history from its own saved conversation (see [AI and RAG → Chat History](ai-and-rag.md#chat-history)) and, once the reply exists, saves both turns under these ids. A retry sends the same `userMessageId`, which is saved once, and the failed reply's id as `replaceAssistantId`; the server deletes that reply first.
-  - **`history`** is read only from a request without the ids (a tab opened before the server owned the conversation), keeping its last 20 messages; nothing is saved for such a request.
+  - **`history`** is read only from a request without the ids (a tab opened before the server owned the conversation), keeping its last 20 messages within a 30,000-character window (older turns past it are cut to 200 characters); nothing is saved for such a request.
   - **The focus ids** (max 255 each) name the workout the athlete is chatting from; the server loads them, ownership-checked, into the prompt's FOCUSED WORKOUT block, ignores ids that aren't theirs, and stores them with both turns.
 - **Validation:** `chatRequestSchema`
 - **Response:** `{ response: string, ragInfo: RagInfo, safetyNotice?: ChatSafetyNotice }` — `safetyNotice` (`{ level: "urgent" | "caution", message }`) is present when the athlete's message, or their previous one, matches the red-flag symptom (`urgent`) or heart-rate-medication (`caution`) patterns in `server/services/aiSafety.ts`. It is fixed copy, shown above the reply whatever the model wrote.
@@ -1464,10 +1508,11 @@ Send a message to the AI coach and receive a streaming response via Server-Sent 
 
 - **Auth:** Required
 - **Rate limit:** `chat` category, 10/min
-- **Body:** Same as `/api/v1/chat`, plus `planEditing?: boolean` (default `true`; `false` skips plan proposals). `focusPlanDayId` is also passed to the proposal generator
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
+- **Body:** Same as `/api/v1/chat`; here `planEditing?: boolean` (default `true`; `false` is the opt-out for a chat surface that does not render proposal cards, and skips plan proposals) takes effect. `focusPlanDayId` is also passed to the proposal generator
 - **Saving (with the message ids):** the athlete's turn is saved before the first event; if that fails, the request ends in a 500 and is not answered. The reply is saved when the stream ends, whether finished, cut off or a proposal, with the text that was sent, its `ragInfo` (without excerpts), its `safetyNotice`, a `factProposal` it offered and, for a proposal, `kind: "proposal"` and the `proposalId`.
 - **Athlete facts (with the message ids):** a message that may state something lasting (a keyword gate) is read by the fast model alongside the reply. When it states a fact the [athlete card](#athlete-fact-routes) doesn't hold, the reply's last event before `done` offers it, on prose and proposal replies alike. Nothing is written to the card until the athlete answers with [`POST /api/v1/chat/messages/:id/fact`](#post-apiv1chatmessagesidfact). Never after a red-flag symptom, and the stream waits at most 2 seconds for a read still running.
-- **Plan editing:** when `planEditing` is on and the message is classified as a plan-change request, the reply is a [plan proposal](#plan-proposal-routes) instead of streamed prose; if the athlete has `coachAutoApplyPlanChanges` on, the stream tries to apply it immediately. A failure before any of the proposal's summary is sent falls back to the normal chat stream; after that, the reply ends saying the change could not be drafted. A message that trips the red-flag symptom patterns is never treated as a plan change: it gets the normal chat reply, told to put medical care first.
+- **Plan editing:** when `planEditing` is on and the message is classified as a plan-change request, the reply is a [plan proposal](#plan-proposal-routes) instead of streamed prose; if the athlete has `coachAutoApplyPlanChanges` on, the stream tries to apply it immediately. A failure before any of the proposal's summary is sent falls back to the normal chat stream; after that, the reply ends saying the change could not be drafted. A message that trips the red-flag symptom patterns is never treated as a plan change: it gets the normal chat reply, told to put medical care first. With `AI_CHAT_TOOLS=true` the classifier does not run: the coach model streams its reply with lookup tools and may itself call for a plan change, whose proposal then follows the prose already sent; a failed draft on that path ends with the failure text.
 - **Response headers:** `Content-Type: text/event-stream`, `Cache-Control: no-cache`
 - **SSE events:**
   - `{ ragInfo: RagInfo }` — First event with RAG metadata
@@ -1576,7 +1621,7 @@ Return the **last stored** Coach Insights analysis instantly, with no AI spend, 
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 60/min
 - **AI gates:** None (read-only; never calls the model)
-- **Response:** `{ ...CoachInsightsResult, generatedAt: string, stale: boolean }` — `stale` is `true` when a workout was logged after `generatedAt`. Returns `{ insights: null }` when the user has never generated insights.
+- **Response:** `{ ...CoachInsightsResult, generatedAt: string, stale: boolean }` — `stale` is `true` when the athlete's workout history has changed since the result was generated: the latest log date or the number of logs differs from the one recorded with it (every log counts, walks included; editing a workout in place does not). Returns `{ insights: null }` when the user has never generated insights.
 
 ### POST /api/v1/coach-insights
 
@@ -1593,8 +1638,8 @@ The last stored "what this means for you" reading for each Overview-tab chart, k
 
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 60/min
-- **Query:** `range` (optional) — the Analytics page's selected range: a day count from 1 to 366 (the page sends `30`, `90`, `180` or `365`) or `all`. With it, a stored analysis of a different range answers `{ sections: null }`, so a reading never sits beside charts of another range. A result stored before analyses had a range counts as `all`. Without it, the stored result is returned whatever its range. An invalid value is a `400`.
-- **Response:** the stored `OverviewAnalysisResult` (including `rangeDays`: the day count it covers, or `null` for all time) plus `generatedAt` and a `stale` flag (`true` once a training workout was logged after it was generated; a walk or other session that does not count as training does not mark it stale); `{ sections: null }` when nothing has been generated yet for the range
+- **Query:** `range` (optional) — the Analytics page's selected range: a day count from 1 to 366 (the page sends `30`, `90`, `180` or `365`) or `all`. With it, a stored analysis of a different range answers `{ sections: null }`, so a reading never sits beside charts of another range. A result stored before analyses had a range is returned for any `range`. Without it, the stored result is returned whatever its range. An invalid value is a `400`.
+- **Response:** the stored `OverviewAnalysisResult` (including `rangeDays`: the day count it covers, or `null` for all time) plus `generatedAt` and a `stale` flag (`true` once the athlete's training-log history has changed since it was generated: the latest training-log date or the number of training logs differs; a walk or other session that does not count as training does not mark it stale, nor does editing a workout in place); `{ sections: null }` when nothing has been generated yet for the range
 
 ### POST /api/v1/overview-analysis
 
@@ -1612,7 +1657,7 @@ Generate AI coaching suggestions for upcoming planned workouts.
 - **Auth:** Required
 - **Rate limit:** `suggestions` category, 3/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Response:** `{ suggestions: WorkoutSuggestion[], ragInfo: RagInfo }`
+- **Response:** `{ suggestions: WorkoutSuggestion[], ragInfo?: RagInfo, message?: string, responseMetadata?: Record<workoutId, { trainingStyleId, phase, strategyRuleVersion, promptBundleVersion, rationaleCodes? }> }` — only `suggestions` is always present. `message` is a note for the athlete (no upcoming workouts, a safety escalation, or why nothing changed); `responseMetadata` is the recommendation trace, keyed by each suggestion's `workoutId`.
 - **Note:** Returns empty suggestions if no upcoming planned workouts exist. An empty `suggestions` list otherwise means the coach looked and found nothing to change.
 - **Errors:** a failed model call (provider error, open circuit breaker, timeout, or a reply that isn't the JSON array asked for) is an error, not an empty list: `503 AI_UNAVAILABLE`, `429 AI_QUOTA_EXCEEDED`, `400 AI_INVALID_INPUT` or `502 AI_ERROR`. The one exception is a red-flag safety escalation, which is still returned as the single suggestion.
 
@@ -1678,7 +1723,7 @@ Update a coaching material. Re-embeds if content or title changed.
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Body:** Partial `{ title?, content?, type? }`
 - **Side effects:** Queues re-embedding if content or title changed.
-- **Response:** Updated `CoachingMaterial`
+- **Response:** Updated `CoachingMaterial`, or `404` when the material isn't the athlete's
 
 ### DELETE /api/v1/coaching-materials/:id
 
@@ -1686,7 +1731,7 @@ Delete a coaching material, then purge its RAG chunks (`deleteChunksByMaterialId
 
 - **Auth:** Required
 - **Rate limit:** `coaching` category, 10/min
-- **Response:** `{ success: true }`
+- **Response:** `{ success: true }`, or `404` when the material isn't the athlete's
 
 ### GET /api/v1/coaching-materials/rag-status
 
@@ -1694,16 +1739,16 @@ Check the RAG pipeline status (embedding counts, dimension info).
 
 - **Auth:** Required
 - **Rate limit:** `coaching` category, 60/min
-- **Response:** RAG status object
+- **Response:** `{ hasApiKey, totalMaterials, totalChunks, allEmbedded, materials: [{ id, title, type, contentLength, chunkCount, hasEmbeddings }], storedDimension, expectedDimension, dimensionMismatch, embeddingApi }`
 
 ### POST /api/v1/coaching-materials/re-embed
 
-Re-embed all coaching materials for the current user.
+Re-embed all coaching materials for the current user, inline in the request (not queued).
 
 - **Auth:** Required
 - **Rate limit:** `coaching` category, 5/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Response:** Re-embed result summary
+- **Response:** `{ success: true, materialsProcessed: number, errors: string[] }` — a material that fails is listed in `errors` (`"<id>: <message>"`) rather than failing the request
 
 ---
 
@@ -1736,7 +1781,7 @@ Apply the proposed changes to the plan: all of them, or the ones the athlete pic
 - **Rate limit:** `suggestionApply` category, 10/min — requires AI consent. The AI budget is deliberately _not_ checked up front: it is checked internally only if a structured re-parse actually turns out to be needed.
 - **Body:** optional `{ planDayIds?: string[] }` (1–14 ids). Without it, every change is applied. Only the picked changes are re-checked, re-parsed and written; the others are never applied.
 - **Response:** `{ applied: true, changeCount }`, or `{ applied: false, reason, message }` for a retryable failure (`structured_parse_failed`, `ai_budget_exceeded`, `ai_disabled`), with the proposal left pending.
-- **Errors:** `400` (`invalid_selection` — an empty pick, or a day the proposal doesn't change), `404` (proposal not found), `409` (`not_pending` or `stale` — the plan moved on underneath it, or a picked change is for a day before the athlete's today)
+- **Errors:** `400` (`invalid_selection` — an empty pick, or a day the proposal doesn't change), `404` (proposal not found), `409` (`not_pending` or `stale` — the plan moved on underneath it, or a picked change is for a day before the athlete's today). A `stale` failure resolves the proposal `invalidated` and lists the affected days as `staleChanges: [{ planDayId, dayLabel }]`. The days are checked once before any re-parse and again under a row lock before writing.
 
 ### POST /api/v1/plan-proposals/:id/undo
 
@@ -1753,6 +1798,7 @@ Decline the proposal and leave the plan untouched.
 
 - **Auth:** Required
 - **Rate limit:** `suggestionApply` category, 10/min
+- **Response:** `{ dismissed: boolean }` — `false` when the proposal is no longer pending
 - **Errors:** `404` (proposal not found)
 
 ---
@@ -1767,7 +1813,7 @@ Record a consent decision.
 
 - **Auth:** Required
 - **Rate limit:** `consent` category, 20/min
-- **Body:** `{ consentType, granted }` (`recordConsentSchema`); stored as `{ userId, consentType, granted, consentedAt }`
+- **Body:** `{ consentType: "privacy_notice" | "error_reporting", granted: boolean }` (`recordConsentSchema`); stored as `{ userId, consentType, granted, consentedAt }`, one row per consent type: a later decision overwrites the earlier one and moves `consentedAt`
 - **Response:** `{ success: true }`
 
 ### GET /api/v1/consents
@@ -1776,7 +1822,7 @@ The user's recorded consent decisions — the read behind a DSAR.
 
 - **Auth:** Required
 - **Rate limit:** `consent` category, 30/min
-- **Response:** `{ consents }`
+- **Response:** `{ consents: Array<{ consentType, granted, consentedAt }> }` — the latest decision per type, newest first
 
 ---
 
@@ -1821,7 +1867,7 @@ Manually trigger email checks for the current user (weekly summary, missed remin
 
 - **Auth:** Required (Clerk JWT)
 - **Rate limit:** `emailCheck` category, 5/min
-- **Response:** `{ sent: string[] }` — list of email types sent
+- **Response:** `{ sent: string[] }` — list of email types sent (`weekly_summary`, `missed_reminder`); always empty when the athlete has no email address or `emailNotifications` is off, and each type also needs its own toggle
 
 ### GET /api/v1/cron/emails
 
@@ -1830,7 +1876,8 @@ External cron trigger endpoint for batch email processing across all users.
 - **Auth:** `x-cron-secret` header (timing-safe comparison with `CRON_SECRET` env var)
 - **No Clerk auth required**
 - **Rate limit:** `cronEmails` category, 10/min
-- **Response:** Cron job result summary
+- **Response:** `{ usersChecked, emailsSent, details: string[] }` — `emailsSent` counts the send jobs enqueued, not emails delivered; `401 UNAUTHORIZED` when the header is missing, wrong, or `CRON_SECRET` is unset
+- **Side effects:** marks past planned days `missed`, enqueues each due email as a job, and enqueues MAF baseline-test reminders for athletes whose test is due (at their notify hour, whatever their email settings)
 - **Note:** The scan gates per athlete on each email's own local send hour (its override, else their default `notifyHour`), so an external scheduler should call this hourly.
 
 ### GET /api/v1/emails/unsubscribe
@@ -1857,7 +1904,7 @@ Internal structured exercise health rollup endpoint. Defined in `server/routes/a
 
 - **Auth:** Clerk auth plus `x-internal-analytics-secret` header (timing-safe comparison with `INTERNAL_ANALYTICS_SECRET` env var)
 - **Rate limit:** `internalAnalytics` category, 5/min
-- **Response:** `{ rollups, counters }`
+- **Response:** `{ rollups, counters }` — the daily rollups for the last 30 days, newest first, and today's counters; `401 UNAUTHORIZED` when the secret header is missing or wrong
 
 ---
 
@@ -1874,7 +1921,7 @@ Return the server's VAPID public key so the client can call `PushManager.subscri
 - **Auth:** Required
 - **Rate limit:** `push` category, 60/min
 - **Response:** `{ publicKey: string }`
-- **Errors:** `404 PUSH_NOT_CONFIGURED` when push is not configured
+- **Errors:** `404 PUSH_NOT_CONFIGURED` when web push is not configured
 
 ### POST /api/v1/push/subscribe
 
@@ -1950,6 +1997,7 @@ Generate a Strava OAuth authorization URL with CSRF-protected signed state.
 - **Response:** `{ authUrl: string }` — Strava consent URL to open
 - **State parameter:** HMAC-SHA256 signed with `userId:timestamp:nonce:signature`, max age enforced, single-use (atomically claimed on callback). The authorize URL also sets `approval_prompt=force`
 - **Cookie:** sets the `HttpOnly`, `Secure`, `SameSite=Lax` browser-binding cookie (`__Host-fitai.strava-oauth` in production, `fitai.strava-oauth` elsewhere) holding the SHA-256 of the state, valid for the state's max age; the callback requires it ([Integrations → CSRF State Verification](integrations.md#csrf-state-verification))
+- **Errors:** `500` when `STRAVA_CLIENT_ID` is not configured
 - **Native app:** with `?codeChallenge=<base64url(SHA-256(verifier))>` (43 characters, else `400 VALIDATION_ERROR`) it returns `{ authUrl }` for Strava's mobile consent page with `redirect_uri` = `<APP_URL>/strava/mobile-callback` and a state carrying the challenge, and sets no cookie. The app finishes with `POST /api/v1/strava/native/complete` ([Integrations → Native App Connect](integrations.md#native-app-connect))
 
 ### GET /api/v1/strava/callback
@@ -1960,8 +2008,8 @@ OAuth callback handler. Exchanges authorization code for tokens, encrypts and st
 - **Rate limit:** `stravaAuth` category, 20 per 15 minutes (shared with `/auth`) — keyed by userId when the request carries a Clerk session, otherwise by IP
 - **Query:** `code`, `state` (CSRF-verified, single-use — replays redirect to `/settings?strava=error`), `scope`
 - **Cookie:** the browser-binding cookie `/auth` set must match the state, so only the browser that started the flow can complete it; a missing or mismatched cookie redirects to `/settings?strava=error` before the code is exchanged. The cookie is cleared on every outcome
-- **Side effects:** Creates `stravaConnections` record with AES-256-GCM encrypted tokens; clears any `requires_reauth` tombstone on reconnect
-- **Response:** Redirect to `/settings`
+- **Side effects:** Creates `stravaConnections` record with AES-256-GCM encrypted tokens; clears any `requires_reauth` tombstone on reconnect; queues the first import (a `strava-sync` job), whose failure to enqueue does not fail the connect
+- **Response:** Redirect to `/settings?strava=connected`, or `/settings?strava=error` on any failure (including Strava refusing the code)
 
 ### POST /api/v1/strava/native/complete
 
@@ -1975,7 +2023,7 @@ The native app finishing a Strava connect with the `code` and `state` Strava's A
 
 ### GET /strava/mobile-callback
 
-Strava's `redirect_uri` for the native app: an Android App Link, so normally the app opens instead of this page. When it does not, the server answers a static HTML page with an "Open fitai" link to itself (following it is a user gesture, which Android routes to a verified app). `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex`; nothing from the query is echoed.
+Strava's `redirect_uri` for the native app: an Android App Link, so normally the app opens instead of this page. Rate-limited by the `stravaAuth` bucket (20 per 15 minutes). When it does not, the server answers a static HTML page with an "Open fitai" link to itself (following it is a user gesture, which Android routes to a verified app). `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex`; nothing from the query is echoed.
 
 ### POST /api/v1/strava/sync
 
@@ -1983,13 +2031,13 @@ Incrementally sync Strava activities into workout logs (since `lastSyncedAt` wit
 
 - **Auth:** Required
 - **Rate limit:** `stravaSync` category, 5 per 15 minutes, per user
-- **Side effects:** Fetches activities from Strava API, maps to WorkoutLog format, deduplicates by `stravaActivityId`, auto-refreshes expired tokens (serialized under a per-user advisory lock), enriches calories for the newest ≤25 imports from the activity-detail endpoint, then reconciles each new activity against that day's logged workouts and open plan days — attaching the recording to the workout the athlete already logged (filling only NULL metrics), completing the open plan day with a log that carries the day's prescription text but only what the recording measured (one set built from a distance/cardio recording, none from a "Weight Training" one, no compliance; nothing prescribed is copied in as an actual), or importing standalone (with a suggested match when one was plausible but not certain; see [Integrations → Activity Sync](integrations.md#activity-sync)) — and advances the `lastSyncedAt` cursor.
+- **Side effects:** Fetches activities from Strava API, maps to WorkoutLog format, deduplicates by `stravaActivityId` (and drops an activity the athlete's Garmin sync already imported), auto-refreshes expired tokens (serialized under a per-user advisory lock), enriches calories for the newest ≤25 imports from the activity-detail endpoint, then reconciles each new activity against that day's logged workouts and open plan days — attaching the recording to the workout the athlete already logged (filling only NULL metrics), completing the open plan day with a log that carries the day's prescription text but only what the recording measured (one set built from a distance/cardio recording, none from a "Weight Training" one, no compliance; nothing prescribed is copied in as an actual), or importing standalone (with a suggested match when one was plausible but not certain; see [Integrations → Activity Sync](integrations.md#activity-sync)) — and advances the `lastSyncedAt` cursor. When a recording landed on a plan day it queues a `session-streams` fetch; a Strava 401 mid-sync tombstones the connection (`requiresReauth`).
 - **Response:** `{ success: true, imported: number, enriched: number, completedPlanDays: number, suggested: number, standalone: number, skipped: number, total: number, hasMore: boolean }` — `imported` is the sum of the four landing counts; `hasMore: true` means the page cap was hit and another sync will continue where this one stopped.
-- **Errors:** `401 { code: "STRAVA_REAUTH_REQUIRED" }` (revoked — reconnect needed), `401 { code: "UNAUTHORIZED" }` (not connected), `429 { code: "RATE_LIMITED", retryAfterSeconds }` (Strava rate limit, after retries), `502 { code: "EXTERNAL_API_ERROR" }` (transient upstream failure).
+- **Errors:** `401 { code: "STRAVA_REAUTH_REQUIRED" }` (revoked — reconnect needed), `401 { code: "UNAUTHORIZED" }` (not connected), `429 { code: "RATE_LIMITED", retryAfterSeconds }` with a matching `Retry-After` header (Strava rate limit, after retries), `502 { code: "EXTERNAL_API_ERROR" }` (transient upstream failure), `500 INTERNAL_SERVER_ERROR` for anything else.
 
 ### DELETE /api/v1/strava/disconnect
 
-Disconnect the Strava integration. Performs a best-effort upstream `POST /oauth/deauthorize` (non-fatal on failure) before deleting the local connection.
+Disconnect the Strava integration. Performs a best-effort upstream `POST /oauth/deauthorize` (non-fatal on failure) before deleting the local connection, then deletes the athlete's stored session streams (the HR/pace streams fetched from Strava). Imported workouts and their summary metrics stay.
 
 - **Auth:** Required
 - **Rate limit:** `stravaDisconnect` category, 10 per 15 minutes
@@ -2004,7 +2052,7 @@ Strava's subscription-validation challenge, sent once (synchronously) while the 
 - **Auth:** Not required (the request comes from Strava)
 - **Rate limit:** IP-based, 300 per minute (shared with the POST below)
 - **Query:** `hub.mode=subscribe`, `hub.verify_token`, `hub.challenge`
-- **Response:** `200 { "hub.challenge": string }` when `hub.verify_token` matches this deployment's token (`STRAVA_WEBHOOK_VERIFY_TOKEN`, or the value derived from `STRAVA_CLIENT_SECRET`); `403` otherwise
+- **Response:** `200 { "hub.challenge": string }` when `hub.verify_token` matches this deployment's token (`STRAVA_WEBHOOK_VERIFY_TOKEN`, or the value derived from `STRAVA_CLIENT_SECRET`); `403 FORBIDDEN` otherwise
 
 ### POST /api/v1/strava/webhook
 
@@ -2013,7 +2061,7 @@ Strava webhook event receiver — the push half of [automatic sync](integrations
 - **Auth:** Not required and unsigned — the payload is treated as a hint only. An event never writes anything itself: it enqueues a debounced `strava-sync` job for the connected account(s) behind `owner_id`, and that job fetches from Strava with the athlete's own token and dedups like any other sync.
 - **Rate limit:** IP-based, 300 per minute
 - **Body:** `{ object_type: "activity" | "athlete", object_id: number, aspect_type: "create" | "update" | "delete", owner_id: number, subscription_id: number, event_time?: number, updates?: object }`
-- **Response:** `200 { received: true }` immediately, for well-formed and malformed bodies alike (Strava retries non-2xx responses up to three times). Processing happens after the acknowledgement: `delete` events, unknown athletes, tombstoned connections and events for a `subscription_id` other than the verified one are ignored; an athlete deauthorization enqueues a sync whose 401 handling tombstones the connection.
+- **Response:** `200 { received: true }` immediately, for well-formed and malformed bodies alike (Strava retries non-2xx responses up to three times). Processing happens after the acknowledgement: everything is ignored while automatic sync or webhooks are switched off for the deployment (or it lacks the Strava credentials or a public `APP_URL`), and activity `delete` events, unknown athletes, tombstoned connections and events for a `subscription_id` other than the verified one are ignored; an athlete deauthorization enqueues a sync whose 401 handling tombstones the connection.
 
 ## Garmin Routes
 
@@ -2065,9 +2113,9 @@ Imports the most recent activities from Garmin into `workout_logs`.
   - `429 { code: "GARMIN_SYNC_TOO_SOON" }` — less than 5 minutes since `lastSyncedAt`
   - `401 { code: "GARMIN_RECONNECT_REQUIRED" }` — prior `lastError` is set; user must disconnect + reconnect
   - `503 { code: "GARMIN_CIRCUIT_OPEN" }` — global 429 breaker tripped
-- **Behavior:** Calls `client.getActivities(start, 20)` a page at a time until a short page, a page reaching back past the last sync less 7 days (90 days back on a first sync), or 5 pages, whichever comes first; a failed page fails the whole sync. Dedupes against the partial unique index `(user_id, garmin_activity_id) WHERE garmin_activity_id IS NOT NULL`, and inserts the new rows via `onConflictDoNothing`, each with its one synthesised exercise set (a distance-and-time set for runs, rides, swims, rows and walks; none for strength or generic sessions) in the same transaction (C26).
-- **Success response:** `{ success: true, imported: number, skipped: number, total: number }` — `imported` is the true insert count; anything caught by the partial index is rolled into `skipped`.
-- **Error responses:** `401 GARMIN_AUTH_FAILED`, `502 GARMIN_API_ERROR` (with `lastError` persisted), `409 GARMIN_BUSY`.
+- **Behavior:** Calls `client.getActivities(start, 20)` a page at a time until a short page, a page reaching back past the last sync less 7 days (90 days back on a first sync), or 5 pages, whichever comes first; a failed page fails the whole sync. Skips activities already imported (on a live workout or one in the recycle bin) and recordings the athlete's Strava sync already brought in, dedupes against the partial unique index `(user_id, garmin_activity_id) WHERE garmin_activity_id IS NOT NULL`, and inserts the new rows via `onConflictDoNothing`, each with its one synthesised exercise set (a distance-and-time set for runs, rides, swims, rows and walks; none for strength or generic sessions) in the same transaction (C26).
+- **Success response:** `{ success: true, imported: number, skipped: number, total: number }` — `imported` is the true insert count; already-imported activities, Strava duplicates and anything caught by the partial index are rolled into `skipped`. `lastSyncedAt` is advanced, and the analytics caches are invalidated when anything was imported.
+- **Error responses:** `401 GARMIN_AUTH_FAILED` (the stored session could not be restored), `502 GARMIN_API_ERROR` (a token refresh or activity fetch failed; `lastError` is persisted, so later syncs answer `GARMIN_RECONNECT_REQUIRED`, only when Garmin rejected the credentials), `409 GARMIN_BUSY`.
 
 ---
 
@@ -2100,13 +2148,15 @@ Get merged timeline of planned and logged workouts.
 
 - **Auth:** Required
 - **Rate limit:** `timeline` category, 60/min
-- **Query:** `planId?` (filter by plan), `limit?` (past entries per page, default 200, max 500), `before?` (`YYYY-MM-DD`, exclusive: the previous page's cursor), `offset?` (legacy flat window; no cursor is returned when it is sent)
+- **Query:** `planId?` (filter by plan), `limit?` (past entries per page, default 200; a larger value is clamped to 500), `before?` (`YYYY-MM-DD`, exclusive: the previous page's cursor), `offset?` (legacy flat window; no cursor is returned when it is sent). A `limit` below 1 or not a number, a negative `offset`, or a malformed `before` is `400 BAD_REQUEST`
 - **Response:** `TimelineEntry[]` — merged planned + logged workouts sorted by date, newest first
 - **Headers:** `X-Next-Cursor: YYYY-MM-DD` when older entries exist; echo it back as `before` for the next page
 
-The first page (no `before`) is anchored on the athlete's today: it holds every entry dated today or later plus the most recent `limit` past entries, so the upcoming schedule is always complete. Pages never split a calendar date. Every entry is paged by its own `date`, which for a logged plan day is the log's date rather than the day's scheduled slot, so a session logged or dragged off its slot appears on exactly one page (C43).
+The first page (no `before`) is anchored on the athlete's today: it holds every entry dated today or later plus up to the `limit` most recent past entries, so the upcoming schedule is always complete. Pages never split a calendar date. Every entry is paged by its own `date`, which for a logged plan day is the log's date rather than the day's scheduled slot, so a session logged or dragged off its slot appears on exactly one page (C43).
 
 Plan-day entries also carry `priority` (the session's tier, absent on rest days), `recovery` and `missedOn` (what became of a missed session — see [missed-session recovery](#get-apiv1plansdaysdayidrecovery)), `recoverable` (`true` on a missed session the timeline should ask about: undecided, a real session, not a race-week day, before its plan was retired, and missed no more than seven days ago in the athlete's timezone), `recoveryUndoable` (`true` on a folded or shortened session whose move can still be taken back: upcoming, not yet done, and missed recently enough that the card would ask about it again) and `raceDerived` (`true` when the session shown is the race, the shakeout before it or recovery after it, set by the plan's race date). Each is omitted when it doesn't apply. `dayName` is the weekday the entry sits on, read from its `date` — not the plan day's stored `dayName`, which names the slot the session was written for — so a session moved from Tuesday to Thursday reads "Thursday".
+
+A past or `missed` plan day inside one of the athlete's [timeline annotations](#timeline-annotation-routes) (any type) carries `excused: true` and is not counted as missed; a completed or skipped day keeps its own status. Every page is also enriched before it is sent: upcoming planned entries carry `sessionEstimate`, entries with notes `coachNotes`, and every entry its `dayKind`, with `avgCadenceUnit` and `mafCompliance` where they apply.
 
 **Response example:**
 
@@ -2185,7 +2235,7 @@ Export all training data as CSV or JSON.
 
 - **Auth:** Required
 - **Rate limit:** `export` category, 5/min
-- **Query:** `format` — `"csv"` (default) or `"json"`
+- **Query:** `format` — `"csv"` (default) or `"json"`; any other value returns the CSV
 - **Response:** File download with appropriate Content-Type and Content-Disposition headers. The CSV holds workout and exercise-set rows only, and leaves out records sitting in the [recycle bin](#recycle-bin-routes). The JSON is the full data-subject export (P7, CODEBASE_ANALYSIS_2026-10-03): plans with every day and its prescription, nutrition, reviews, consents, MAF data, analytics results and the recycle bin's contents among them. Secrets (OAuth tokens, Garmin credentials, push keys) and server-internal caches are left out.
 
 ---
@@ -2194,7 +2244,7 @@ Export all training data as CSV or JSON.
 
 **Base path:** `/api/v1/nutrition` (paths in the table are relative to it). **Files:** `server/routes/nutrition/*`.
 
-The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag — when it is not `"true"`, every route below returns `404`. The AI-backed routes (`/parse/*`, `POST /insights`) additionally require AI consent and budget. Their request and response schemas are in [`docs/openapi.json`](openapi.json) (registered in `shared/openapiRoutes/nutrition.ts`); [Nutrition & Fuelling § API surface](nutrition.md#5-api-surface) covers the behaviour behind them.
+The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag (default `"true"`) — when it is not `"true"`, every route below returns `404 NOT_FOUND`. The AI-backed routes (`/parse/*`, `POST /insights`) additionally require AI consent and budget. Their request and response schemas are in [`docs/openapi.json`](openapi.json) (registered in `shared/openapiRoutes/nutrition.ts`); [Nutrition & Fuelling § API surface](nutrition.md#5-api-surface) covers the behaviour behind them.
 
 | Method | Path                                   | Purpose                                                                                                          | Rate limit (per min)                 |
 | ------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
@@ -2204,7 +2254,7 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | POST   | `/foods/barcode`                       | Barcode → food (Open Food Facts)                                                                                 | `nutritionBarcode` (30)              |
 | POST   | `/foods`                               | Create a custom food (+ servings)                                                                                | `nutritionWrite` (30)                |
 | GET    | `/foods/:id`                           | Food + named servings                                                                                            | `nutritionRead` (60)                 |
-| PATCH  | `/foods/:id`                           | Edit a custom food (`409` when another athlete has logged it and the name or macros change)                      | `nutritionWrite` (30)                |
+| PATCH  | `/foods/:id`                           | Edit a custom food (`409` when another athlete logged it or uses it in a recipe and the name or macros change)   | `nutritionWrite` (30)                |
 | DELETE | `/foods/:id`                           | Delete a custom food (`409` if a log or recipe uses it, or it is a recipe's own food)                            | `nutritionWrite` (30)                |
 | POST   | `/foods/:id/servings`                  | Add a named serving                                                                                              | `nutritionWrite` (30)                |
 | DELETE | `/foods/:id/servings/:servingId`       | Delete a serving                                                                                                 | `nutritionWrite` (30)                |
@@ -2234,14 +2284,14 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | GET    | `/recipes`                             | List recipes                                                                                                     | `nutritionRead` (60)                 |
 | POST   | `/recipes`                             | Create a recipe                                                                                                  | `nutritionWrite` (30)                |
 | GET    | `/recipes/:id`                         | Recipe + ingredients + per-serving macros                                                                        | `nutritionRead` (60)                 |
-| PATCH  | `/recipes/:id`                         | Edit a recipe (`409` when another athlete has logged it)                                                         | `nutritionWrite` (30)                |
+| PATCH  | `/recipes/:id`                         | Edit a recipe (`409` when another athlete logged it or uses it in a recipe and the name or macros change)        | `nutritionWrite` (30)                |
 | DELETE | `/recipes/:id`                         | Delete a recipe (`409` while another of your recipes uses it)                                                    | `nutritionWrite` (30)                |
 
 `/planned-session-estimate/:planDayId` is intentionally **not** an AI route: its
 deterministic and pace-personalized layers must work for every athlete, so it
 carries no `aiConsentCheck` middleware. The optional AI refinement on top is
-gated inline instead — it is skipped unless `users.aiCoachEnabled` is true, and
-the consent flag is part of the result's cache key so opting out immediately
+gated inline instead — it is skipped unless `users.aiCoachEnabled` is true and
+the AI budget allows it, and the consent flag is part of the result's cache key so opting out immediately
 stops a previously refined value being replayed. The same inline pattern is used
 by nutrition semantic search.
 
