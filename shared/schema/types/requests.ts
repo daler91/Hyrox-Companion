@@ -70,9 +70,13 @@ export const calendarDateSchema = dateStringSchema.refine(isIsoCalendarDate, {
  * Body for `POST /api/v1/weekly-review/intent`. `week` is any date inside the
  * target week — the handler anchors it to the Monday, exactly as the review's
  * GET does with `?week=`. A null or blank intent clears the week's line.
+ *
+ * `week` must be a real calendar day, as the GET's `isWeekParamValid` requires:
+ * checked by shape alone, "2026-02-31" rolled forward into March and the intent
+ * was written to a week the athlete never chose.
  */
 export const weeklyReviewIntentSchema = z.object({
-  week: dateStringSchema,
+  week: calendarDateSchema,
   intent: z
     .string()
     .max(WEEKLY_REVIEW_INTENT_MAX_LENGTH, `Intent must be ${WEEKLY_REVIEW_INTENT_MAX_LENGTH} characters or less`)

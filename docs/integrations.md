@@ -791,7 +791,7 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 | pg-boss queue-depth telemetry | `*/5 * * * *` UTC | `queueDepthTelemetry` |
 | Structured exercise health rollup | `10 2 * * *` UTC | `structuredExerciseRollup` |
 | Analytics recompute | `5 * * * *` UTC (hourly; fires per-user at local midnight) | `analyticsRecompute` |
-| Food embedding backfill | `*/30 * * * *` UTC (every 30 min; only when `NUTRITION_SEMANTIC_ENABLED=true` and AI is configured) | `nutritionEmbeddingBackfill` |
+| Food embedding backfill | `*/30 * * * *` UTC (every 30 min; only when `NUTRITION_SEMANTIC_ENABLED=true` and AI is configured; skips a batch once `AI_GLOBAL_DAILY_LIMIT_CENTS` is reached) | `nutritionEmbeddingBackfill` |
 | RAG chunk prune | `50 3 * * *` UTC | `ragChunkPrune` |
 | Account erasure sweep | `35 * * * *` UTC (hourly) | `accountErasureSweep` |
 | Nutrition push reminders | `25 * * * *` UTC (hourly; per-user refuel window + 20:00 local logging nudge; only when `NUTRITION_ENABLED=true`) | `nutritionReminders` |

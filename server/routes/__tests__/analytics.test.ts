@@ -696,6 +696,18 @@ describe("Analytics Routes", () => {
 
       expect(storage.weeklyReviews.setIntent).not.toHaveBeenCalled();
     });
+
+    // Tech debt #43: shape-only validation took an impossible day, which
+    // rolled forward into the next month and wrote the intent to that week.
+    it("rejects a well-formed but impossible week, as the review's GET does", async () => {
+      const impossible = await request(app)
+        .post("/api/v1/weekly-review/intent")
+        .send({ week: "2026-02-31", intent: "three runs" });
+
+      expect(impossible.status).toBe(400);
+      expect(impossible.body.code).toBe("VALIDATION_ERROR");
+      expect(storage.weeklyReviews.setIntent).not.toHaveBeenCalled();
+    });
   });
 });
 

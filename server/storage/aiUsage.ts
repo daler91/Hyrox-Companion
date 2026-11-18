@@ -6,8 +6,9 @@ import { db } from "../db";
 export type AiUsageLog = typeof aiUsageLogs.$inferSelect;
 
 export class AiUsageStorage {
+  /** `userId` null records spend no athlete caused (the food-embedding backfill). */
   async insertUsageLog(log: {
-    userId: string;
+    userId: string | null;
     model: string;
     feature: string;
     inputTokens: number;

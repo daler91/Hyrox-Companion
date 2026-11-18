@@ -452,9 +452,16 @@ export class PlanStorage {
 
     // A new date carries its week and weekday with it (planSlotForMove).
     const slot = await planSlotForMove(executor, day.planId, updates.scheduledDate);
+    const values = { ...updates, ...slot };
+    // Nothing to write: answer with the day as it is. drizzle's `.set()` throws
+    // "No values to set" when every value is undefined, and an empty PATCH (or
+    // a status PATCH carrying only skipReason, which is ignored without a
+    // status) reached it from three routes and came back as a 500, as the
+    // workout PATCH once did (CL14, writeWorkoutLogColumns). Tech debt #37.
+    if (!Object.values(values).some((value: unknown) => value !== undefined)) return day;
     const [updatedDay] = await executor
       .update(planDays)
-      .set({ ...updates, ...slot })
+      .set(values)
       .where(eq(planDays.id, dayId))
       .returning();
     return updatedDay;

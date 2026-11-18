@@ -3,9 +3,11 @@ import type { NextFunction,Request, Response } from "express";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  clearProfileRetries,
   clearUserSeenCache,
   evictUserFromSeenCache,
   isAuthenticated,
+  PROFILE_RETRY_INTERVAL_MS,
   rememberUserErased,
   USER_SEEN_CACHE_MAX_ENTRIES,
   userSeenCacheSize,
@@ -50,6 +52,7 @@ describe("isAuthenticated middleware", () => {
     res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
     next = vi.fn();
     clearUserSeenCache();
+    clearProfileRetries();
     vi.clearAllMocks();
     vi.mocked(storage.users.upsertUser).mockResolvedValue({ id: "test-user-id" });
   });
@@ -128,6 +131,69 @@ describe("isAuthenticated middleware", () => {
     expect(storage.users.upsertUser).toHaveBeenCalledWith({ id: "test-user-id" });
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  // Tech debt #42: the profile used to be fetched only when the row was
+  // created, so a failed first fetch left the athlete with no email for good.
+  it("fetches the Clerk profile again for an existing row that still has no email", async () => {
+    vi.mocked(getAuth).mockReturnValue({ userId: "test-user-id" });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test-user-id", email: null });
+    vi.mocked(clerkClient.users.getUser).mockResolvedValue({
+      primaryEmailAddress: { emailAddress: "test@example.com" },
+      emailAddresses: [],
+      firstName: "Test",
+      lastName: "User",
+      imageUrl: "https://example.com/avatar.png",
+    });
+
+    await isAuthenticated(req, res, next);
+
+    expect(clerkClient.users.getUser).toHaveBeenCalledWith("test-user-id");
+    expect(storage.users.upsertUser).toHaveBeenCalledWith({
+      id: "test-user-id",
+      email: "test@example.com",
+      firstName: "Test",
+      lastName: "User",
+      profileImageUrl: "https://example.com/avatar.png",
+    });
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("leaves an existing row that has an email alone", async () => {
+    vi.mocked(getAuth).mockReturnValue({ userId: "test-user-id" });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test-user-id", email: "test@example.com" });
+
+    await isAuthenticated(req, res, next);
+
+    expect(clerkClient.users.getUser).not.toHaveBeenCalled();
+    expect(storage.users.upsertUser).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("retries a missing email at most once per interval", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.mocked(getAuth).mockReturnValue({ userId: "test-user-id" });
+      vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test-user-id", email: null });
+      vi.mocked(clerkClient.users.getUser).mockRejectedValue(new Error("Clerk unavailable"));
+
+      await isAuthenticated(req, res, next);
+      expect(clerkClient.users.getUser).toHaveBeenCalledTimes(1);
+
+      // Past the seen-cache's 5 minutes, but inside the retry interval: no new fetch.
+      clearUserSeenCache();
+      vi.setSystemTime(Date.now() + 10 * 60_000);
+      await isAuthenticated(req, res, next);
+      expect(clerkClient.users.getUser).toHaveBeenCalledTimes(1);
+
+      clearUserSeenCache();
+      vi.setSystemTime(Date.now() + PROFILE_RETRY_INTERVAL_MS);
+      await isAuthenticated(req, res, next);
+      expect(clerkClient.users.getUser).toHaveBeenCalledTimes(2);
+      expect(next).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("retries Clerk profile sync without email when the email is already owned", async () => {

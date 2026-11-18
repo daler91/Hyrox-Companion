@@ -443,6 +443,35 @@ describe("offlineQueue", () => {
       expect(apiRequest).toHaveBeenCalledTimes(1);
     });
 
+    it("never replays on the online event before the signed-in user has reconciled the queue's owner", async () => {
+      vi.mocked(apiRequest).mockResolvedValue(new Response("{}"));
+      enqueueMutation("POST", "/api/v1/workouts", { title: "Someone's" }, { id: "unowned" });
+
+      globalThis.dispatchEvent(new Event("online"));
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(apiRequest).not.toHaveBeenCalled();
+      expect(getPendingCount()).toBe(1);
+    });
+
+    it("holds the online event's replay while no signed-in user owns the queue, until the next reconcile", async () => {
+      vi.mocked(apiRequest).mockResolvedValue(new Response("{}"));
+      reconcileQueueOwner("user-a");
+      enqueueMutation("POST", "/api/v1/workouts", { title: "A's" }, { id: "a1" });
+
+      // Signed out without a reload; the connection comes back before anyone signs in.
+      releaseQueueOwner();
+      globalThis.dispatchEvent(new Event("online"));
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(apiRequest).not.toHaveBeenCalled();
+
+      reconcileQueueOwner("user-a");
+      globalThis.dispatchEvent(new Event("online"));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(apiRequest).toHaveBeenCalledTimes(1);
+      expect(getPendingCount()).toBe(0);
+    });
+
     it("leaves an offline queue to the online event", async () => {
       vi.mocked(apiRequest).mockResolvedValue(new Response("{}"));
       reconcileQueueOwner("user-a");

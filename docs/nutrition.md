@@ -658,6 +658,9 @@ Safety properties:
   30 minutes, embeds up to 200 foods a run (`embedMissingFoods`) and takes only
   shared rows, public custom foods and the custom foods of athletes who have AI
   consent on; ids it returns are resolved back through `getVisibleFoodsByIds`.
+  Its spend is recorded in `ai_usage_logs` with no athlete (`food_embedding`), so
+  it counts toward `AI_GLOBAL_DAILY_LIMIT_CENTS`, and a run is skipped once that
+  ceiling is reached.
 - **The planned-session estimate is soft-gated the same way.**
   `/planned-session-estimate/:planDayId` must serve every athlete, because its
   deterministic and pace-personalized layers are not AI, so it carries no consent

@@ -89,6 +89,10 @@ sequenceDiagram
         API->>Clerk: clerkClient.users.getUser(userId)
         API->>DB: storage.users.upsertUser({ id, email, firstName, lastName, profileImageUrl })
     end
+    opt Row has no email yet (at most hourly)
+        API->>Clerk: clerkClient.users.getUser(userId)
+        API->>DB: storage.users.upsertUser({ id, email, firstName, lastName, profileImageUrl })
+    end
     API->>DB: storage.users.getUser(userId) in the route handler
     DB->>API: User record
     API->>React: User JSON
@@ -160,7 +164,7 @@ Route handlers use this to obtain the current user's ID after the `isAuthenticat
 When a Clerk-authenticated request passes through `isAuthenticated`, the middleware calls `ensureUserExists(clerkUserId)`:
 
 1. **Check the user-seen cache.** A user-seen cache (5-minute TTL) tracks users whose row this server recently confirmed. The cache is layered: a per-process in-memory `Map` (capped at 10,000 users, least recently seen dropped first), backed by a shared `server_runtime_cache` table so multiple instances share the signal. A hit in the `Map` returns immediately (no DB or remote call); a miss there costs one read of the shared table, and a hit in it also returns. Under `NODE_ENV=test` only the `Map` is used.
-2. **Check the database.** On a cache miss, look up the user row by ID. If a row already exists, mark the user seen and return.
+2. **Check the database.** On a cache miss, look up the user row by ID. If a row already exists, mark the user seen and return, after one exception: a row that still has no email gets its Clerk profile fetched again (step 5), at most once an hour per athlete (`PROFILE_RETRY_INTERVAL_MS`, claimed in `server_runtime_cache` so replicas share it).
 3. **Refuse an erased account.** If there is no row and the ID carries an `auth-erased` tombstone (see [Account Deletion](#account-deletion)), throw instead of provisioning; `isAuthenticated` answers `401`.
 4. **Provision a minimal row.** Otherwise upsert a minimal `users` row containing only the Clerk user ID, then call `hydrateClerkProfile()` to fill in the rest.
 5. **Hydrate the Clerk profile.** `hydrateClerkProfile()` fetches the full profile from Clerk's API via `clerkClient.users.getUser(clerkUserId)`, bounded by a 15-second timeout (`EXTERNAL_API_TIMEOUT_MS` in `server/constants.ts`, applied with `Promise.race` since the Clerk SDK does not accept an `AbortSignal`). It then upserts the `users` row with:
@@ -170,7 +174,7 @@ When a Clerk-authenticated request passes through `isAuthenticated`, the middlew
    - `profileImageUrl` -- Avatar URL
    If the Clerk fetch fails or times out, the minimal row is left in place (the warning is logged and the request proceeds).
 
-The `upsertUser` method in `UserStorage` uses an `INSERT ... ON CONFLICT DO UPDATE` query, but `ensureUserExists` only hydrates the profile when it has just created the row. Once a row exists, a later change to the name, email or avatar in Clerk is not copied to it, and a hydration that failed is not retried. If the upsert hits the `users_email_unique` constraint (the email already belongs to a different user), the profile is re-upserted without the `email` field so provisioning still succeeds.
+The `upsertUser` method in `UserStorage` uses an `INSERT ... ON CONFLICT DO UPDATE` query, but `ensureUserExists` hydrates the profile only when it has just created the row, or when the row still has no email. A failed first fetch is therefore retried until the email arrives, which matters because email notifications skip athletes without one. Once a row has an email, a later change to the name, email or avatar in Clerk is not copied to it. If the upsert hits the `users_email_unique` constraint (the email already belongs to a different user), the profile is re-upserted without the `email` field so provisioning still succeeds.
 
 For the dev bypass path, a similar `ensureDevUserExists` function creates a user with the hardcoded ID `"dev-user"`, email `dev@localhost`, and name `Dev User`.
 
