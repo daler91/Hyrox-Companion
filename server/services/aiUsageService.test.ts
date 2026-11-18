@@ -19,6 +19,7 @@ import {
   __resetGlobalBudgetCacheForTests,
   checkAiBudget,
   estimateCostCents,
+  isGlobalAiBudgetExhausted,
   resolveModelPricing,
 } from "./aiUsageService";
 
@@ -184,5 +185,37 @@ describe("checkAiBudget", () => {
 
     expect(result.allowed).toBe(true);
     expect(logger.error).toHaveBeenCalled();
+  });
+});
+
+describe("isGlobalAiBudgetExhausted", () => {
+  const globalTotal = vi.mocked(storage.aiUsage.getGlobalDailyTotalCents);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetGlobalBudgetCacheForTests();
+    env.AI_GLOBAL_DAILY_LIMIT_CENTS = undefined;
+  });
+
+  it("is false without reading the total when no ceiling is set", async () => {
+    await expect(isGlobalAiBudgetExhausted()).resolves.toBe(false);
+    expect(globalTotal).not.toHaveBeenCalled();
+  });
+
+  it("is true once the app-wide spend reaches the ceiling, and false below it", async () => {
+    env.AI_GLOBAL_DAILY_LIMIT_CENTS = 5000;
+    globalTotal.mockResolvedValue(4999);
+    await expect(isGlobalAiBudgetExhausted()).resolves.toBe(false);
+
+    __resetGlobalBudgetCacheForTests();
+    globalTotal.mockResolvedValue(5000);
+    await expect(isGlobalAiBudgetExhausted()).resolves.toBe(true);
+  });
+
+  it("throws when the total can't be read, unlike checkAiBudget's global check", async () => {
+    env.AI_GLOBAL_DAILY_LIMIT_CENTS = 5000;
+    globalTotal.mockRejectedValue(new Error("db down"));
+
+    await expect(isGlobalAiBudgetExhausted()).rejects.toThrow("db down");
   });
 });

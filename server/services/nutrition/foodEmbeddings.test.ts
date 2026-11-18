@@ -31,20 +31,31 @@ vi.mock("../../db", () => ({
 vi.mock("../../vectorDb", () => ({ vectorPool: { query } }));
 vi.mock("../../gemini/client", () => ({ EMBEDDING_DIMENSIONS: 3072, generateEmbeddings: vi.fn() }));
 vi.mock("../../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("../aiUsageService", () => ({ isGlobalAiBudgetExhausted: vi.fn(), recordAiUsage: vi.fn() }));
 
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { generateEmbeddings } from "../../gemini/client";
+import { isGlobalAiBudgetExhausted, recordAiUsage } from "../aiUsageService";
 import {
   __resetFoodEmbeddingScanForTests,
   deleteFoodEmbeddingsByFoodIds,
   embedMissingFoods,
+  estimateEmbeddingTokens,
   foodEmbeddingText,
   pruneDanglingFoodEmbeddings,
   selectFoodsToEmbed,
   textHash,
 } from "./foodEmbeddings";
+
+describe("estimateEmbeddingTokens", () => {
+  it("counts about four characters a token, and at least one per text", () => {
+    expect(estimateEmbeddingTokens(["Banana", "Apple"])).toBe(4);
+    expect(estimateEmbeddingTokens(["", "Oat"])).toBe(2);
+    expect(estimateEmbeddingTokens([])).toBe(0);
+  });
+});
 
 describe("foodEmbeddingText", () => {
   it("joins name and brand, trimming", () => {
@@ -157,7 +168,65 @@ describe("embedMissingFoods", () => {
     candidateWhere.mockClear();
     candidateOrderBy.mockClear();
     vi.mocked(generateEmbeddings).mockReset();
+    vi.mocked(recordAiUsage).mockReset();
+    vi.mocked(isGlobalAiBudgetExhausted).mockReset().mockResolvedValue(false);
     __resetFoodEmbeddingScanForTests();
+  });
+
+  // Tech debt #41: the backfill's spend was neither recorded nor checked
+  // against the app-wide ceiling. It belongs to no athlete, so it is recorded
+  // with no user.
+  it("records the batch's estimated spend against no athlete", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    selectLimit.mockResolvedValueOnce([
+      { id: "a", name: "Banana", brand: null },
+      { id: "b", name: "Apple", brand: null },
+    ]);
+    vi.mocked(generateEmbeddings).mockResolvedValueOnce([
+      [1, 2, 3],
+      [4, 5, 6],
+    ]);
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await embedMissingFoods();
+
+    expect(recordAiUsage).toHaveBeenCalledWith(
+      null,
+      "gemini-embedding-001",
+      "food_embedding",
+      estimateEmbeddingTokens(["Banana", "Apple"]),
+      0,
+    );
+  });
+
+  it("skips the batch without embedding once the app-wide AI budget is reached", async () => {
+    vi.mocked(isGlobalAiBudgetExhausted).mockResolvedValue(true);
+    query.mockResolvedValueOnce({ rows: [] });
+    selectLimit.mockResolvedValueOnce([{ id: "a", name: "Banana", brand: null }]);
+
+    const result = await embedMissingFoods();
+
+    expect(result).toEqual({ embedded: 0, skipped: "ai_budget" });
+    expect(generateEmbeddings).not.toHaveBeenCalled();
+    expect(recordAiUsage).not.toHaveBeenCalled();
+  });
+
+  it("throws without embedding when the app-wide budget can't be read", async () => {
+    vi.mocked(isGlobalAiBudgetExhausted).mockRejectedValue(new Error("db down"));
+    query.mockResolvedValueOnce({ rows: [] });
+    selectLimit.mockResolvedValueOnce([{ id: "a", name: "Banana", brand: null }]);
+
+    await expect(embedMissingFoods()).rejects.toThrow("db down");
+    expect(generateEmbeddings).not.toHaveBeenCalled();
+  });
+
+  it("does not check the budget when nothing needs embedding", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    selectLimit.mockResolvedValueOnce([]);
+
+    await embedMissingFoods();
+
+    expect(isGlobalAiBudgetExhausted).not.toHaveBeenCalled();
   });
 
   it("is a no-op when there are no candidates pending embedding", async () => {

@@ -8,6 +8,7 @@ import { db } from "../../db";
 import { EMBEDDING_DIMENSIONS, generateEmbeddings } from "../../gemini/client";
 import { logger } from "../../logger";
 import { vectorPool } from "../../vectorDb";
+import { isGlobalAiBudgetExhausted, recordAiUsage } from "../aiUsageService";
 
 /**
  * Vector storage for semantic food search (Phase 2). Owns the `food_embeddings`
@@ -40,6 +41,15 @@ let scanCursor: string | null = null;
 
 export function __resetFoodEmbeddingScanForTests(): void {
   scanCursor = null;
+}
+
+/**
+ * Estimated input tokens for a batch of embedded texts. The embedding API
+ * returns no usage metadata, so this is ~4 characters a token, as for the other
+ * embedding estimates; food names are short, so each text is at least 1.
+ */
+export function estimateEmbeddingTokens(texts: readonly string[]): number {
+  return texts.reduce((total, text) => total + Math.max(1, Math.ceil(text.length / 4)), 0);
 }
 
 /** The text embedded for a food: its name plus brand (brand disambiguates products). */
@@ -199,8 +209,15 @@ async function scanForPending(
  * them into `food_embeddings`. Returns how many were embedded. Best-effort — assumes
  * the caller gated on the flag + AI; throws only on an unexpected DB/AI failure (the
  * cron swallows it).
+ *
+ * The spend belongs to no athlete, so it is recorded with no user and counts
+ * toward the app-wide AI ceiling only; once that ceiling is reached the batch is
+ * skipped (`skipped: "ai_budget"`), and a ceiling that can't be read throws
+ * rather than embed unconfirmed. It used to be neither counted nor checked.
  */
-export async function embedMissingFoods(limit = MAX_BATCH): Promise<{ embedded: number }> {
+export async function embedMissingFoods(
+  limit = MAX_BATCH,
+): Promise<{ embedded: number; skipped?: "ai_budget" }> {
   const existing = await vectorPool.query<{ food_id: string; text_hash: string }>(
     `SELECT food_id, text_hash FROM food_embeddings`,
   );
@@ -215,7 +232,16 @@ export async function embedMissingFoods(limit = MAX_BATCH): Promise<{ embedded: 
     return { embedded: 0 };
   }
 
-  const vectors = await generateEmbeddings(pending.map((p) => p.text));
+  // Checked only when there is something to embed; the cursor stays put, so the
+  // same foods are picked up once the ceiling allows.
+  if (await isGlobalAiBudgetExhausted()) {
+    logger.warn({ context: "nutrition", pending: pending.length }, "Food embedding backfill skipped: app-wide AI budget reached");
+    return { embedded: 0, skipped: "ai_budget" };
+  }
+
+  const texts = pending.map((p) => p.text);
+  const vectors = await generateEmbeddings(texts);
+  await recordAiUsage(null, EMBEDDING_MODEL, "food_embedding", estimateEmbeddingTokens(texts), 0);
   const rows: { id: string; vectorStr: string; hash: string }[] = [];
   for (const [index, item] of pending.entries()) {
     const vector = vectors[index];

@@ -571,7 +571,7 @@ Per-call Gemini token-consumption records, used to cap daily AI spend and flag a
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
-| `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE |
+| `user_id` | `varchar(255)` | nullable, FK -> `users.id` ON DELETE CASCADE. NULL for spend no athlete caused, the food-embedding backfill (`feature` `food_embedding`); NOT NULL until migration `0127` |
 | `model` | `varchar(100)` | NOT NULL |
 | `feature` | `varchar(50)` | NOT NULL |
 | `input_tokens` | `integer` | NOT NULL, default `0` |
@@ -587,8 +587,10 @@ which the composite index serves directly, and the application-wide sum across
 all users, which has no matching index and therefore scans. The scan is bounded
 because the cron trims this table to 7 days, and `checkAiBudget` caches the global
 total in-process for 30 seconds (collapsing concurrent misses into one query), so
-it runs roughly twice a minute per replica rather than once per AI request. See
-[AI → Cost controls](ai-and-rag.md#cost-controls).
+it runs roughly twice a minute per replica rather than once per AI request. A row
+with no `user_id` counts toward that application-wide sum only: the per-user sum and
+the data export (`listForUser`) match on `user_id`, so it is in no athlete's cap or
+export. See [AI → Cost controls](ai-and-rag.md#cost-controls).
 
 ---
 
@@ -1469,7 +1471,7 @@ CI (`.github/workflows/migrations.yml`) runs `db:check`, then `db:generate` foll
 
 ### Migration Files
 
-Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **127 migrations**, `0000` through `0126`:
+Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **128 migrations**, `0000` through `0127`:
 
 ```
 migrations/
@@ -1530,11 +1532,12 @@ migrations/
   ...
   0125_device_push_tokens.sql                        # device_push_tokens table
   0126_health_connect_ids.sql                        # health_connect_id on workout_logs / recycle_bin_items
+  0127_ai_usage_logs_system_rows.sql                 # ai_usage_logs.user_id nullable, for spend no athlete caused
   meta/
     _journal.json
     0000_snapshot.json
     ...
-    0126_snapshot.json
+    0127_snapshot.json
 ```
 
 - **SQL files**: Each migration contains the raw SQL statements.

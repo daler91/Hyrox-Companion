@@ -84,8 +84,13 @@ export function estimateCostCents(
 /**
  * Record AI usage after a provider call completes.
  */
+/**
+ * Record one provider call's estimated spend. `userId` is null for spend no
+ * athlete caused (the food-embedding backfill over the shared food cache): it
+ * counts toward the app-wide ceiling and toward no athlete's daily cap.
+ */
 export async function recordAiUsage(
-  userId: string,
+  userId: string | null,
   model: string,
   feature: string,
   inputTokens: number,
@@ -154,6 +159,20 @@ async function getGlobalDailyTotalCents(): Promise<number> {
       inFlightGlobalTotal = null;
     });
   return await inFlightGlobalTotal;
+}
+
+/**
+ * Whether app-wide AI spend over the last 24 hours has reached
+ * AI_GLOBAL_DAILY_LIMIT_CENTS; always false when no ceiling is set. For work no
+ * athlete asked for (the food-embedding backfill), which has no per-user cap to
+ * fall back on. Throws when the total can't be read, so such a caller skips its
+ * AI call rather than spend unconfirmed (unlike checkAiBudget, whose per-user cap
+ * still applies when the global read fails).
+ */
+export async function isGlobalAiBudgetExhausted(): Promise<boolean> {
+  const globalLimitCents = env.AI_GLOBAL_DAILY_LIMIT_CENTS;
+  if (globalLimitCents === undefined) return false;
+  return (await getGlobalDailyTotalCents()) >= globalLimitCents;
 }
 
 /**

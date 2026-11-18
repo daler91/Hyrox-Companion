@@ -1628,8 +1628,12 @@ export const aiUsageLogs = pgTable(
     id: varchar("id", { length: 255 })
       .primaryKey()
       .default(sql`gen_random_uuid()`),
+    // NULL for spend no athlete caused: the food-embedding backfill embeds the
+    // shared food cache. Such rows count toward the app-wide ceiling
+    // (getGlobalDailyTotalCents sums every row) and toward no athlete's daily
+    // cap or export, which match on user_id. A NULL here never means "shared
+    // with everyone": nothing reads these rows by matching a missing owner.
     userId: varchar("user_id", { length: 255 })
-      .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     model: varchar("model", { length: 100 }).notNull(),
     feature: varchar("feature", { length: 50 }).notNull(),

@@ -881,10 +881,14 @@ calls it inline: the auto-coach job, the `…IfAllowed` generators the midnight
 recompute uses (coach insights, overview analysis, nutrition insights), race
 prediction, the planned-session estimate, semantic food search, the structured
 apply of a timeline suggestion and the legacy text parse on workout creation.
-Two calls are neither budget-checked nor recorded against an athlete: the
-food-embedding cron (`embedMissingFoods()`), which embeds cached foods, and the
-RAG status health probe, which embeds the word "test" and caches the result
-for 5 minutes. There are two ceilings, checked in this order:
+The food-embedding cron (`embedMissingFoods()`), which embeds cached foods,
+belongs to no athlete: it skips a batch once the application-wide ceiling is
+reached (`isGlobalAiBudgetExhausted()`, which throws, so the batch is skipped,
+when the total can't be read), and records its spend with no `user_id`, so it
+counts toward that ceiling and no athlete's cap. One call is neither
+budget-checked nor recorded: the RAG status health probe, which embeds the word
+"test" and caches the result for 5 minutes. There are two ceilings, checked in
+this order:
 
 | Ceiling | Setting | Reached → | Rationale |
 |---------|---------|-----------|-----------|
