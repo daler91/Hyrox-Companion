@@ -814,7 +814,7 @@ Update a plan day. Despite the path, `:planId` is not checked: the day is looked
 - **Rate limit:** `planDayUpdate` category, 20/min
 - **Body:** Partial plan day (focus, mainWorkout, accessory, notes, scheduledDate, expectedDurationMin, expectedRpe, plannedTimeOfDayMin, priority); `scheduledDate` is a real `YYYY-MM-DD` calendar day or `null`
 - **Validation:** `updatePlanDayRouteSchema` (`expectedDurationMin` 1–600, `expectedRpe` 1–10, `plannedTimeOfDayMin` 0–1439)
-- **Response:** Updated `PlanDay` (or `404 "Day not found"`)
+- **Response:** Updated `PlanDay` (or `404 "Day not found"`). A body with nothing to change returns the day as it is.
 
 A new `scheduledDate` also rewrites the day's `weekNumber` and `dayName` to
 match (on a plan that has a start date), and is recorded as the athlete's own move for the coach's record of plan
@@ -840,7 +840,7 @@ Update a plan day (`updatePlanDayWithCleanup` in `server/services/planService.ts
 - **Auth:** Required
 - **Rate limit:** `planDayUpdate` category, 20/min
 - **Body:** Same client-writable fields as the scoped route above (`updatePlanDayRouteSchema`)
-- **Response:** Updated `PlanDay` (or `404 "Day not found"`)
+- **Response:** Updated `PlanDay` (or `404 "Day not found"`). A body with nothing to change returns the day as it is.
 
 Moving a missed session to today or later makes it planned again and records
 it as folded (`recovery: "folded"`, `missedOn` = the date it was missed, and a
@@ -855,7 +855,7 @@ Update only the status, scheduled date and/or skip reason of a plan day.
 - **Auth:** Required
 - **Rate limit:** `planDayStatus` category, 20/min
 - **Body:** `{ status?: "planned" | "completed" | "missed" | "skipped", scheduledDate?: string | null, skipReason?: "ill" | "injured" | "schedule" | "low_energy" | null }` (`scheduledDate` a real `YYYY-MM-DD` calendar day)
-- **Response:** Updated `PlanDay` (or `404`)
+- **Response:** Updated `PlanDay` (or `404`). A body with nothing to change (empty, or only `skipReason`) returns the day as it is.
 - **Transitions:** `planned` → `completed` / `skipped` / `missed`; `completed` →
   `planned` / `skipped`; `missed` → `completed` / `planned`; `skipped` →
   `planned` / `completed`; the same status again is always allowed. Any other
