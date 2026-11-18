@@ -525,12 +525,13 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
 if (globalThis.window !== undefined) {
   globalThis.addEventListener("online", () => {
     // A new connection: replay now, and start any backoff again from the base.
+    // Through retryPendingWrites, like the timer and focus retries, so it waits
+    // for a reconciled owner: it used to call flushQueue directly, and a
+    // connection coming back before the signed-in athlete's reconcile (or after
+    // a sign-out without a reload) replayed the previous athlete's queue under
+    // the new session.
     resetRetryBackoff();
-    void flushQueue()
-      .catch(() => {
-        // Individual mutation failures are already handled inside flushQueue.
-        // This catches unexpected errors (e.g. localStorage unavailable).
-      });
+    retryPendingWrites();
   });
   // A device that never lost its network gets no `online` event, so returning
   // to the app is the other moment to retry a pending write (CL27).
