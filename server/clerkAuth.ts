@@ -6,7 +6,7 @@ import { EXTERNAL_API_TIMEOUT_MS } from "./constants";
 import { isUniqueViolation } from "./dbErrors";
 import { env } from "./env";
 import { logger } from "./logger";
-import { deleteRuntimeCache, getRuntimeCache, runtimeCacheKey, setRuntimeCache } from "./sharedRuntimeState";
+import { claimRuntimeCacheKey, deleteRuntimeCache, getRuntimeCache, runtimeCacheKey, setRuntimeCache } from "./sharedRuntimeState";
 import { storage } from "./storage";
 
 export const DEV_USER_ID = "dev-user";
@@ -254,6 +254,52 @@ function rememberUserSeen(userId: string, now: number): void {
   }
 }
 
+/**
+ * How often a row that still has no email may have its Clerk profile fetched
+ * again. The profile used to be fetched only when the row was created, so a
+ * Clerk outage or timeout at first sign-in left the athlete without an email
+ * for good, and every email notification skipped them
+ * (getUsersWithEmailNotifications requires one). Bounded per athlete, across
+ * replicas, because some Clerk accounts legitimately have no email address.
+ */
+export const PROFILE_RETRY_INTERVAL_MS = 60 * 60_000; // 1 hour
+
+// Per-process record of the last profile retry, used alone under NODE_ENV=test
+// and in front of the shared claim otherwise.
+const profileRetriedAt = new Map<string, number>();
+
+function profileRetryCacheKey(userId: string): string {
+  return runtimeCacheKey("auth-profile-retry", userId);
+}
+
+/** Whether this request may retry the athlete's Clerk profile now; claims the slot if so. */
+async function claimProfileRetry(userId: string, now: number): Promise<boolean> {
+  const lastRetry = profileRetriedAt.get(userId);
+  if (lastRetry !== undefined && now - lastRetry < PROFILE_RETRY_INTERVAL_MS) return false;
+  // Re-inserted so the map stays in retry order, and capped like the seen-cache:
+  // oldest retries drop first, which only means that athlete may retry sooner.
+  profileRetriedAt.delete(userId);
+  profileRetriedAt.set(userId, now);
+  while (profileRetriedAt.size > USER_SEEN_CACHE_MAX_ENTRIES) {
+    const oldest = profileRetriedAt.keys().next().value;
+    if (oldest === undefined) break;
+    profileRetriedAt.delete(oldest);
+  }
+  if (env.NODE_ENV === "test") return true;
+  try {
+    return await claimRuntimeCacheKey(profileRetryCacheKey(userId), PROFILE_RETRY_INTERVAL_MS);
+  } catch (err) {
+    // A missed retry costs nothing the next window can't recover; the request goes on.
+    logger.warn({ err, userId }, "Failed to claim the Clerk profile retry; skipping it");
+    return false;
+  }
+}
+
+/** Forget the per-process profile-retry record (tests). */
+export function clearProfileRetries(): void {
+  profileRetriedAt.clear();
+}
+
 async function ensureUserExists(clerkUserId: string): Promise<void> {
   const now = Date.now();
   if (await hasUserBeenSeenRecently(clerkUserId, now)) return;
@@ -262,6 +308,9 @@ async function ensureUserExists(clerkUserId: string): Promise<void> {
   if (!existing) {
     if (await wasUserErased(clerkUserId, now)) throw new ErasedAccountError();
     await storage.users.upsertUser({ id: clerkUserId });
+    await hydrateClerkProfile(clerkUserId);
+  } else if (!existing.email && (await claimProfileRetry(clerkUserId, now))) {
+    // The first fetch failed, or Clerk had no email then: try again.
     await hydrateClerkProfile(clerkUserId);
   }
 
