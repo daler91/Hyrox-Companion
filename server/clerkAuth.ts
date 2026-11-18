@@ -290,6 +290,9 @@ async function claimProfileRetry(userId: string, now: number): Promise<boolean> 
     return await claimRuntimeCacheKey(profileRetryCacheKey(userId), PROFILE_RETRY_INTERVAL_MS);
   } catch (err) {
     // A missed retry costs nothing the next window can't recover; the request goes on.
+    // err is the runtime-cache write's database error and userId the internal
+    // Clerk id used for correlation, as in the seen-cache logs above; no profile data.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ err, userId }, "Failed to claim the Clerk profile retry; skipping it");
     return false;
   }

@@ -235,6 +235,8 @@ export async function embedMissingFoods(
   // Checked only when there is something to embed; the cursor stays put, so the
   // same foods are picked up once the ceiling allows.
   if (await isGlobalAiBudgetExhausted()) {
+    // A count of shared cached foods; no athlete data.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ context: "nutrition", pending: pending.length }, "Food embedding backfill skipped: app-wide AI budget reached");
     return { embedded: 0, skipped: "ai_budget" };
   }
