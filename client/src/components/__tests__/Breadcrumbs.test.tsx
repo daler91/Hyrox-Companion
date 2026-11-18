@@ -92,3 +92,30 @@ describe("Breadcrumbs workout label", () => {
     expect(screen.getByTestId("breadcrumb-current")).toHaveTextContent("Deadlift Day");
   });
 });
+
+// Tech debt #53: Nutrition and Weekly Review had no label, so their pages
+// showed no trail at all.
+describe("Breadcrumbs route labels", () => {
+  function renderAt(path: string) {
+    const { hook } = memoryLocation({ path });
+    return render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Router hook={hook}>
+          <Breadcrumbs />
+        </Router>
+      </QueryClientProvider>,
+    );
+  }
+
+  it.each([
+    ["/log", "Log Workout"],
+    ["/nutrition", "Nutrition"],
+    ["/analytics", "Analytics"],
+    ["/review", "Weekly Review"],
+    ["/settings", "Settings"],
+  ])("labels %s as %s", (path, label) => {
+    renderAt(path);
+
+    expect(screen.getByTestId("breadcrumb-current")).toHaveTextContent(label);
+  });
+});

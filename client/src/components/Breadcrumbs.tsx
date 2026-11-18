@@ -7,10 +7,14 @@ import { Link, useLocation, useSearch } from "wouter";
 import { QUERY_KEYS } from "@/lib/api";
 import { type TimelineCache } from "@/lib/timelineCache";
 
+// One label per route in AuthenticatedRouter (App.tsx): a route missing here
+// renders no trail at all.
 const ROUTE_LABELS: Record<string, string> = {
   "/": "Training",
   "/log": "Log Workout",
+  "/nutrition": "Nutrition",
   "/analytics": "Analytics",
+  "/review": "Weekly Review",
   "/settings": "Settings",
   "/privacy": "Privacy Policy",
   "/delete-account": "Delete Account",

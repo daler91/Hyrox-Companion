@@ -370,7 +370,7 @@ Editing surfaces for structured workout formats (EMOM, AMRAP, rounds, intervals)
 
 - `AppSidebar` -- Main navigation sidebar rendering `PRIMARY_NAV_ITEMS` (Training, Log Workout, Nutrition when the nutrition flag is on, Analytics, Settings); the footer holds the user avatar and name, the theme toggle, and a log-out button.
 - `MobileTabBar` -- Bottom tab bar mirroring the sidebar's `PRIMARY_NAV_ITEMS` for phones (`md:hidden`).
-- `Breadcrumbs` -- A "Training › current page" trail read from the wouter location. It renders on `/log`, `/analytics`, `/settings`, `/privacy` and `/delete-account`, and on `/` only while a workout sheet is open (`?workout=`), where it names that workout from the cached timeline; `/nutrition` and `/review` have no label and so no trail. Desktop-only (`hidden md:block`) since the tab bar covers "where am I" on phones. (`useNavigationBreadcrumb` is unrelated: it records route changes as Sentry breadcrumbs.)
+- `Breadcrumbs` -- A "Training › current page" trail read from the wouter location. It renders on `/log`, `/nutrition`, `/analytics`, `/review`, `/settings`, `/privacy` and `/delete-account`, and on `/` only while a workout sheet is open (`?workout=`), where it names that workout from the cached timeline. Desktop-only (`hidden md:block`) since the tab bar covers "where am I" on phones. (`useNavigationBreadcrumb` is unrelated: it records route changes as Sentry breadcrumbs.)
 - `CoachPanel` -- AI coach chat panel (described above).
 - `OnboardingWizard` -- Multi-step onboarding dialog.
 - `ThemeProvider` -- Dark/light theme context provider.
