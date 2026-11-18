@@ -261,10 +261,11 @@ builder/compliance test only know post/patch/delete. The handler anchors `week` 
 exactly as the GET does, because the unique index is on the Monday and a mid-week date taken
 at face value would open a second row for a week that must hold one. Storage uses
 `onConflictDoUpdate` on that index, so two tabs saving at once resolve to one row rather than
-racing into a duplicate-key error. Two things differ from the GET: `intent` is capped at 280
-characters (`WEEKLY_REVIEW_INTENT_MAX_LENGTH`, `shared/weeklyReview.ts`), and `week` is checked
-by shape only (`dateStringSchema`), not by `isWeekParamValid`, so an impossible date such as
-`2026-02-31` is accepted here and anchored to the week it rolls forward into.
+racing into a duplicate-key error. `intent` is capped at 280 characters
+(`WEEKLY_REVIEW_INTENT_MAX_LENGTH`, `shared/weeklyReview.ts`), and `week` must be a real calendar
+day (`calendarDateSchema`, the same `isIsoCalendarDate()` check as the GET), so an impossible
+date such as `2026-02-31` is refused with `400 VALIDATION_ERROR` rather than anchored to the week
+it would roll forward into.
 
 A blank intent clears the row's text rather than deleting the row: "I wrote nothing" and "I
 cleared what I wrote" are the same thing to the athlete, and keeping the row keeps `updatedAt`

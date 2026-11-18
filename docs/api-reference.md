@@ -1354,9 +1354,9 @@ Write or clear the athlete's intent for a week. `POST` rather than `PUT` despite
 
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 20/min
-- **Body:** `{ week: string, intent?: string | null }` (`intent` max 280 chars) — the date is anchored server-side to its Monday, since the unique index is on `(user_id, week_start)`. A blank or `null` intent clears the week's line.
+- **Body:** `{ week: string, intent?: string | null }` (`intent` max 280 chars) — `week` must be a real calendar day; it is anchored server-side to its Monday, since the unique index is on `(user_id, week_start)`. A blank or `null` intent clears the week's line.
 - **Response:** `{ weekStart, intent }`
-- **Errors:** `400` (validation)
+- **Errors:** `400 VALIDATION_ERROR`, including an impossible date such as `2026-02-31`, which the GET also refuses
 
 ### GET /api/v1/session-grades
 
