@@ -94,9 +94,10 @@ The app's stylesheet and the logo files use the **HSL** column for the lime toke
 the dark theme's `--primary` are `96 85% 74%`; `NexusMark` and the SVGs fill with `hsl(96 85% 74%)`),
 and the Android app uses the matching hex values. The Hex column is that same colour. Earlier
 versions of this table gave lime as `#C4F37E` and lime-soft as `#F0F9E4`, which are different
-colours (`84 83% 72%` and `86 64% 94%`) that neither the stylesheet nor the logos used. Two
-places still carry `#C4F37E`: the designed PDF beside this file, and the PWA manifest's
-`theme_color` in `vite.config.ts`.
+colours (`84 83% 72%` and `86 64% 94%`) that neither the stylesheet nor the logos used. The
+designed PDF beside this file still prints `#C4F37E` and needs re-exporting from its source. The
+PWA manifest's `theme_color` in `vite.config.ts` moved to `#B1F584` on 2026-11-18, and
+`test/build/pwaManifest.test.ts` keeps it equal to the stylesheet's lime.
 
 ### Neutrals (ink ramp)
 | Token | Hex | Use |

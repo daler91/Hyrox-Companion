@@ -551,7 +551,7 @@ File findings on issue #768 or open focused follow-up PRs referencing it.
 PWA is enabled via `vite-plugin-pwa` in `vite.config.ts`:
 
 - **Register type**: `prompt` -- A new version is not activated automatically. No prompt is shown either: `onNeedRefresh` in `main.tsx` is an empty callback and nothing calls the update function `registerSW()` returns.
-- **Manifest**: App name "fitai.coach" (short name "fitai"), standalone display mode, dark background (`#0a0a0a`), theme colour `#C4F37E`, and 192px, 512px and maskable 512px PNG icons plus the SVG favicon.
+- **Manifest**: App name "fitai.coach" (short name "fitai"), standalone display mode, dark background (`#0a0a0a`), theme colour `#B1F584` (the brand lime, pinned to the stylesheet's `--accent` by `test/build/pwaManifest.test.ts`), and 192px, 512px and maskable 512px PNG icons plus the SVG favicon.
 - **Workbox configuration**:
   - Precaches `js`, `css`, `html`, `ico`, `png` and `svg` files, and of the fonts only the latin-subset `woff2` of each face (`PRECACHE_GLOB_PATTERNS`). Other subsets and the `woff` fallbacks are cached at runtime the first time a page needs them. Fonts are never inlined into the stylesheet as base64 (`build.assetsInlineLimit`), so the entry CSS carries none (PF6).
   - `cleanupOutdatedCaches: true` removes stale cache entries on update.
