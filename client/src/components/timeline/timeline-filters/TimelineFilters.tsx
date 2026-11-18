@@ -1,7 +1,7 @@
 import { Filter } from "lucide-react";
 import { useRef, useState } from "react";
 
-import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
+import { LazyGeneratePlanDialog } from "@/components/plans/LazyGeneratePlanDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -210,7 +210,7 @@ export default function TimelineFilters({
         isUpdatingGoal={isUpdatingGoal}
       />
 
-      <GeneratePlanDialog
+      <LazyGeneratePlanDialog
         open={generateDialogOpen}
         onOpenChange={setGenerateDialogOpen}
         existingPlans={plans}

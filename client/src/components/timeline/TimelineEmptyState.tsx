@@ -13,7 +13,7 @@ import {
 import { useRef, useState } from "react";
 import { Link } from "wouter";
 
-import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
+import { LazyGeneratePlanDialog } from "@/components/plans/LazyGeneratePlanDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -149,7 +149,7 @@ function WelcomeEmptyState({
         Not sure where to start? Ask our AI Coach for training recommendations.
       </p>
 
-      <GeneratePlanDialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog} />
+      <LazyGeneratePlanDialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog} />
     </div>
   );
 }
