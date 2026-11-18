@@ -160,6 +160,7 @@ describe("offlineQueue", () => {
           synced: 1,
           failed: 0,
           dropped: 0,
+          expired: 0,
           syncedRequests: [{ url: "/api/v1/workouts", method: "POST" }],
         },
       }),
@@ -622,6 +623,47 @@ describe("offlineQueue", () => {
         reason: "max_retries",
       }),
     );
+    unsubscribe();
+  });
+
+  // Tech debt #57: the summary toast said "after too many failed attempts"
+  // for every drop, so it has to know which of them expired instead.
+  it("tells the sync summary how many of its drops expired rather than failed", async () => {
+    const dropped = vi.fn();
+    const unsubscribe = onMutationDropped(dropped);
+    const syncComplete = vi.fn();
+    globalThis.addEventListener(OFFLINE_SYNC_COMPLETE_EVENT, syncComplete);
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([
+        {
+          id: "too-old",
+          method: "POST",
+          url: "/api/v1/workouts",
+          body: { title: "Old" },
+          timestamp: Date.now() - 8 * 24 * 60 * 60 * 1000,
+          retryCount: 0,
+        },
+        {
+          id: "too-many-retries",
+          method: "POST",
+          url: "/api/v1/workouts",
+          body: { title: "Rejected" },
+          timestamp: Date.now(),
+          retryCount: 5,
+        },
+      ]),
+    );
+
+    expect(await flushQueue()).toEqual({ synced: 0, failed: 0, dropped: 2 });
+
+    expect(dropped).toHaveBeenCalledWith(expect.objectContaining({ id: "too-old", reason: "max_age" }));
+    expect(syncComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: expect.objectContaining({ dropped: 2, expired: 1 }),
+      }),
+    );
+    globalThis.removeEventListener(OFFLINE_SYNC_COMPLETE_EVENT, syncComplete);
     unsubscribe();
   });
 

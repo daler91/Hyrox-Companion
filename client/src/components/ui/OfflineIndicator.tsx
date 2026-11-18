@@ -15,6 +15,29 @@ import {
 const OFFLINE_POLL_INTERVAL_MS = 2000;
 const SYNC_SUCCESS_DISMISS_MS = 3500;
 
+function changes(count: number): string {
+  return count === 1 ? "1 change" : `${count} changes`;
+}
+
+/**
+ * Why a sync run discarded what it did. A flush drops an entry for one of two
+ * reasons, age (more than 7 days queued) or too many rejections, and the toast
+ * used to give the second for both (tech debt #57).
+ */
+export function droppedChangesDescription(dropped: number, expired: number): string {
+  const failed = dropped - expired;
+  const verb = dropped === 1 ? "was" : "were";
+  let why: string;
+  if (failed <= 0) {
+    why = `${changes(dropped)} ${verb} discarded because ${dropped === 1 ? "it was" : "they were"} queued more than 7 days ago.`;
+  } else if (expired <= 0) {
+    why = `${changes(dropped)} ${verb} discarded after too many failed attempts.`;
+  } else {
+    why = `${changes(dropped)} ${verb} discarded: ${expired} queued more than 7 days ago, ${failed} after too many failed attempts.`;
+  }
+  return `${why} Please re-enter recent edits.`;
+}
+
 // Phones: a centred pill just under the sticky header, clear of the tab bar,
 // the action pills and the jump-to-today pill that all share the bottom
 // edge. From md up it sits bottom-left, where it always did.
@@ -76,7 +99,7 @@ export function OfflineIndicator() {
         // workouts after prolonged offline periods (7d / 5 retry limit).
         toast({
           title: "Some offline changes couldn't be synced",
-          description: `${detail.dropped} change${detail.dropped === 1 ? " was" : "s were"} discarded after too many failed attempts. Please re-enter recent edits.`,
+          description: droppedChangesDescription(detail.dropped, detail.expired),
           variant: "destructive",
           duration: 10_000,
         });

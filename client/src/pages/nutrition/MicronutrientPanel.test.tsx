@@ -38,6 +38,10 @@ describe("MicronutrientPanel", () => {
     vi.mocked(api.nutrition.getMicros).mockResolvedValue({ date: "2026-06-07", micros: [] });
     renderPanel();
 
-    expect(await screen.findByTestId("micro-empty")).toBeInTheDocument();
+    // Tech debt #57: it said to "re-search a food", but search never fills
+    // in micros; opening a USDA food to log it does.
+    const empty = await screen.findByTestId("micro-empty");
+    expect(empty).toHaveTextContent("Opening a USDA food to log it fetches its micronutrients");
+    expect(empty).not.toHaveTextContent(/re-search/i);
   });
 });

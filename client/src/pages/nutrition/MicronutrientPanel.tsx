@@ -4,8 +4,10 @@ import { useMicros } from "@/hooks/useNutrition";
 
 /**
  * Daily micronutrient totals against reference intakes (FR-5.1). Shows only the
- * micros the day's foods carry data for; most cached foods have none until
- * re-fetched, so a clear empty state explains the gap.
+ * micros the day's foods carry data for. Many cached foods have none until a
+ * USDA food is opened to log, which fetches its micros (`enrichFromUsda`), so
+ * a clear empty state explains the gap. The totals read each food's current
+ * micros, so a food filled in after it was logged counts too.
  */
 export function MicronutrientPanel({ date }: { readonly date: string }) {
   const { data, isLoading } = useMicros(date);
@@ -18,7 +20,7 @@ export function MicronutrientPanel({ date }: { readonly date: string }) {
     if (micros.length === 0) {
       return (
         <p className="text-xs text-muted-foreground" data-testid="micro-empty">
-          No micronutrient data yet. Re-search a food to pull micros from USDA / Open Food Facts.
+          No micronutrient data yet. Opening a USDA food to log it fetches its micronutrients; foods from other sources may have none.
         </p>
       );
     }

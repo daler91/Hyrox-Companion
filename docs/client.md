@@ -561,7 +561,7 @@ PWA is enabled via `vite-plugin-pwa` in `vite.config.ts`:
   - Runtime caching for fonts: `CacheFirst` into `font-cache` (20 entries, one year) for font files (`woff`, `woff2`, `ttf`, `otf`, `eot`) and for `fonts.googleapis.com` / `fonts.gstatic.com`.
   - Runtime caching for images (`png`, `jpg`, `jpeg`, `svg`, `webp`): `StaleWhileRevalidate` into `image-cache` (100 entries, 30 days).
 - **Service worker registration**: Called in `main.tsx` after render, with `onNeedRefresh` and `onOfflineReady` callbacks (both empty), and skipped under Cypress. There is exactly **one** registration.
-- **Offline indicator and replay state**: The `OfflineIndicator` component (`client/src/components/ui/OfflineIndicator.tsx`) displays offline status, the count of queued writes awaiting replay (workout creates, plan-day status changes and food logs — see [Offline Queue](state-management.md#offline-queue)), and sync/drop feedback after replay attempts.
+- **Offline indicator and replay state**: The `OfflineIndicator` component (`client/src/components/ui/OfflineIndicator.tsx`) displays offline status, the count of queued writes awaiting replay (workout creates, plan-day status changes and food logs — see [Offline Queue](state-management.md#offline-queue)), and sync/drop feedback after replay attempts. The drop toast says how many changes were discarded for being queued more than 7 days and how many after too many failed attempts.
 
 ### Push notifications and the service worker
 
