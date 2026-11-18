@@ -9,9 +9,10 @@ import kotlinx.serialization.Serializable
  *
  * Its own types rather than generated API models, because no generated type
  * is the input the server lints:
- * - The workout write models (CreateWorkoutRequest, UpdateWorkoutRequest)
- *   have no structureBlocks field, although POST and PATCH /api/v1/workouts
- *   accept and lint one. The only request-side block model belongs to
+ * - The blocks come in three unrelated generated classes for one shape:
+ *   CreateWorkoutRequest.StructureBlocksItem and
+ *   UpdateWorkoutRequest.StructureBlocksItem (POST and PATCH
+ *   /api/v1/workouts, which lint them), and the request model of
  *   PATCH /api/v1/plans/days/{dayId}/structure.
  * - The rows the app sends are CreateWorkoutRequest.ExercisesItem or
  *   UpdateWorkoutRequest.ExercisesItem, two separate classes; ParsedExercise

@@ -218,12 +218,15 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
 
 ### Client and UX
 
-- **52. The desktop sidebar can be hidden with no visible way back** — Confirmed. Ctrl/Cmd+B
-  toggles it and a 7-day cookie remembers the choice (`client/src/components/ui/sidebar.tsx`),
-  but the only `SidebarTrigger` is in a header that is `md:hidden` (`client/src/App.tsx:198-199`).
-  `--sidebar-width-icon` (`App.tsx:178`) is unused.
-- **53. No breadcrumb label for Nutrition or Weekly Review** — Confirmed. `ROUTE_LABELS`
-  lacks both routes (`client/src/components/Breadcrumbs.tsx:10-17`).
+- ~~**52. The desktop sidebar can be hidden with no visible way back**~~ — Resolved
+  2026-11-18. The header with the `SidebarTrigger` moved to `client/src/components/AppHeader.tsx`,
+  which still always shows below md and now also shows on desktop while the sidebar is
+  collapsed, so Ctrl/Cmd+B or the week-long cookie can no longer strand it. The unused
+  `--sidebar-width-icon` override is gone. Guarded by
+  `client/src/components/__tests__/AppHeader.test.tsx`.
+- ~~**53. No breadcrumb label for Nutrition or Weekly Review**~~ — Resolved 2026-11-18.
+  `ROUTE_LABELS` has `/nutrition` and `/review`. Guarded by
+  `client/src/components/__tests__/Breadcrumbs.test.tsx`.
 - **54. Service worker updates have no prompt** — Confirmed. `registerType: "prompt"`
   (`vite.config.ts:38`) with an empty `onNeedRefresh` (`client/src/main.tsx:61-63`): a new
   build activates only once every tab is closed.
@@ -233,11 +236,13 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
 - **56. Feature error boundaries send no feature tag** — Confirmed.
   `FeatureErrorBoundaryWrapper` takes `featureName` but passes nothing to
   `Sentry.ErrorBoundary` (`client/src/components/FeatureErrorBoundaryWrapper.tsx:20`).
-- **57. Two messages describe the wrong thing** — Confirmed. The offline drop toast says
-  "discarded after too many failed attempts" for every reason, including `max_age` and
-  `wrong_account` (`client/src/components/ui/OfflineIndicator.tsx:79`). The micronutrient
-  empty state says to "re-search a food" (`client/src/pages/nutrition/MicronutrientPanel.tsx:21`);
-  the backfill happens when a USDA food's detail is opened.
+- ~~**57. Two messages describe the wrong thing**~~ — Resolved 2026-11-18. The sync-complete
+  event counts how many drops expired (`expired`), and the summary toast names each reason
+  (more than 7 days queued, or too many failed attempts); the other drop reasons never
+  reach that toast and keep their own. The micronutrient empty state now says opening a USDA
+  food to log it fetches its micronutrients. Guarded by `client/src/lib/offlineQueue.test.ts`,
+  `client/src/components/ui/__tests__/OfflineIndicator.a11y.test.tsx` and
+  `client/src/pages/nutrition/MicronutrientPanel.test.tsx`.
 - **58. Weekly review shows deltas for a week still in progress** — Confirmed.
   `client/src/components/review/WeeklyReviewSummary.tsx:62-68,97-104` renders the session and
   duration deltas whatever `isCurrentWeek` is; `docs/weekly-review-spec.md` §6.5 asks for
@@ -245,10 +250,10 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
 - **59. The web fuelling chip estimates locally** — Confirmed.
   `client/src/components/timeline/timeline-workout-card/FuellingTargetChip.tsx` calls
   `estimatePlannedSession` and never reads the API's `sessionEstimate`, so the chip and the fuelling panel can disagree.
-- **60. The PWA theme colour is the superseded lime** — Confirmed. `theme_color: "#C4F37E"`
-  in `vite.config.ts:57`; the stylesheet, the logo files, the Android app and (since
-  2026-11-17) `docs/BrandKit/BRAND.md` use `#B1F584`. The designed PDF in `docs/BrandKit/`
-  also still prints `#C4F37E` and needs re-exporting from its source.
+- ~~**60. The PWA theme colour is the superseded lime**~~ — Resolved 2026-11-18.
+  `theme_color` is `#B1F584`, and `test/build/pwaManifest.test.ts` converts it to HSL and
+  pins it to the stylesheet's `--accent`. Still open outside the code: the designed PDF in
+  `docs/BrandKit/` prints `#C4F37E` and needs re-exporting from its source.
 
 ### Android app
 
@@ -269,15 +274,17 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
 
 - **65. SonarCloud may not be evaluating coverage** — Reported. Under Automatic Analysis no
   lcov report is uploaded, so "Coverage on New Code" may never be computed.
-- **66. `mobile.yml` runs on a push that touches `mobile-release.yml` but not on a pull
-  request that does** — Confirmed (`.github/workflows/mobile.yml`, the two `paths` lists).
+- ~~**66. `mobile.yml` runs on a push that touches `mobile-release.yml` but not on a pull
+  request that does**~~ — Resolved 2026-11-18. The pull-request paths now match the push
+  paths. Guarded by `test/build/workflowPaths.test.ts`, which compares the two lists for
+  every workflow that filters both.
 - **67. `sonar-project.properties` declares a much narrower test set than
   `.sonarcloud.properties`** — Confirmed
   (`sonar.tests=client/src/hooks/__tests__,server/routes/__tests__`). It would misclassify
   tests if the CI scanner were switched back on.
-- **68. `pnpm/action-setup` is labelled two ways** — Confirmed. All eight uses pin the same
-  commit; `build.yml`, `openapi-breaking.yml` and the second job in `migrations.yml` comment
-  it `# v4`, the rest `# v6.1.1`.
+- ~~**68. `pnpm/action-setup` is labelled two ways**~~ — Resolved 2026-11-18. The pinned
+  commit is tag v6.1.1, and all eight uses now say so. Guarded by
+  `test/build/workflowPins.test.ts`: every pin of one commit must name one release.
 - **69. `script/coach-memory-usage.ts` cannot measure the athlete card** — Confirmed. It has
   no query on `athlete_facts`, though its header still calls it the gate for that decision.
 - **70. No test pins the middleware order** — Reported. `docs/adr-startup-pattern.md` names
@@ -285,53 +292,19 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
 
 ### Stale code comments
 
-- **71. Comments that no longer match the code beside them** — each Confirmed unless marked.
-  - `shared/units.ts:22-25` — the example said not to compile does compile; `:39` names a
-    column, `maf_test_results.duration_seconds`, that does not exist.
-  - `server/routes/account.ts:14-18` — lists 13 cascading tables as if complete; about 30
-    cascade from `users`.
-  - `server/queue.ts:78-83` — says the "sent" marker is persisted after the send; claims are
-    taken before it.
-  - `server/emailScheduler.ts:82` and `:629` — "daily cron" / "once-daily cron"; the scan is
-    hourly.
-  - `server/cron.ts:168` — idempotency rows "have a 24h TTL"; it is 7 days
-    (`server/middleware/idempotency.ts:14`). `server/cron.ts:306-311` names two analytics
-    features; the recompute covers four.
-  - `server/garmin.ts:81-85` — the 429 breaker freezes Garmin "on this instance"; the trip is
-    shared through `server_runtime_cache`.
-  - `shared/schema/tables.ts:817-819` — "we re-login when current time passes this value";
-    the code re-mints the OAuth2 token from OAuth1.
-  - `shared/schema/tables.ts:1851-1852` — the non-manual nutrition entry methods are called
-    dormant; they are in use.
-  - `shared/schema/nutrition.ts:168-169` — `apiDegraded` is described as "the USDA API was
-    unreachable"; it means no provider was reached. `:598-599` — targets are called
-    insert-only; a same-day save replaces.
-  - `shared/schema/types/users.ts:90-91`, `server/storage/analytics.ts:143-144` — describe
-    the training-constraints note and `skipReason` as they were before the athlete card and
-    the missed-session flow.
-  - `server/services/weeklyProgress.ts:82-83` — says `getMondayWeekBoundaries` anchors to UTC
-    and powers the training-overview charts; every caller passes a timezone and the charts
-    use `getMonday`.
-  - `server/services/nutrition/foodEmbeddings.ts:78` — "mirrors … halfvec cast"; the chunk
-    search no longer casts.
-  - `server/routes/plans.ts:585-586` — points at a 10 MB parser "in server/index.ts"; it is
-    in `server/largeBodyParsers.ts`. `server/middleware/errorHandler.ts:143-145` lists two of
-    the five body limits.
-  - `server/crypto.ts:28` — "run the re-encrypt job" without naming
-    `ENCRYPTION_REENCRYPT_ON_BOOT`, the variable that runs it.
-  - `client/src/lib/errorReportingConsent.ts:12,38,44` — "takes effect on the next reload";
-    the consent card applies the change at once.
-  - `client/src/components/workout-detail/ReviewSurface.tsx:84-86` — the footer list omits
-    Combine.
-  - `mobile/core/src/commonMain/kotlin/com/fitai/coach/core/structure/StructureLintInput.kt:13`
-    — says the create and update requests have no `structureBlocks` field; both do.
-  - `mobile/androidApp/src/main/AndroidManifest.xml:9` — "on-device speech recogniser"; the
-    default recogniser is used, with no offline preference.
-  - `mobile/composeApp/src/commonMain/kotlin/com/fitai/coach/ui/theme/FitaiColors.kt:16-18` —
-    says the brand kit lists `#C4F37E` and that nothing renders it; the kit now lists
-    `#B1F584`, and the PWA manifest (#60) does render the old value.
-  - `.github/workflows/mobile-release.yml:11` — calls its secrets repository secrets; the job
-    runs in the `play-store` environment.
+- ~~**71. Comments that no longer match the code beside them**~~ — Resolved 2026-11-18. Each
+  comment was checked against its code and rewritten: `shared/units.ts` (the example now uses
+  a `Seconds`-typed parameter, and says the storage types are unchecked, #50),
+  `server/routes/account.ts`, `server/queue.ts`, `server/emailScheduler.ts`, `server/cron.ts`,
+  `server/garmin.ts`, `shared/schema/tables.ts` (the Garmin token, the entry methods, and the
+  `trainingConstraints` column too), `shared/schema/nutrition.ts`,
+  `shared/schema/types/users.ts`, `server/storage/analytics.ts`,
+  `server/services/weeklyProgress.ts`, `server/services/nutrition/foodEmbeddings.ts`,
+  `server/routes/plans.ts`, `server/middleware/errorHandler.ts`, `server/crypto.ts` (which
+  now names `ENCRYPTION_REENCRYPT_ON_BOOT` and points at #49),
+  `client/src/lib/errorReportingConsent.ts`, `ReviewSurface.tsx`, `StructureLintInput.kt`,
+  the Android manifest and `Speech.android.kt` (the phone's default recogniser),
+  `FitaiColors.kt` and `mobile-release.yml`.
 
 ---
 
@@ -376,5 +349,5 @@ not in them.
 | P1 — High | 6/6 | 0 | All resolved |
 | P2 — Medium | 6/6 | 0 | All resolved |
 | P3 — Low | 10/11 | 1 | #22 CSRF resolved via `csrf-csrf` double-submit; #29 dual-TS installs open (blocked on TS 7.1 API + typescript-eslint) |
-| Docs verification, 2026-11-17 | 11/42 | 31 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43 and #51 resolved 2026-11-18 |
-| **Total** | **39/71** | **32** | #29 is intentional interim state; the other 31 of #30–#71 are untriaged |
+| Docs verification, 2026-11-17 | 18/42 | 24 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43, #51, #52, #53, #57, #60, #66, #68 and #71 resolved 2026-11-18 |
+| **Total** | **46/71** | **25** | #29 is intentional interim state; the other 24 of #30–#71 are untriaged |

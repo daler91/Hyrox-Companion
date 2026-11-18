@@ -54,7 +54,7 @@ export default defineConfig({
         start_url: "/",
         display: "standalone",
         background_color: "#0a0a0a",
-        theme_color: "#C4F37E",
+        theme_color: "#B1F584",
         // Raster icons for the install prompt and home screen. Android needs
         // 192/512 PNGs to offer "Install app" rather than a plain shortcut,
         // and the maskable one is full-bleed brand green so the adaptive

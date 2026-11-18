@@ -30,6 +30,9 @@ name: Mobile Core
 #   debug key, so the previous test build has to be uninstalled first.
 #
 # iOS targets join in Phase 7, compiled on a macOS runner.
+#
+# The push and pull_request path lists match (test/build/workflowPaths.test.ts):
+# a change that runs this on main is checked in the pull request that makes it.
 on:
   push:
     branches:
@@ -53,6 +56,7 @@ on:
       - script/mobile-fixtures/**
       - shared/**
       - .github/workflows/mobile.yml
+      - .github/workflows/mobile-release.yml
   # A fresh test build on demand (Actions → Mobile Core → Run workflow), e.g.
   # after changing the CLERK_PUBLISHABLE_KEY variable.
   workflow_dispatch:

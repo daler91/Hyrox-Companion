@@ -17,12 +17,17 @@
  *
  * What it does catch is ASSIGNMENT across units, which is the exact shape of
  * every unit bug in the audit — a minutes-valued expression handed to a
- * seconds-typed field:
+ * seconds-typed parameter or field:
  *
  * ```ts
- * const metrics: MafTestMetrics = { durationSeconds: workout.duration };
- * //                               ^ Minutes is not assignable to Seconds
+ * secondsToMinutes(minutes(workout.duration));
+ * //               ^ Minutes is not assignable to Seconds
  * ```
+ *
+ * Only a branded receiver checks anything. The storage types are plain
+ * `number` (`MafTestMetrics.durationSeconds`, the Drizzle rows), so handing
+ * them minutes still compiles; the brand has to be checked before the value
+ * reaches them (tech debt #50).
  *
  * Mixed arithmetic is covered by the naming rule in the ADR instead: an
  * identifier holding a duration must end in `Seconds` or `Minutes`, so mixing
@@ -36,7 +41,7 @@ type Unit<Tag extends string> = number & { readonly [unitBrand]: Tag };
 
 /** Whole or fractional minutes. The canonical unit of `exercise_sets.time`. */
 export type Minutes = Unit<"minutes">;
-/** Whole or fractional seconds. The canonical unit of `maf_test_results.duration_seconds`. */
+/** Whole or fractional seconds. The canonical unit of `durationSeconds` in `maf_test_results.metrics`. */
 export type Seconds = Unit<"seconds">;
 /** Metres. The canonical unit of `workout_logs.distance_meters`. */
 export type Metres = Unit<"metres">;

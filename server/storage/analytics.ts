@@ -140,8 +140,9 @@ export class AnalyticsStorage {
    * trains off-plan. `getWeeklyStats` used to do exactly that and the email
    * DID turn it into a rate, so an athlete with no plan was emailed 100%
    * (audit H6); it now returns `planCompletedCount` so that rate can be built
-   * from plan days alone. `skipReason` rides along because this is its first
-   * read anywhere in the product.
+   * from plan days alone. `skipReason` rides along so the review can show why
+   * each skipped session was skipped, as the timeline and the coach's training
+   * stats also do.
    *
    * User-scoped in SQL via the parent plan, like getMissedWorkoutsForDate, so
    * it stays an indexed lookup over one athlete's plans.

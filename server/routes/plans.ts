@@ -583,7 +583,8 @@ protectedPost(
 
 // Photo sibling of /reparse for plan days. Same replace semantics, same
 // rate bucket — only the input modality differs. Body size enforced by
-// the route-scoped 10MB express.json() in server/index.ts.
+// the 10MB image-parse JSON parser in server/largeBodyParsers.ts, which the
+// protected route stack runs after auth and the rate limiter.
 protectedPost(
   router,
   "/api/v1/plans/days/:dayId/reparse-from-image",

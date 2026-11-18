@@ -3,8 +3,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, useLayoutEffect } from "react";
 import { Route,Switch } from "wouter";
 
+import { AppHeader } from "@/components/AppHeader";
 import { AppSidebar } from "@/components/AppSidebar";
-import { Logo } from "@/components/brand/Logo";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { MobileTabBar } from "@/components/MobileTabBar";
@@ -12,7 +12,7 @@ import { PrivacyConsentBanner } from "@/components/PrivacyConsentBanner";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { OfflineIndicator } from "@/components/ui/OfflineIndicator";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
@@ -175,7 +175,6 @@ function AuthenticatedLayout() {
 
   const style = {
     "--sidebar-width": "16rem",
-    "--sidebar-width-icon": "3rem",
   } as React.CSSProperties;
 
   return (
@@ -192,13 +191,7 @@ function AuthenticatedLayout() {
           </a>
           <AppSidebar />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {/* min-h + safe-area padding rather than a fixed h-14: installed on
-                a phone with viewport-fit=cover the header runs under the status
-                bar, and the padding keeps the menu button below it. */}
-            <header className="sticky top-0 z-50 flex min-h-14 flex-shrink-0 items-center gap-2 border-b bg-background/80 p-2 pt-[calc(0.5rem+env(safe-area-inset-top))] backdrop-blur-sm md:hidden">
-              <SidebarTrigger data-testid="button-sidebar-toggle" />
-              <Logo size={24} />
-            </header>
+            <AppHeader />
             {/* tabIndex=-1 so the skip-to-content link can move focus here.
                 Without it, browsers move scroll but not focus, which defeats AT users. */}
             <main id="main-content" tabIndex={-1} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain focus:outline-none">

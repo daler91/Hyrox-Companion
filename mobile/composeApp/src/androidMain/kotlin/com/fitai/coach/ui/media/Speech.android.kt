@@ -23,9 +23,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 
 /**
- * Dictation with the on-device SpeechRecognizer: it listens in the app, with
- * the microphone permission asked for on the first tap. Where the device has
- * no recogniser service, the system's own speech screen is used instead.
+ * Dictation with a SpeechRecognizer: it listens in the app, with the
+ * microphone permission asked for on the first tap. The recogniser is the
+ * phone's default recognition service, which may be an online one; no offline
+ * preference is asked for. Where the device has no recogniser service, the
+ * system's own speech screen is used instead.
  */
 @Composable
 actual fun rememberSpeechInput(onText: (String) -> Unit, onError: (String) -> Unit): SpeechInput? {

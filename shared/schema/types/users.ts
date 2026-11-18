@@ -87,8 +87,10 @@ export const updateUserPreferencesSchema = z.object({
   activityLevel: z.enum(["sedentary", "light", "moderate", "active", "very_active"]).nullable().optional(),
   weightGoalDirection: z.enum(["lose", "maintain", "gain"]).nullable().optional(),
   weightGoalRateKgPerWeek: boundedNumber(BOUNDS.weightGoalRateKgPerWeek).nullable().optional(),
-  // Durable injuries/limitations, seeded from the plan generator's textarea.
-  // Same 500-char bound as generatePlanInputSchema.injuries, which feeds it.
+  // The older free-text injuries note the athlete card replaced. The client
+  // only ever sends null here (the card's "Remove note"); the plan generator's
+  // injuries box goes onto the card instead. Same 500-char bound as
+  // generatePlanInputSchema.injuries, which used to feed it.
   trainingConstraints: z.string().max(500).nullable().optional(),
   mafAge: boundedNumber(BOUNDS.mafAge).nullable().optional(),
   mafInjuryIllnessMedication: z.boolean().nullable().optional(),

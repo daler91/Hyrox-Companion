@@ -45,7 +45,10 @@ export interface OfflineQueueChangeDetail {
 export interface OfflineSyncCompleteDetail {
   synced: number;
   failed: number;
+  /** Entries this run discarded: the expired ones plus those that failed too often. */
   dropped: number;
+  /** How many of `dropped` were discarded for age (queued more than 7 days ago). */
+  expired: number;
   /** The url/method of each successfully replayed mutation, so listeners can
    * invalidate the query caches that write actually touched. */
   syncedRequests: SyncedRequest[];
@@ -448,6 +451,7 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
   let synced = 0;
   let failed = 0;
   let dropped = 0;
+  let expired = 0;
   const syncedRequests: SyncedRequest[] = [];
   const remaining: PendingMutation[] = [];
 
@@ -464,6 +468,7 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
     // Drop stale mutations older than MAX_AGE_MS
     if (ageMs > MAX_AGE_MS) {
       dropped++;
+      expired++;
       notifyDropped({ id: mutation.id, method: mutation.method, url: mutation.url, retryCount, reason: "max_age", ageMs });
       return;
     }
@@ -516,7 +521,7 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
     if (enqueuedDuringFlush.length > 0) scheduleQueueRetry();
   }
   if (synced > 0 || dropped > 0) {
-    notifySyncComplete({ synced, failed, dropped, syncedRequests });
+    notifySyncComplete({ synced, failed, dropped, expired, syncedRequests });
   }
   return { synced, failed, dropped };
 }

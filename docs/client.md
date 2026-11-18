@@ -53,7 +53,7 @@ When auth is bypassed (dev mode or Cypress tests), ClerkProvider is omitted and 
 
 - A skip-to-content accessibility link
 - `AppSidebar` (navigation sidebar)
-- A mobile header with `SidebarTrigger` and the `Logo` (visible on `md:hidden`)
+- `AppHeader` -- the `SidebarTrigger` and the `Logo`. It always shows below md; on desktop it shows only while the sidebar is collapsed (Ctrl/Cmd+B collapses it, and the `sidebar_state` cookie keeps it collapsed for a week), so the sidebar can always be reopened
 - `<main id="main-content">`, the only scrolling region (html, body and `#root` are locked to the viewport), holding `Breadcrumbs` and the `AuthenticatedRouter`
 - `MobileTabBar` -- Bottom tab bar for the primary destinations (five with the nutrition flag on, four without), visible on `md:hidden`; shares `PRIMARY_NAV_ITEMS` with `AppSidebar` (`client/src/lib/navItems.ts`)
 - `PrivacyConsentBanner`
@@ -319,7 +319,7 @@ Workout detail surfaces live in their own top-level directory so Timeline, Log W
 
 ### `brand/` -- Logo Components
 
-- `Logo` -- The Nexus mark with the wordmark beside it, or the mark alone with `showWordmark={false}`; the wordmark's size follows the mark's. Used in the sidebar, the mobile header and the landing page.
+- `Logo` -- The Nexus mark with the wordmark beside it, or the mark alone with `showWordmark={false}`; the wordmark's size follows the mark's. Used in the sidebar, `AppHeader` and the landing page.
 - `NexusMark`, `Wordmark` -- The two halves. The mark takes a `variant` (`primary`, `ink`, `mono` or `currentColor`), matching the logo files in [`docs/BrandKit/`](BrandKit/BRAND.md).
 
 ### `chat/` -- Chat Markdown
@@ -370,7 +370,7 @@ Editing surfaces for structured workout formats (EMOM, AMRAP, rounds, intervals)
 
 - `AppSidebar` -- Main navigation sidebar rendering `PRIMARY_NAV_ITEMS` (Training, Log Workout, Nutrition when the nutrition flag is on, Analytics, Settings); the footer holds the user avatar and name, the theme toggle, and a log-out button.
 - `MobileTabBar` -- Bottom tab bar mirroring the sidebar's `PRIMARY_NAV_ITEMS` for phones (`md:hidden`).
-- `Breadcrumbs` -- A "Training › current page" trail read from the wouter location. It renders on `/log`, `/analytics`, `/settings`, `/privacy` and `/delete-account`, and on `/` only while a workout sheet is open (`?workout=`), where it names that workout from the cached timeline; `/nutrition` and `/review` have no label and so no trail. Desktop-only (`hidden md:block`) since the tab bar covers "where am I" on phones. (`useNavigationBreadcrumb` is unrelated: it records route changes as Sentry breadcrumbs.)
+- `Breadcrumbs` -- A "Training › current page" trail read from the wouter location. It renders on `/log`, `/nutrition`, `/analytics`, `/review`, `/settings`, `/privacy` and `/delete-account`, and on `/` only while a workout sheet is open (`?workout=`), where it names that workout from the cached timeline. Desktop-only (`hidden md:block`) since the tab bar covers "where am I" on phones. (`useNavigationBreadcrumb` is unrelated: it records route changes as Sentry breadcrumbs.)
 - `CoachPanel` -- AI coach chat panel (described above).
 - `OnboardingWizard` -- Multi-step onboarding dialog.
 - `ThemeProvider` -- Dark/light theme context provider.
@@ -551,7 +551,7 @@ File findings on issue #768 or open focused follow-up PRs referencing it.
 PWA is enabled via `vite-plugin-pwa` in `vite.config.ts`:
 
 - **Register type**: `prompt` -- A new version is not activated automatically. No prompt is shown either: `onNeedRefresh` in `main.tsx` is an empty callback and nothing calls the update function `registerSW()` returns.
-- **Manifest**: App name "fitai.coach" (short name "fitai"), standalone display mode, dark background (`#0a0a0a`), theme colour `#C4F37E`, and 192px, 512px and maskable 512px PNG icons plus the SVG favicon.
+- **Manifest**: App name "fitai.coach" (short name "fitai"), standalone display mode, dark background (`#0a0a0a`), theme colour `#B1F584` (the brand lime, pinned to the stylesheet's `--accent` by `test/build/pwaManifest.test.ts`), and 192px, 512px and maskable 512px PNG icons plus the SVG favicon.
 - **Workbox configuration**:
   - Precaches `js`, `css`, `html`, `ico`, `png` and `svg` files, and of the fonts only the latin-subset `woff2` of each face (`PRECACHE_GLOB_PATTERNS`). Other subsets and the `woff` fallbacks are cached at runtime the first time a page needs them. Fonts are never inlined into the stylesheet as base64 (`build.assetsInlineLimit`), so the entry CSS carries none (PF6).
   - `cleanupOutdatedCaches: true` removes stale cache entries on update.
@@ -561,7 +561,7 @@ PWA is enabled via `vite-plugin-pwa` in `vite.config.ts`:
   - Runtime caching for fonts: `CacheFirst` into `font-cache` (20 entries, one year) for font files (`woff`, `woff2`, `ttf`, `otf`, `eot`) and for `fonts.googleapis.com` / `fonts.gstatic.com`.
   - Runtime caching for images (`png`, `jpg`, `jpeg`, `svg`, `webp`): `StaleWhileRevalidate` into `image-cache` (100 entries, 30 days).
 - **Service worker registration**: Called in `main.tsx` after render, with `onNeedRefresh` and `onOfflineReady` callbacks (both empty), and skipped under Cypress. There is exactly **one** registration.
-- **Offline indicator and replay state**: The `OfflineIndicator` component (`client/src/components/ui/OfflineIndicator.tsx`) displays offline status, the count of queued writes awaiting replay (workout creates, plan-day status changes and food logs — see [Offline Queue](state-management.md#offline-queue)), and sync/drop feedback after replay attempts.
+- **Offline indicator and replay state**: The `OfflineIndicator` component (`client/src/components/ui/OfflineIndicator.tsx`) displays offline status, the count of queued writes awaiting replay (workout creates, plan-day status changes and food logs — see [Offline Queue](state-management.md#offline-queue)), and sync/drop feedback after replay attempts. The drop toast says how many changes were discarded for being queued more than 7 days and how many after too many failed attempts.
 
 ### Push notifications and the service worker
 

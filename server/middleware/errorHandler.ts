@@ -141,8 +141,10 @@ export function globalErrorHandler(
   }
 
   // S3 — body-parser's default 413 message is just "request entity too large"
-  // which gives the user no hint about the per-route limit (100kb default,
-  // 2mb for coaching materials). Rewrite to something actionable.
+  // which gives the user no hint about the per-route limit (100kb app-wide;
+  // 10mb for image parsing, 5mb for a chat send with a photo, 2mb for
+  // coaching materials and 1mb for plan import, in largeBodyParsers.ts).
+  // Rewrite to something actionable.
   if (reply.status === 413) {
     res.status(413).json({
       error:

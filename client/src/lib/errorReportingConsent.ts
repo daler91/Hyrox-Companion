@@ -8,8 +8,11 @@ import { safeLocalStorage } from "./safeStorage";
 // reporting without affecting other users.
 //
 // Defaults to enabled (absence of the key) so existing behavior is preserved
-// and any storage failure fails open to the current default. Read once at boot
-// in main.tsx to gate Sentry.init, so a change takes effect on the next reload.
+// and any storage failure fails open to the current default. Read at boot to
+// gate Sentry.init. The setters below only record the decision; their callers
+// apply it at once: the Settings card starts or stops Sentry in place
+// (startErrorReporting / stopErrorReporting), and the privacy banner's
+// acknowledgement fires the event errorReporting's boot listener answers.
 const ERROR_REPORTING_CONSENT_KEY = "fitai-error-reporting-consent-v1";
 const OPTED_OUT_VALUE = "off";
 
@@ -35,13 +38,13 @@ export function isErrorReportingEnabled(): boolean {
   return unsavedDecision ?? readSavedDecision() ?? true;
 }
 
-/** Re-enable error reporting (clears the opt-out). Takes effect on next reload. */
+/** Record the opt-in (clears the opt-out). Starting Sentry is the caller's job. */
 export function enableErrorReporting(): void {
   safeLocalStorage.removeItem(ERROR_REPORTING_CONSENT_KEY);
   rememberIfUnsaved(true);
 }
 
-/** Opt out of error reporting. Takes effect on next reload. */
+/** Record the opt-out. Stopping Sentry is the caller's job. */
 export function disableErrorReporting(): void {
   safeLocalStorage.setItem(ERROR_REPORTING_CONSENT_KEY, OPTED_OUT_VALUE);
   rememberIfUnsaved(false);

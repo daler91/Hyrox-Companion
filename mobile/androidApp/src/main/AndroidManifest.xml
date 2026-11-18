@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Asked for from Settings when the athlete turns notifications on, never at launch. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Dictation with the on-device speech recogniser; asked for on the first tap of Dictate. -->
+    <!-- Dictation with the phone's default speech recogniser, in the app; asked for on the first tap of Dictate. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Health Connect reads for the workout sync (core/.../health), asked for in Settings. -->
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />

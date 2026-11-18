@@ -8,7 +8,9 @@ name: Mobile Release
 # The version name is the tag's version; the version code is
 # major * 1,000,000 + minor * 1,000 + patch, so every tag uploads a higher one.
 #
-# Secrets (repository → Settings → Secrets and variables → Actions):
+# Secrets (the job runs in the play-store environment, so keep them there,
+# behind its protection rules: Settings → Environments → play-store →
+# Environment secrets; repository secrets would reach the job too):
 #   ANDROID_UPLOAD_KEYSTORE_BASE64     the upload keystore (Play App Signing holds the app signing key)
 #   ANDROID_UPLOAD_KEYSTORE_PASSWORD
 #   ANDROID_UPLOAD_KEY_ALIAS

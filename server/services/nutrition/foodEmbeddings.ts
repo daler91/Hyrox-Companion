@@ -85,8 +85,11 @@ export function selectFoodsToEmbed(
 }
 
 /** Top-K foodIds by cosine similarity to the query embedding (ANN order preserved).
- *  Mirrors CoachingStorage.searchChunksByEmbedding's halfvec cast so the HNSW index
- *  is used. Not user-scoped — foods are shared; the caller re-checks visibility. */
+ *  Orders by the halfvec cast so the planner walks `idx_food_embeddings_hnsw`
+ *  (created in maintenance.ts). The coaching-chunk search no longer casts: it
+ *  filters by athlete, which the shared index cannot do before it stops (AI33).
+ *  Foods are shared, so the approximate index search is right here. Not
+ *  user-scoped; the caller re-checks visibility. */
 export async function searchFoodIdsByEmbedding(
   embedding: number[],
   topK: number,

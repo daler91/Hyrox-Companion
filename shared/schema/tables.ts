@@ -170,18 +170,18 @@ export const users = pgTable("users", {
   // Target rate of weight change in kg/week (canonical). Magnitude only; the
   // sign comes from weightGoalDirection. null ⇒ treated as 0 (maintain).
   weightGoalRateKgPerWeek: real("weight_goal_rate_kg_per_week"),
-  // The athlete's durable injuries and limitations, in their own words.
+  // The older free-text "Injuries & Limitations" note, in the athlete's own
+  // words. The athlete card (athlete_facts) has replaced it: the plan
+  // generator's `injuries` box now goes onto the card a fact per sentence
+  // (moveStatementsToCard), and nothing writes this column except to clear
+  // it, which happens once the whole note fits on the card or when the
+  // athlete removes it from Settings. Until then the AI prompts still read it.
   //
-  // Named for what it holds rather than for the field that feeds it: the plan
-  // generator's one-shot `injuries` textarea is the capture point, but the same
-  // sentence covers equipment and scheduling limits ("no sled at my gym"). It
-  // was previously interpolated into the generation prompt and discarded, so
-  // every regeneration asked the athlete to type it again.
-  //
-  // Cleared to null when the athlete empties the box — a constraint that has
-  // resolved must be forgettable, which is exactly what
-  // maf_injury_illness_medication (write-once at onboarding, permanently -10bpm,
-  // no way to un-set) gets wrong.
+  // It was kept, rather than discarded after plan generation, so a constraint
+  // typed once ("no sled at my gym") reached every later plan, and clearable,
+  // because a constraint that has resolved must be forgettable, which is
+  // exactly what maf_injury_illness_medication (write-once at onboarding,
+  // permanently -10bpm, no way to un-set) gets wrong.
   trainingConstraints: text("training_constraints"),
   mafAge: integer("maf_age"),
   mafInjuryIllnessMedication: boolean("maf_injury_illness_medication"),
@@ -814,9 +814,10 @@ export const garminConnections = pgTable("garmin_connections", {
   // encrypted with encryptToken(). Null until the first successful login.
   encryptedOauth1Token: text("encrypted_oauth1_token"),
   encryptedOauth2Token: text("encrypted_oauth2_token"),
-  // expires_at from the OAuth2 token (seconds since epoch → JS Date). We
-  // re-login when current time passes this value, since the lib's refresh
-  // path is unreliable.
+  // expires_at from the OAuth2 token (seconds since epoch → JS Date). Past
+  // this value the OAuth2 token is re-minted from the stored OAuth1 token, with
+  // no SSO login; only an OAuth1 token Garmin rejects falls back to the
+  // email/password login (layer 6 in server/garmin.ts).
   tokenExpiresAt: timestamp("token_expires_at"),
   lastSyncedAt: timestamp("last_synced_at"),
   // Surfaced to the UI as a "reconnect needed" banner. Cleared on successful
@@ -1853,8 +1854,10 @@ export type FoodSource = (typeof FOOD_SOURCES)[number];
 // back-compat with existing "./tables" importers.
 export { MEAL_TYPES, type MealType } from "./enums";
 
-// How an entry was created. Phase 1 only ever writes "manual"; the others are
-// dormant columns reserved for Phase 2 (barcode) and Phase 4 (AI nl/photo).
+// How an entry was created: "manual" (picked from search or My Foods),
+// "barcode" (a scanned product), "nl" (a described meal the parser read) or
+// "photo" (a meal photo the parser read). All four are written; the day view
+// marks the two parsed kinds.
 export const FOOD_ENTRY_METHODS = ["manual", "barcode", "nl", "photo"] as const;
 export type FoodEntryMethod = (typeof FOOD_ENTRY_METHODS)[number];
 

@@ -165,9 +165,10 @@ export function startCron(storage: IStorage): void {
     "Email cron scheduled: hourly, firing per athlete at their local notify hour (weekly review reminder Sunday 17:00 local)",
   );
 
-  // Daily idempotency cache cleanup (CODEBASE_AUDIT.md §2). Rows have a 24h
-  // TTL on `expiresAt`; this prunes stale entries so the table does not grow
-  // unbounded.
+  // Daily idempotency cache cleanup (CODEBASE_AUDIT.md §2). Rows have a 7-day
+  // TTL on `expiresAt` (IDEMPOTENCY_TTL_SECONDS in middleware/idempotency.ts,
+  // matching the offline queue's max age); this prunes stale entries so the
+  // table does not grow unbounded.
   idempotencyCleanupTask = cron.schedule(
     "30 3 * * *",
     async () => {
@@ -306,9 +307,12 @@ export function startCron(storage: IStorage): void {
   // Midnight analytics recompute. Ticks hourly in UTC and fires per-user at
   // their LOCAL midnight (the scan gates on local hour 0), mirroring the email
   // scheduler's per-timezone approach. Enqueues recompute jobs for users whose
-  // stored Coach Insights / Race Prediction is stale because a workout was
-  // logged after it was generated. Scoped to users who already have a stored
-  // result, so AI is never spent for users who never opened the feature.
+  // stored result for any of the four ANALYTICS_FEATURES (Coach Insights, Race
+  // Prediction, Nutrition Insights, the training-overview analysis) is stale
+  // because something was logged after it was generated; each feature has its
+  // own anchor (analyticsRecomputeScheduler.ts). Scoped to users who already
+  // have a stored result, so AI is never spent for users who never opened the
+  // feature.
   analyticsRecomputeTask = cron.schedule(
     "5 * * * *",
     async () => {

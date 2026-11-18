@@ -77,9 +77,11 @@ export const DEFAULT_JOB_OPTIONS = {
 
 /**
  * Options for non-idempotent jobs: no retries. Use this for handlers
- * with side effects that cannot be safely replayed (e.g. sending email,
- * where the "sent" marker is persisted after the send and a retry after
- * a post-send DB failure would deliver a duplicate).
+ * with side effects that cannot be safely replayed (e.g. sending email).
+ * The email handlers claim the send (a conditional UPDATE stamping the
+ * "sent" marker) before sending, so a retry would find the claim taken and
+ * send nothing anyway; a failed send forgoes that email rather than risk a
+ * duplicate (see the claim notes in emailScheduler.ts).
  */
 export const NO_RETRY_JOB_OPTIONS = {
   retryLimit: 0,

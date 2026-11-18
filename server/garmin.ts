@@ -80,7 +80,9 @@ import { getUserId } from "./types";
 //
 // Layer 5 — Global 429 circuit breaker (garminCircuitBreaker)
 //   If ANY Garmin call returns 429, freeze ALL Garmin operations across all
-//   users on this instance for GLOBAL_429_COOLDOWN_MS. The official advice
+//   users for GLOBAL_429_COOLDOWN_MS. The trip is shared through
+//   server_runtime_cache, so every instance freezes, not just the one that
+//   saw the 429 (W14, below). The official advice
 //   from python-garminconnect is "wait 60 seconds" — we wait much longer
 //   because we don't know how widely the ban will propagate.
 //
