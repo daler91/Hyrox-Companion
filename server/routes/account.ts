@@ -11,11 +11,12 @@ const router = Router();
  * DELETE /api/v1/account
  *
  * Permanently deletes the authenticated user's account and all associated
- * data. FK cascades on the `users` table handle child row cleanup for:
- * workout_logs, exercise_sets, training_plans, plan_days, chat_messages,
- * coaching_materials, strava_connections, garmin_connections,
- * custom_exercises, push_subscriptions, ai_usage_logs, idempotency_keys,
- * and timeline_annotations.
+ * data. In the main database the FK cascades from `users` remove every row the
+ * athlete owns: about 30 tables reference `users.id` directly, and the rest
+ * (exercise_sets under workout_logs, plan_days under training_plans, ...)
+ * cascade through their parent. `shared/schema/tables.cascade.test.ts` fails
+ * when a table referencing `users.id` neither cascades nor is a documented
+ * exception.
  *
  * Two stores need explicit handling beyond the cascade:
  * - `document_chunks` and `food_embeddings` live on the SEPARATE vector

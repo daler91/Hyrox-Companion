@@ -79,11 +79,14 @@ export function getWeekRangeForDate(dateStr: string): LocalWeekRange {
 /**
  * Monday-anchored week boundaries in the *athlete's* timezone.
  *
- * The counterpart of {@link getMondayWeekBoundaries}, which anchors to UTC and
- * powers the training-overview charts. Athlete-facing weekly surfaces should
- * use this one: a Sydney athlete's Monday starts eleven hours before a UTC
- * Monday does, and a weekly summary that disagrees with the athlete's own
- * calendar is worse than one that disagrees with a chart.
+ * The counterpart of {@link getMondayWeekBoundaries}, which returns only the
+ * two Monday dates (every caller now passes the athlete's timezone; without
+ * one it falls back to UTC). This one returns full Monday-to-Sunday ranges for
+ * this week and last, for the weekly surfaces that need both ends: a Sydney
+ * athlete's Monday starts eleven hours before a UTC Monday does, and a weekly
+ * summary that disagrees with the athlete's own calendar is wrong. The
+ * training-overview charts bucket by week with `getMonday` in
+ * analyticsService.ts, not with either of these.
  *
  * An unusable timezone degrades to UTC via {@link getLocalDateStrSafe} rather
  * than throwing — a stale `users.userTimezone` must not 500 a read.

@@ -26,9 +26,13 @@ function deriveKey(secret: string): Buffer {
 //      ENCRYPTION_KEY — the v1 key — in place). Deploy. New writes are now
 //      tagged v2; existing v1/legacy ciphertext still decrypts via the v1 key.
 //   2. Run the re-encrypt job (reencryptToken on every stored credential) to
-//      migrate v1/legacy ciphertext forward to v2.
-//   3. Once nothing references v1, the v1 key may be retired. Keep both keys
-//      configured until the migration is verified complete.
+//      migrate v1/legacy ciphertext forward to v2: set
+//      ENCRYPTION_REENCRYPT_ON_BOOT=true and restart, and the boot runs
+//      reencryptStoredCredentials (server/services/keyRotation.ts).
+//   3. Once nothing references v1, the v1 key would no longer be needed. Keep
+//      both keys configured until the migration is verified complete. (The env
+//      schema still requires ENCRYPTION_KEY, so it cannot actually be removed
+//      yet: tech debt #49.)
 type KeyVersion = "v1" | "v2";
 
 const VERSIONS: readonly KeyVersion[] = ["v1", "v2"];

@@ -165,8 +165,10 @@ export const updateRecipeSchema = createRecipeSchema;
 
 export interface FoodSearchResponse {
   results: Food[];
-  // True when the USDA API was unreachable and only locally-cached foods are
-  // shown (NFR-5 graceful degradation).
+  // True when no live provider (USDA, Open Food Facts or Edamam) was reached
+  // and only locally-cached foods are shown (NFR-5 graceful degradation). A
+  // search that skipped the providers because the cache already had enough is
+  // not degraded.
   apiDegraded: boolean;
 }
 
@@ -596,7 +598,9 @@ export interface ParseLabelResponse {
 const targetValue = z.number().nonnegative().max(100_000).nullable().optional();
 
 // Set/replace the user's macro & calorie targets. Targets are versioned by
-// effectiveFrom (insert-only, never updated in place) so history is preserved.
+// effectiveFrom so history is preserved: a save on a new day adds a version,
+// and a second save on the same day replaces that day's version
+// (replaceTargetVersion in server/storage/nutritionTargets.ts).
 export const upsertNutritionTargetSchema = z
   .object({
     calories: targetValue,

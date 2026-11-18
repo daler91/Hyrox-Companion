@@ -13,9 +13,9 @@ import androidx.compose.ui.graphics.Color
  * for the primary action; and [accentText] stands in for lime wherever the
  * accent is text or an icon, which lime on white could not be.
  *
- * Lime is #B1F584, from `hsl(96 85% 74%)`: what the web and the logo files
- * draw. The brand kit's swatch table lists #C4F37E beside that same HSL, but
- * nothing renders it.
+ * Lime is #B1F584, from `hsl(96 85% 74%)`: what the web, the PWA manifest,
+ * the logo files and the brand kit's swatch table all use. The superseded
+ * #C4F37E survives only in the brand kit's designed PDF.
  */
 @Immutable
 data class FitaiColors(

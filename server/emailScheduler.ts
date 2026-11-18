@@ -79,10 +79,10 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   user = fresh;
 
   // All day-of-week and "this week" math runs in the athlete's local time
-  // (C10). The daily cron still fires once a day in UTC, but each user's
-  // Monday is detected against THEIR userTimezone, so a Sydney user gets
-  // Monday morning local and a Hawaii user gets Monday evening local
-  // instead of either always firing or never firing depending on tz.
+  // (C10). The cron scan ticks hourly in UTC, but each user's Monday and
+  // notify hour are detected against THEIR userTimezone, so every athlete
+  // gets the summary on their own Monday at their own hour instead of on
+  // whichever UTC day the scan happened to see.
   const tz = user.userTimezone;
   if (getLocalDayOfWeek(now, tz) !== 1) return false;
 
@@ -626,8 +626,8 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
     // full scans of the users table) with no ordering dependency between
     // them — the enqueue loop below only runs once all three have settled.
     // Running them concurrently turns 3 sequential round trips into 1 on
-    // this once-daily cron, which currently scans every user in the app
-    // twice, back to back.
+    // this hourly scan, which reads every user in the app twice, back to
+    // back.
     const [markedMissed, usersToCheck, dueMafUsers] = await Promise.all([
       storage.plans.markMissedPlanDays(),
       storage.users.getUsersWithEmailNotifications(),

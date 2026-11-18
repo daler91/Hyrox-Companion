@@ -82,7 +82,8 @@ const EMPTY_EXERCISE_SETS: ExerciseSet[] = [];
  * editor, RPE + notes, then the supporting context (coach rationale,
  * fuelling, plan link, MAF test, settings) collapsed into a single
  * "Session details" card. Action footer covers ask-coach, status-revert
- * (back to planned), and delete (two-step confirm).
+ * (back to planned), combine (merge with another log that day) and delete
+ * (two-step confirm).
  *
  * Skipped cards have their own SkippedSheet surface; this component
  * is only mounted for entries with a workoutLogId.
