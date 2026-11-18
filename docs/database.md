@@ -519,7 +519,7 @@ The backfill (`runAssistedMigrationBackfill` in `server/services/assistedMigrati
 | `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
 | `owner_type` | `text` | NOT NULL, CHECK in (`planDay`, `workoutLog`) |
 | `owner_id` | `varchar(255)` | NOT NULL |
-| `user_id` | `varchar(255)` | nullable, FK -> `users.id` ON DELETE CASCADE (changed from SET NULL in migration `0082`: the review list matches `user_id = me OR user_id IS NULL`, so a deleted athlete's orphaned rows were shown to everyone) |
+| `user_id` | `varchar(255)` | nullable, FK -> `users.id` ON DELETE CASCADE (changed from SET NULL in migration `0082`: the review list then matched `user_id = me OR user_id IS NULL`, so a deleted athlete's orphaned rows were shown to everyone). Every writer stamps the owner, and `listBackfillReviews` returns only rows whose `user_id` is the requesting athlete's |
 | `status` | `text` | NOT NULL, CHECK in (`needs_manual_review`, `resolved`) |
 | `reason` | `text` | nullable |
 | `first_seen_at` | `timestamp` | default `now()` |

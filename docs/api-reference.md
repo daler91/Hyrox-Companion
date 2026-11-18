@@ -339,8 +339,8 @@ Create a new workout log, optionally with parsed exercises and/or structure bloc
 - **`mainWorkout`:** optional; left out or blank, the server writes a summary of `exercises` in the athlete's units.
 - **Server-owned fields:** `source`, `stravaActivityId`, `garminActivityId`, `healthConnectId` and `startedAt` are stripped from the body, as are the device-link, adherence and `prescribed*` columns. The provenance fields mark a workout as a device import and are written only by the activity syncs and the device-link routes, so accepting them from a client would let a manual log present itself as a Strava or Garmin recording. `planId` is likewise always derived: the server resolves plan linkage from `planDayId` (ownership-checked; a day that is not the caller's is silently dropped) or from the plan covering the workout's date (auto-matching that plan's day on the same date), and a client-supplied `planId` is discarded.
 - **Plan-day logs:** a log with a `planDayId` marks the day completed and records its adherence snapshot. Sent without `exercises` or `structureBlocks`, it copies the day's prescribed sets and structure into the log. If the day already has a log, such a create answers with that existing log when it is a plain "Done" (the day's own focus and text, nothing else), and is refused with `409 CONFLICT` otherwise.
-- **Legacy parse:** with no `exercises`, no `structureBlocks` and no `planDayId`, and a text AI provider configured, the server parses `mainWorkout`/`accessory` itself — only if the athlete has AI coaching on, AI is enabled and their budget allows; otherwise the log saves with its text and no sets. A parse that returns nothing is `400`.
-- **Text-only guard:** while the structured-blocks gate is on (`STRUCTURED_BLOCKS_ENABLED=true`, the default, and `STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY` not `true`), a body with `mainWorkout`/`accessory` text but no `exercises`, no `structureBlocks` and no `planDayId` is refused with `422 STRUCTURED_ROWS_REQUIRED` (`rejectTextOnlyWriteIfNeeded`), so the legacy parse above is reached only when the gate is off.
+- **Legacy parse:** with no `exercises`, no `structureBlocks` and no `planDayId` of the athlete's own, and a text AI provider configured, the server parses `mainWorkout`/`accessory` itself — only if the athlete has AI coaching on, AI is enabled and their budget allows; otherwise the log saves with its text and no sets. A parse that returns nothing is `400`.
+- **Text-only guard:** while the structured-blocks gate is on (`STRUCTURED_BLOCKS_ENABLED=true`, the default, and `STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY` not `true`), a body with `mainWorkout`/`accessory` text but no `exercises`, no `structureBlocks` and no `planDayId` of the athlete's own is refused with `422 STRUCTURED_ROWS_REQUIRED` (`rejectTextOnlyWriteIfNeeded`), so the legacy parse above is reached only when the gate is off. A `planDayId` that is another athlete's, or a deleted day, does not exempt the write: that link is dropped on save.
 - **Side effects:** If user has AI coach enabled, sets `isAutoCoaching` flag and queues an `auto-coach` job (the flag is cleared again if nothing is queued). The athlete's cached analytics slices are dropped.
 - **Response:** `200` with the created `WorkoutLog` and its `exerciseSets` (when it has any), plus `newPersonalRecords` when the sets set new PRs
 
@@ -1670,6 +1670,7 @@ Apply a generated timeline AI suggestion to a plan day's field.
 - **AI gates:** `aiConsentCheck`
 - **Body:** `{ workoutId: string, targetField: "notes" | "mainWorkout" | "accessory", action: "replace" | "append", recommendation: string, rationale?: string | null, aiSource?: "rag" | "legacy" | "none" | null }`
 - **Response:** The updated plan day (or 404 when the plan day is not found)
+- **Errors:** `503 AI_BUDGET_UNAVAILABLE` when applying to a day with an exercise table needs a structured re-parse and the AI budget can't be confirmed; nothing is written. The route leaves out `aiBudgetCheck` so an apply that needs no AI never waits on the budget.
 
 ### GET /api/v1/timeline/ai-suggestions/debug/:workoutId
 
@@ -1781,7 +1782,7 @@ Apply the proposed changes to the plan: all of them, or the ones the athlete pic
 - **Rate limit:** `suggestionApply` category, 10/min — requires AI consent. The AI budget is deliberately _not_ checked up front: it is checked internally only if a structured re-parse actually turns out to be needed.
 - **Body:** optional `{ planDayIds?: string[] }` (1–14 ids). Without it, every change is applied. Only the picked changes are re-checked, re-parsed and written; the others are never applied.
 - **Response:** `{ applied: true, changeCount }`, or `{ applied: false, reason, message }` for a retryable failure (`structured_parse_failed`, `ai_budget_exceeded`, `ai_disabled`), with the proposal left pending.
-- **Errors:** `400` (`invalid_selection` — an empty pick, or a day the proposal doesn't change), `404` (proposal not found), `409` (`not_pending` or `stale` — the plan moved on underneath it, or a picked change is for a day before the athlete's today). A `stale` failure resolves the proposal `invalidated` and lists the affected days as `staleChanges: [{ planDayId, dayLabel }]`. The days are checked once before any re-parse and again under a row lock before writing.
+- **Errors:** `400` (`invalid_selection` — an empty pick, or a day the proposal doesn't change), `404` (proposal not found), `409` (`not_pending` or `stale` — the plan moved on underneath it, or a picked change is for a day before the athlete's today). A `stale` failure resolves the proposal `invalidated` and lists the affected days as `staleChanges: [{ planDayId, dayLabel }]`. The days are checked once before any re-parse and again under a row lock before writing. `503 AI_BUDGET_UNAVAILABLE` when a picked change needs a structured re-parse and the AI budget can't be confirmed; nothing is written and the proposal stays pending.
 
 ### POST /api/v1/plan-proposals/:id/undo
 
@@ -2296,6 +2297,8 @@ stops a previously refined value being replayed. The same inline pattern is used
 by nutrition semantic search.
 
 Every nutrition date (`date`, `sourceDate`, `targetDate`, `effectiveFrom`, and the `/block` and `/summary-range` `from`/`to`) must be a real calendar day written `YYYY-MM-DD`, checked by the shared `isIsoCalendarDate()`. An impossible day such as `2026-02-30` returns `400` with one issue; the old check took it and the database answered `500` (C49, `docs/CODEBASE_ANALYSIS_2026-10-03.md`).
+
+Every response that carries a whole food row (search, recent, food detail, favourites, and the matched `food` on `/parse/text` and `/parse/photo` items) has `createdByUserId` nulled unless the caller is that food's author, so a public custom food never reveals who made it.
 
 See [Nutrition & Fuelling](nutrition.md) for request/response shapes, the per-100g scaling model, and AI safety details.
 

@@ -913,12 +913,15 @@ assumes every athlete maxes out their $2, which none will.
   query. Each replica keeps its own cache; a slightly stale total is fine.
 - The global check **fails open** to the per-user cap: a transient aggregate
   query failure must not take AI down for every user. The per-user check fails
-  closed in the middleware, as before (`503 AI_BUDGET_UNAVAILABLE`), in the
-  auto-coach job (the job fails and is retried), and in the planned-session
-  estimate, semantic food search and the legacy text parse, which skip the AI
-  step. The other inline callers (coach insights, overview analysis, nutrition
-  insights, race prediction, the structured apply) log the failed lookup and
-  make the call.
+  closed everywhere. The middleware answers `503 AI_BUDGET_UNAVAILABLE`, and
+  so do the timeline-suggestion and plan-proposal apply routes when the apply
+  needs a structured re-parse (they leave out the middleware so an apply that
+  needs no AI never waits on the budget). The auto-coach job and the nightly
+  coach-insights, overview and nutrition-insights recomputes throw, so the job
+  fails, releases its daily claim and is retried. Race prediction returns its
+  deterministic estimate with `aiUnavailableReason: "ai_error"`. The
+  planned-session estimate, semantic food search and the legacy text parse
+  skip the AI step.
 - Both checks are **check-then-act** — usage is recorded after the provider call
   returns — so concurrent requests inside one rate-limit window can each pass a
   check that the sum of them exceeds. The per-route rate limits bound that

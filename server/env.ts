@@ -147,8 +147,20 @@ const envSchema = z
     // (CODEBASE_AUDIT.md §2). Accepted values: "0" (off), "1" (one hop),
     // "loopback" (only local proxies).
     TRUST_PROXY: z.enum(["0", "1", "loopback"]).default("1"),
-    RAG_CHUNK_SIZE: z.coerce.number().default(600),
-    RAG_CHUNK_OVERLAP: z.coerce.number().default(100),
+    // Characters per RAG chunk and the overlap between neighbours
+    // (server/services/ragService.ts chunkText). A size of 0 or less never
+    // advances the chunker, so an embed job spun forever; a negative overlap
+    // would skip the text between chunks. Both are whole characters.
+    RAG_CHUNK_SIZE: z.coerce
+      .number()
+      .int({ error: "RAG_CHUNK_SIZE must be a whole number of characters" })
+      .positive({ error: "RAG_CHUNK_SIZE must be greater than 0" })
+      .default(600),
+    RAG_CHUNK_OVERLAP: z.coerce
+      .number()
+      .int({ error: "RAG_CHUNK_OVERLAP must be a whole number of characters" })
+      .min(0, { error: "RAG_CHUNK_OVERLAP cannot be negative" })
+      .default(100),
     // Semantic search results further than this cosine distance from the
     // query are dropped (pinned principles never are). Loose by default: it
     // cuts unrelated chunks; the "[rag] Search returned chunks" log line
@@ -214,6 +226,12 @@ const envSchema = z
     // search/barcode degrade to USDA + Open Food Facts as before.
     EDAMAM_APP_ID: z.string().optional(),
     EDAMAM_APP_KEY: z.string().optional(),
+  })
+  .refine((data) => data.RAG_CHUNK_OVERLAP < data.RAG_CHUNK_SIZE, {
+    // An overlap as long as the chunk leaves nothing new in each chunk; the
+    // chunker would quietly drop the overlap instead.
+    message: "❌ FATAL: RAG_CHUNK_OVERLAP must be smaller than RAG_CHUNK_SIZE",
+    path: ["RAG_CHUNK_OVERLAP"],
   })
   .refine((data) => !(data.NODE_ENV === "production" && data.ALLOW_DEV_AUTH_BYPASS === "true"), {
     message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",

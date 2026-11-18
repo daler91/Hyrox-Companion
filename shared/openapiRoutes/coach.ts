@@ -58,6 +58,14 @@ const AI_PROVIDER: readonly ErrorCase[] = [
 const payloadTooLarge = (limit: string): ErrorCase => ({ status: 413, text: `PAYLOAD_TOO_LARGE: the body is over this route's ${limit} limit` });
 const notFound = (what: string): ErrorCase => ({ status: 404, text: `NOT_FOUND: ${what}` });
 const conflict = (text: string): ErrorCase => ({ status: 409, text });
+/**
+ * An apply route that checks the AI budget itself, only when the apply needs a
+ * structured re-parse (getStructuredApplyBlocker, server/services/aiSuggestionService.ts).
+ */
+const STRUCTURED_APPLY_BUDGET_UNAVAILABLE: ErrorCase = {
+  status: 503,
+  text: "AI_BUDGET_UNAVAILABLE: the apply needs a structured re-parse and the AI budget could not be confirmed; nothing was written",
+};
 
 const json = (schema: z.ZodType) => ({ "application/json": { schema } });
 
@@ -784,7 +792,7 @@ function registerTimelinePaths({ registry, routes, ok, fail, aiBudgetHeaders }: 
           message: z.string().optional().openapi({ description: "Present when applied is false: a sentence for the athlete" }),
         }),
       ),
-      ...fail(VALIDATION, AI_CONSENT, notFound("no such plan day of the athlete's")),
+      ...fail(VALIDATION, AI_CONSENT, notFound("no such plan day of the athlete's"), STRUCTURED_APPLY_BUDGET_UNAVAILABLE),
     },
   });
 }

@@ -24259,6 +24259,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "AI_BUDGET_UNAVAILABLE: a picked change needs a structured re-parse and the AI budget could not be confirmed; nothing was written and the proposal stays pending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -27622,6 +27632,16 @@
           },
           "429": {
             "description": "Rate limited; Retry-After says when to try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI_BUDGET_UNAVAILABLE: the apply needs a structured re-parse and the AI budget could not be confirmed; nothing was written",
             "content": {
               "application/json": {
                 "schema": {

@@ -94,24 +94,28 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
 
 ### Security and data exposure
 
-- **30. Migration reviews treat a NULL owner as shared** — Confirmed. `listBackfillReviews`
-  matches `user_id = me OR user_id IS NULL` (`server/services/assistedMigrationService.ts:161`),
-  so a review row with no owner is returned to every signed-in athlete by
-  `GET /api/v1/workouts/migration/reviews`, and `upsertReviewFlag` accepts a null `userId`.
-  The foreign key was already switched to `ON DELETE CASCADE` for this reason
-  (`shared/schema/tables.ts`, comment on `structuredExerciseBackfillReviews.userId`); the
-  query still has the branch. Whether such rows exist in production was not checked.
-- **31. Any `planDayId` bypasses the text-only write guard** — Confirmed.
-  `rejectTextOnlyWriteIfNeeded` returns early for any non-empty `planDayId` string, before
-  ownership is checked (`server/routes/structuredWriteGuard.ts:73-76`), and `createWorkout`
-  skips the legacy parse on the same raw value (`server/services/workoutUseCases.ts:123`).
-  A plan day that is not the caller's is then dropped, leaving a text-only, unlinked log.
-- **32. Shared custom foods expose their author's user id on two paths** — Confirmed.
-  `redactFoodOwner` runs on search, recent and food detail only
-  (`server/routes/nutrition/nutritionFoods.routes.ts:66,78,131`).
-  `GET /api/v1/nutrition/favorites` (`nutritionFavorites.routes.ts:19`) and the `food` object
-  on `/parse/text` and `/parse/photo` items (`server/services/nutrition/mealParser.ts:140-157`)
-  return the row unredacted.
+- ~~**30. Migration reviews treat a NULL owner as shared**~~ — Resolved 2026-11-17.
+  `listBackfillReviews` matched `user_id = me OR user_id IS NULL`, so a flag with no owner
+  was returned to every athlete by `GET /api/v1/workouts/migration/reviews`. It now matches
+  the athlete's own id only, and `upsertReviewFlag` requires an owner. Guarded by
+  `server/services/assistedMigrationService.integration.test.ts` (another athlete's flag and
+  an ownerless one are not returned). Existing ownerless rows, if any, are now visible to no
+  one; they were not deleted.
+- ~~**31. Any `planDayId` bypasses the text-only write guard**~~ — Resolved 2026-11-17.
+  The guard let through any request carrying a `planDayId` string, and `createWorkout`
+  skipped the legacy parse on it, before ownership was checked; a day that was not the
+  caller's was then dropped, leaving a text-only, unlinked log. `POST /api/v1/workouts` now
+  checks the day belongs to the caller before the guard exempts the write
+  (`TextOnlyWriteContext.ownedPlanDayLink` in `server/routes/structuredWriteGuard.ts`), and
+  `createWorkout` skips the parse only for an owned day. A foreign or deleted day is treated
+  as no link: `422 STRUCTURED_ROWS_REQUIRED` while the gate is on. Guarded by
+  `structuredWriteGuard.test.ts`, `workouts.test.ts` and `workoutUseCases.test.ts`.
+- ~~**32. Shared custom foods expose their author's user id on two paths**~~ — Resolved
+  2026-11-17. `redactFoodOwner` ran on search, recent and food detail only;
+  `GET /api/v1/nutrition/favorites` and the `food` on `/parse/text` and `/parse/photo` items
+  returned the author's id. It now lives in `server/routes/nutrition/shared.ts` and those
+  routes use it too (`redactParsedFoodOwners` for the parse items). No other nutrition
+  response carries a whole food row. Guarded by `nutrition.routes.test.ts`.
 - **33. RAG excerpts carry no "data, not instructions" framing** — Confirmed.
   `buildRetrievedChunksSection` (`server/prompts/materialsBuilder.ts:47-60`) escapes each
   excerpt and tells the model to use them to guide its coaching; other athlete-supplied text
@@ -130,10 +134,11 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
 
 ### Correctness
 
-- **36. `RAG_CHUNK_SIZE` has no lower bound** — Confirmed. The schema is
-  `z.coerce.number().default(600)` (`server/env.ts:150`); with `0` or a negative value
-  `chunkText()` never advances (`server/services/ragService.ts:85-121`) and the embed job
-  spins. `RAG_CHUNK_OVERLAP` is unbounded too, though the loop guards that case.
+- ~~**36. `RAG_CHUNK_SIZE` has no lower bound**~~ — Resolved 2026-11-17. A size of `0` or
+  less never advanced `chunkText()`, so the embed job spun. `server/env.ts` now requires
+  `RAG_CHUNK_SIZE` to be a positive whole number and `RAG_CHUNK_OVERLAP` a whole number from
+  `0` to one less than the size; anything else is fatal at startup. Guarded by
+  `server/env.test.ts`.
 - **37. An empty plan-day PATCH body probably returns 500** — Reported.
   `PATCH /api/v1/plans/days/:dayId/status` with `{}` or only `{ skipReason }`, and
   `PATCH /api/v1/plans/:planId/days/:dayId` with `{}`, reach `storage.plans.updatePlanDay`
@@ -152,13 +157,17 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
   claims its ledger column before sending and the send queues do not retry
   (`server/emailScheduler.ts:89-98`, `NO_RETRY_JOB_OPTIONS` in `server/queue.ts`), so with Resend
   failing or `RESEND_API_KEY` unset the claim is spent and that window's email is never sent.
-- **40. Per-user AI budget lookups fail open in five inline generators** — Confirmed. Coach
-  insights (`server/services/coachInsightsService.ts:109`), overview analysis
-  (`overviewAnalysisService.ts:447`), nutrition insights
-  (`nutrition/nutritionInsightsService.ts:145`), race prediction
-  (`racePrediction/racePredictionService.ts:435`) and the structured apply
-  (`aiSuggestionService.ts:264`) log a failed lookup and make the provider call. The
-  middleware and the auto-coach job fail closed. The nightly recompute goes through these.
+- ~~**40. Per-user AI budget lookups fail open in five inline generators**~~ — Resolved
+  2026-11-17. Coach insights, overview analysis, nutrition insights, race prediction and the
+  structured apply logged a failed lookup and made the provider call. None does now: the
+  three nightly generators let the error fail the recompute job, which releases its daily
+  claim and is retried; race prediction returns its deterministic estimate with
+  `aiUnavailableReason: "ai_error"`; the structured apply (timeline-suggestion and
+  plan-proposal apply routes) answers `503 AI_BUDGET_UNAVAILABLE`, as the budget middleware
+  does, before anything is written. The global spend check still fails open to the per-user
+  cap, by design. Guarded by `coachInsightsService.test.ts`,
+  `overviewAnalysisService.range.test.ts`, `nutritionInsightsService.test.ts`,
+  `racePredictionService.test.ts` and `aiSuggestionService.test.ts`.
 - **41. Food-embedding spend is not counted** — Confirmed.
   `server/services/nutrition/foodEmbeddings.ts` calls `generateEmbeddings` without
   `trackEmbeddingUsage`, so the embedding cron is neither counted against
@@ -362,5 +371,5 @@ not in them.
 | P1 — High | 6/6 | 0 | All resolved |
 | P2 — Medium | 6/6 | 0 | All resolved |
 | P3 — Low | 10/11 | 1 | #22 CSRF resolved via `csrf-csrf` double-submit; #29 dual-TS installs open (blocked on TS 7.1 API + typescript-eslint) |
-| Docs verification, 2026-11-17 | 0/42 | 42 | #30–#71, found while checking the docs against the code; none reproduced by running |
-| **Total** | **28/71** | **43** | #29 is intentional interim state; #30–#71 are untriaged |
+| Docs verification, 2026-11-17 | 5/42 | 37 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17 |
+| **Total** | **33/71** | **38** | #29 is intentional interim state; the other 37 of #30–#71 are untriaged |

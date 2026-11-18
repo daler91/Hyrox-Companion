@@ -12,6 +12,7 @@ import { parseNutritionLabel } from "../../services/nutrition/labelParser";
 import { parseMealFromPhoto, parseMealFromText, resolveAndPreview } from "../../services/nutrition/mealParser";
 import { getUserId } from "../../types";
 import { protectedPost } from "../_helpers/protectedRouteBuilder";
+import { redactParsedFoodOwners } from "./shared";
 
 // Natural-language and image parsing (FR-4.1, label scan). Suggestions only;
 // the client confirms through POST /logs/batch (nutritionLogs.routes.ts).
@@ -36,7 +37,8 @@ export function registerNutritionParseRoutes(router: Router): void {
       const { text } = req.body as ParseMealTextInput;
       const raw = await parseMealFromText(text, userId);
       const { items, warnings } = await resolveAndPreview(raw, userId);
-      const response: ParseMealResponse = { items, warnings, rawInput: text };
+      // An item's matched food can be another athlete's public custom food.
+      const response: ParseMealResponse = { items: redactParsedFoodOwners(items, userId), warnings, rawInput: text };
       res.json(response);
     },
   );
@@ -59,7 +61,7 @@ export function registerNutritionParseRoutes(router: Router): void {
       const { imageBase64, mimeType } = req.body as ParseExercisesFromImageRequest;
       const raw = await parseMealFromPhoto(imageBase64, mimeType, userId);
       const { items, warnings } = await resolveAndPreview(raw, userId);
-      const response: ParseMealResponse = { items, warnings, rawInput: "[photo]" };
+      const response: ParseMealResponse = { items: redactParsedFoodOwners(items, userId), warnings, rawInput: "[photo]" };
       res.json(response);
     },
   );

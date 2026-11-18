@@ -87,3 +87,39 @@ describe("env native app settings", () => {
     expect(() => parseEnv({ ...baseEnv, MIN_APP_VERSION_IOS: "1.4" })).toThrow(/MIN_APP_VERSION_IOS must look like/);
   });
 });
+
+describe("env RAG chunking", () => {
+  it("defaults to 600-character chunks overlapping by 100", () => {
+    const env = parseEnv(baseEnv);
+
+    expect(env.RAG_CHUNK_SIZE).toBe(600);
+    expect(env.RAG_CHUNK_OVERLAP).toBe(100);
+  });
+
+  it("accepts a positive whole chunk size with a smaller, non-negative overlap", () => {
+    const env = parseEnv({ ...baseEnv, RAG_CHUNK_SIZE: "1200", RAG_CHUNK_OVERLAP: "0" });
+
+    expect(env.RAG_CHUNK_SIZE).toBe(1200);
+    expect(env.RAG_CHUNK_OVERLAP).toBe(0);
+  });
+
+  it.each(["0", "-50"])("rejects a chunk size of %s, which never advances the chunker", (size) => {
+    expect(() => parseEnv({ ...baseEnv, RAG_CHUNK_SIZE: size, RAG_CHUNK_OVERLAP: "0" })).toThrow(
+      /RAG_CHUNK_SIZE must be greater than 0/,
+    );
+  });
+
+  it("rejects a fractional chunk size", () => {
+    expect(() => parseEnv({ ...baseEnv, RAG_CHUNK_SIZE: "600.5" })).toThrow(/RAG_CHUNK_SIZE must be a whole number/);
+  });
+
+  it("rejects a negative overlap, which would skip text between chunks", () => {
+    expect(() => parseEnv({ ...baseEnv, RAG_CHUNK_OVERLAP: "-1" })).toThrow(/RAG_CHUNK_OVERLAP cannot be negative/);
+  });
+
+  it("rejects an overlap as long as the chunk", () => {
+    expect(() => parseEnv({ ...baseEnv, RAG_CHUNK_SIZE: "500", RAG_CHUNK_OVERLAP: "500" })).toThrow(
+      /RAG_CHUNK_OVERLAP must be smaller than RAG_CHUNK_SIZE/,
+    );
+  });
+});

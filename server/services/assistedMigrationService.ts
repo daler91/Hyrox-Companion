@@ -1,6 +1,6 @@
 import { inSequence } from "@shared/inSequence";
 import { exerciseSets, planDays, structuredExerciseBackfillReviews, trainingPlans, workoutLogs } from "@shared/schema";
-import { and, type AnyColumn, asc, desc, eq, gt, isNull, ne, not, or, type SQL, sql } from "drizzle-orm";
+import { and, type AnyColumn, asc, desc, eq, gt, ne, not, type SQL, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { parseExercisesFromText } from "../gemini";
@@ -28,7 +28,9 @@ const BATCH_SIZE = 25;
  */
 const MIGRATION_PARSE_UNITS = { weightUnit: "kg", distanceUnit: "km" } as const;
 
-async function upsertReviewFlag(input: { ownerType: OwnerType; ownerId: string; userId: string | null; status: "needs_manual_review" | "resolved"; reason: string | null }) {
+// `userId` is required: a flag with no owner would describe nobody's workout,
+// and listBackfillReviews returns only the athlete's own flags.
+async function upsertReviewFlag(input: { ownerType: OwnerType; ownerId: string; userId: string; status: "needs_manual_review" | "resolved"; reason: string | null }) {
   await db.insert(structuredExerciseBackfillReviews).values({
     ownerType: input.ownerType,
     ownerId: input.ownerId,
@@ -157,8 +159,14 @@ export async function runAssistedMigrationBackfill(userId: string) {
   return { queued: queue.length, processed: migrated.filter(Boolean).length };
 }
 
+/**
+ * The athlete's own review flags. Only rows stamped with their id: a flag with
+ * no owner used to be returned to every athlete (`user_id = me OR user_id IS
+ * NULL`), the same "NULL owner means shared" leak `foods.created_by_user_id`
+ * had. Every writer stamps the owner, and the owner's deletion cascades.
+ */
 export async function listBackfillReviews(userId: string, filter?: { ownerType?: OwnerType; ownerId?: string }) {
-  const baseWhere = [or(eq(structuredExerciseBackfillReviews.userId, userId), isNull(structuredExerciseBackfillReviews.userId))];
+  const baseWhere = [eq(structuredExerciseBackfillReviews.userId, userId)];
   if (filter?.ownerType) baseWhere.push(eq(structuredExerciseBackfillReviews.ownerType, filter.ownerType));
   if (filter?.ownerId) baseWhere.push(eq(structuredExerciseBackfillReviews.ownerId, filter.ownerId));
 

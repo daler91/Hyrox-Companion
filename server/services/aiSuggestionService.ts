@@ -5,6 +5,7 @@ import type { Logger } from "pino";
 
 import { db } from "../db";
 import { env } from "../env";
+import { AppError, ErrorCode } from "../errors";
 import {
   generateWorkoutSuggestions,
   type UpcomingWorkout,
@@ -253,16 +254,23 @@ export async function getStructuredApplyBlocker(
     return buildUnappliedStructuredResult("ai_disabled");
   }
 
+  let budget: Awaited<ReturnType<typeof checkAiBudget>>;
   try {
-    const budget = await checkAiBudget(userId);
-    if (!budget.allowed) {
-      return buildUnappliedStructuredResult("ai_budget_exceeded");
-    }
+    budget = await checkAiBudget(userId);
   } catch (err) {
-    log.warn(
-      { err, userId },
-      "[timeline] AI budget check failed before structured apply; allowing parse",
-    );
+    // The apply routes leave out aiBudgetCheck so an apply that needs no AI
+    // never waits on the budget. When it does need the parse and the budget
+    // can't be confirmed, it fails as that middleware does (503
+    // AI_BUDGET_UNAVAILABLE) before anything is written, instead of making an
+    // unconfirmed AI call as it used to.
+    // err is the budget-lookup failure and userId the internal id used for
+    // correlation, as at the other budget-check call sites; no plan content.
+    // bearer:disable javascript_lang_logger_leak
+    log.warn({ err, userId }, "[timeline] AI budget check failed before structured apply; refusing the parse");
+    throw new AppError(ErrorCode.AI_BUDGET_UNAVAILABLE, "AI budget enforcement is temporarily unavailable.", 503);
+  }
+  if (!budget.allowed) {
+    return buildUnappliedStructuredResult("ai_budget_exceeded");
   }
 
   return null;

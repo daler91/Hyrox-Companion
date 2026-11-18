@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { generateText } from "../../ai/providers";
 import { AppError } from "../../errors";
 import { storage } from "../../storage";
+import { checkAiBudget } from "../aiUsageService";
 import { makeLogRow } from "./foodTestFixture";
-import { generateNutritionInsights } from "./nutritionInsightsService";
+import { generateNutritionInsights, generateNutritionInsightsIfAllowed } from "./nutritionInsightsService";
 
 vi.mock("../../ai/providers", () => ({ generateText: vi.fn() }));
+vi.mock("../aiUsageService", () => ({ checkAiBudget: vi.fn() }));
 vi.mock("../../storage", () => ({
   storage: {
     users: { getUser: vi.fn() },
@@ -110,5 +112,27 @@ describe("generateNutritionInsights", () => {
 
       expect(promptContent()).toContain("Micronutrients: no complete day of food logged in this window.");
     });
+  });
+});
+
+describe("generateNutritionInsightsIfAllowed", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, userTimezone: "UTC" } as never);
+  });
+
+  it("skips over budget, keeping the stored analysis", async () => {
+    vi.mocked(checkAiBudget).mockResolvedValue({ allowed: false } as never);
+
+    await expect(generateNutritionInsightsIfAllowed("u1")).resolves.toEqual({ ok: false, reason: "ai_budget_exceeded" });
+    expect(generateText).not.toHaveBeenCalled();
+  });
+
+  it("throws without calling the model when the budget cannot be confirmed, so the job retries", async () => {
+    // It used to log the failed lookup and make the call.
+    vi.mocked(checkAiBudget).mockRejectedValue(new Error("db down"));
+
+    await expect(generateNutritionInsightsIfAllowed("u1")).rejects.toThrow("db down");
+    expect(generateText).not.toHaveBeenCalled();
   });
 });

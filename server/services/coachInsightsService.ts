@@ -90,6 +90,11 @@ export async function generateCoachInsights(
  * was skipped (so the caller can preserve the previously stored result) rather
  * than throwing. Mirrors the gating order of resolveAiBlocker in the
  * race-prediction service.
+ *
+ * A budget lookup that fails is the exception: it throws, and no AI is spent
+ * that the budget could not confirm. The recompute job then fails, releases
+ * its daily claim and is retried by pg-boss (processRecomputeAnalyticsJob), as
+ * the auto-coach job does. It used to log the failure and make the call.
  */
 export async function generateCoachInsightsIfAllowed(
   userId: string,
@@ -100,14 +105,8 @@ export async function generateCoachInsightsIfAllowed(
   const user = await storage.users.getUser(userId);
   if (user?.aiCoachEnabled !== true) return { ok: false, reason: "ai_consent_off" };
 
-  try {
-    const budget = await checkAiBudget(userId);
-    if (!budget.allowed) return { ok: false, reason: "ai_budget_exceeded" };
-  } catch (err) {
-    // Budget lookup failure shouldn't hard-block the feature — log and allow,
-    // matching the race-predictor's resolveAiBlocker behavior.
-    log.warn({ err, userId }, "[coach-insights] AI budget check failed; allowing AI call");
-  }
+  const budget = await checkAiBudget(userId);
+  if (!budget.allowed) return { ok: false, reason: "ai_budget_exceeded" };
 
   return { ok: true, result: await generateCoachInsights(userId, log) };
 }

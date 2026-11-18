@@ -6,7 +6,7 @@ import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../../rou
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
 import { protectedDelete, protectedPost } from "../_helpers/protectedRouteBuilder";
-import { FOOD_NOT_FOUND } from "./shared";
+import { FOOD_NOT_FOUND, redactFoodOwner } from "./shared";
 
 // Favorites (FR-1.5): list / add / remove a user's favorite foods.
 export function registerNutritionFavoriteRoutes(router: Router): void {
@@ -16,7 +16,10 @@ export function registerNutritionFavoriteRoutes(router: Router): void {
     isAuthenticated,
     rateLimiter("nutritionRead", 60),
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await storage.nutrition.listFavorites(getUserId(req)));
+      const userId = getUserId(req);
+      // A favourite can be another athlete's public custom food.
+      const favorites = await storage.nutrition.listFavorites(userId);
+      res.json(favorites.map((food) => redactFoodOwner(food, userId)));
     }),
   );
 

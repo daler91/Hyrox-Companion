@@ -546,6 +546,28 @@ describe("applyTimelineAiSuggestion", () => {
     expect(parseExercisesFromText).not.toHaveBeenCalled();
     expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
   });
+
+  it("refuses the structured parse with 503 when the budget cannot be confirmed", async () => {
+    // It used to log the failed lookup and spend the parse anyway.
+    vi.mocked(storage.aiUsage.getDailyTotalCents).mockRejectedValue(new Error("db down"));
+
+    const apply = applyTimelineAiSuggestion(
+      "user-1",
+      {
+        workoutId: "day-1",
+        targetField: "accessory",
+        action: "append",
+        recommendation: "Walking lunges 2x20m",
+        rationale: "Add station durability",
+        aiSource: "rag",
+      },
+      testLog,
+    );
+
+    await expect(apply).rejects.toMatchObject({ code: ErrorCode.AI_BUDGET_UNAVAILABLE, status: 503 });
+    expect(parseExercisesFromText).not.toHaveBeenCalled();
+    expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+  });
 });
 
 describe("generateTimelineAiSuggestions safety surfacing", () => {

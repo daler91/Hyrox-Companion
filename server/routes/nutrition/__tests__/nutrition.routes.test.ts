@@ -421,7 +421,7 @@ describe("nutrition routes", () => {
       expect(searchFoods).toHaveBeenCalledWith("banana", "test_user");
     });
 
-    it("strips another author's owner id from search, recent and detail responses (P16)", async () => {
+    it("strips another author's owner id from search, recent, detail and favourites responses (P16)", async () => {
       const own = { id: "own", createdByUserId: "test_user" };
       const theirs = { id: "theirs", createdByUserId: "user_other" };
       const shared = { id: "usda", createdByUserId: null };
@@ -443,6 +443,18 @@ describe("nutrition routes", () => {
       vi.mocked(getFoodWithServings).mockResolvedValue({ food: theirs, servings: [] });
       const detail = await request(app).get("/api/v1/nutrition/foods/theirs");
       expect(detail.body.food).toEqual({ id: "theirs", createdByUserId: null });
+
+      // A favourite can be another athlete's public custom food too.
+      vi.mocked(storage.nutrition.listFavorites).mockResolvedValue([
+        { ...theirs, lastQuantityG: 140, lastMealType: "breakfast" },
+        { ...own, lastQuantityG: null, lastMealType: null },
+      ]);
+      const favorites = await request(app).get("/api/v1/nutrition/favorites");
+      expect(favorites.body.map((f: { createdByUserId: string | null }) => f.createdByUserId)).toEqual([
+        null,
+        "test_user",
+      ]);
+      expect(favorites.body[0]).toMatchObject({ id: "theirs", lastQuantityG: 140, lastMealType: "breakfast" });
     });
 
     it("adds a favorite only for a visible food", async () => {
@@ -777,7 +789,8 @@ describe("nutrition routes", () => {
             mealType: "breakfast",
             confidence: 92,
             foodId: "f1",
-            food: { id: "f1" } as never,
+            // Matched to another athlete's public custom food (P16).
+            food: { id: "f1", createdByUserId: "user_other" } as never,
             nutrition: { calories: 150, protein: 10, carb: 1, fat: 11, fiber: 0 },
           },
         ],
@@ -788,6 +801,7 @@ describe("nutrition routes", () => {
       expect(res.status).toBe(200);
       expect(res.body.items).toHaveLength(1);
       expect(res.body.items[0].foodId).toBe("f1");
+      expect(res.body.items[0].food).toEqual({ id: "f1", createdByUserId: null });
       expect(res.body.rawInput).toBe("2 eggs");
       expect(parseMealFromText).toHaveBeenCalledWith("2 eggs", "test_user");
     });
@@ -1097,7 +1111,7 @@ describe("nutrition photo meal parsing (FR-4.1)", () => {
           mealType: "breakfast",
           confidence: 88,
           foodId: "f1",
-          food: { id: "f1" } as never,
+          food: { id: "f1", createdByUserId: "user_other" } as never,
           nutrition: { calories: 150, protein: 10, carb: 1, fat: 11, fiber: 0 },
         },
       ],
@@ -1111,6 +1125,8 @@ describe("nutrition photo meal parsing (FR-4.1)", () => {
     expect(res.status).toBe(200);
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].foodId).toBe("f1");
+    // Another athlete's owner id is stripped, as on the text parse (P16).
+    expect(res.body.items[0].food).toEqual({ id: "f1", createdByUserId: null });
     // No source text for a photo — rawInput is a short marker.
     expect(res.body.rawInput).toBe("[photo]");
     expect(parseMealFromPhoto).toHaveBeenCalledWith("/9j/4AAAAAAAAAAA", "image/jpeg", "test_user");
