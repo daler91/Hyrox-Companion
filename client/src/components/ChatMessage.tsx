@@ -1,16 +1,21 @@
 import type { ChatFeedback, ChatSafetyNotice } from "@shared/schema";
-import { AlertCircle, Bot, HeartPulse, ImageIcon, RotateCcw, ShieldAlert, ThumbsDown, ThumbsUp, User } from "lucide-react";
+import {
+  AlertCircle,
+  Bot,
+  HeartPulse,
+  ImageIcon,
+  RotateCcw,
+  ShieldAlert,
+  ThumbsDown,
+  ThumbsUp,
+  User,
+} from "lucide-react";
 import { lazy, memo, Suspense } from "react";
 
 import { RagDebugBadge } from "@/components/RagDebugBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { RagInfo } from "@/hooks/useChatSession";
 import type { MessageAttachment, MessageFailure } from "@/lib/chatMessage";
 import { cn } from "@/lib/utils";
@@ -166,7 +171,10 @@ function ReplyFeedback({ messageId, feedback, onFeedback }: ReplyFeedbackProps) 
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className={cn("h-11 w-11 text-muted-foreground md:h-7 md:w-7", selected && "text-foreground")}
+                  className={cn(
+                    "h-11 w-11 text-muted-foreground md:h-7 md:w-7",
+                    selected && "text-foreground",
+                  )}
                   aria-label={label}
                   aria-pressed={selected}
                   onClick={() => {
@@ -174,7 +182,10 @@ function ReplyFeedback({ messageId, feedback, onFeedback }: ReplyFeedbackProps) 
                   }}
                   data-testid={`button-feedback-${value}`}
                 >
-                  <Icon className={cn("h-3.5 w-3.5", selected && "fill-current")} aria-hidden="true" />
+                  <Icon
+                    className={cn("h-3.5 w-3.5", selected && "fill-current")}
+                    aria-hidden="true"
+                  />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -216,20 +227,26 @@ export const ChatMessage = memo(function ChatMessage({
   const canRate = !isUser && !failure && messageId !== undefined && onFeedback !== undefined;
 
   return (
-    <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`} data-testid={`message-${role}`}>
+    <div
+      className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}
+      data-testid={`message-${role}`}
+    >
       <Avatar className="h-8 w-8 flex-shrink-0">
         <AvatarFallback className={isUser ? "bg-primary text-primary-foreground" : "bg-secondary"}>
-          {isUser ? <User className="h-4 w-4" aria-hidden="true" /> : <Bot className="h-4 w-4" aria-hidden="true" />}
+          {isUser ? (
+            <User className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <Bot className="h-4 w-4" aria-hidden="true" />
+          )}
         </AvatarFallback>
       </Avatar>
       <div className={`flex flex-col ${isUser ? "items-end" : "items-start"} max-w-[80%]`}>
         <div
           className={`rounded-lg px-4 py-3 ${
-            isUser
-              ? "bg-primary text-primary-foreground"
-              : "bg-card border"
+            isUser ? "bg-primary text-primary-foreground" : "bg-card border"
           }`}
         >
+          <span className="sr-only">{isUser ? "You:" : "Coach:"}</span>
           {isUser ? (
             <>
               <p className="text-sm whitespace-pre-wrap">{content}</p>
@@ -256,7 +273,11 @@ export const ChatMessage = memo(function ChatMessage({
                 </div>
               )}
               {failure && (
-                <ReplyFailureNote message={failure.message} onRetry={onRetry} afterText={content !== ""} />
+                <ReplyFailureNote
+                  message={failure.message}
+                  onRetry={onRetry}
+                  afterText={content !== ""}
+                />
               )}
             </>
           )}
@@ -264,11 +285,14 @@ export const ChatMessage = memo(function ChatMessage({
         {(timestamp || canRate) && (
           <div className="mt-1 flex items-center gap-1">
             {timestamp && (
-              <span className="text-xs text-muted-foreground" aria-label={`sent ${timestamp}`}>
+              <span className="text-xs text-muted-foreground">
+                <span className="sr-only">Sent </span>
                 {timestamp}
               </span>
             )}
-            {canRate && <ReplyFeedback messageId={messageId} feedback={feedback} onFeedback={onFeedback} />}
+            {canRate && (
+              <ReplyFeedback messageId={messageId} feedback={feedback} onFeedback={onFeedback} />
+            )}
           </div>
         )}
         {!isUser && ragInfo && <RagDebugBadge ragInfo={ragInfo} />}
