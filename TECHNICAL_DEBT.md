@@ -116,11 +116,12 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
   returned the author's id. It now lives in `server/routes/nutrition/shared.ts` and those
   routes use it too (`redactParsedFoodOwners` for the parse items). No other nutrition
   response carries a whole food row. Guarded by `nutrition.routes.test.ts`.
-- **33. RAG excerpts carry no "data, not instructions" framing** — Confirmed.
-  `buildRetrievedChunksSection` (`server/prompts/materialsBuilder.ts:47-60`) escapes each
-  excerpt and tells the model to use them to guide its coaching; other athlete-supplied text
-  is labelled as data (for example `server/prompts/chatPhoto.ts:14`). Uploaded material is the
-  largest athlete-controlled text in the prompt.
+- ~~**33. RAG excerpts carry no "data, not instructions" framing**~~ — Resolved 2026-11-18.
+  Uploaded coaching material was escaped but, unlike the athlete's own message, not framed
+  as data. Both builders in `server/prompts/materialsBuilder.ts` (the RAG path and the
+  full-text fallback) now wrap each piece in a `<coaching_material>` tag the escaped text
+  cannot close, and tell the model to treat it strictly as data
+  (`COACHING_MATERIALS_ARE_DATA`). Guarded by `materialsBuilder.test.ts`.
 - **34. Dev auth bypass stays active alongside Clerk keys** — Reported. In development or test
   with `ALLOW_DEV_AUTH_BYPASS=true` and both Clerk keys set, a request without a valid Clerk
   session runs as `dev-user` unless it sends `x-test-no-bypass: true`
@@ -139,12 +140,11 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
   `RAG_CHUNK_SIZE` to be a positive whole number and `RAG_CHUNK_OVERLAP` a whole number from
   `0` to one less than the size; anything else is fatal at startup. Guarded by
   `server/env.test.ts`.
-- **37. An empty plan-day PATCH body probably returns 500** — Reported.
-  `PATCH /api/v1/plans/days/:dayId/status` with `{}` or only `{ skipReason }`, and
-  `PATCH /api/v1/plans/:planId/days/:dayId` with `{}`, reach `storage.plans.updatePlanDay`
-  with nothing to set (`server/services/planService.ts:793-805`, `server/storage/plans.ts:455-458`).
-  drizzle throws "No values to set" there; the workout PATCH already guards the same case
-  (`server/services/workoutService/workouts.ts:443-447`).
+- ~~**37. An empty plan-day PATCH body returns 500**~~ — Resolved 2026-11-18. Reproduced
+  against the real schema: `storage.plans.updatePlanDay` handed an update with nothing to
+  write to drizzle's `.set()`, which throws "No values to set", so three PATCH routes
+  answered 500. It now returns the owned day unchanged, as the workout PATCH does. Guarded by
+  `server/storage/__tests__/planDayEmptyUpdate.integration.test.ts`.
 - **38. Reparse edge cases** — (a) Confirmed: the plan-day reparse writes the caller's
   override text whenever the parse returns a result, even when the response is then `422`
   for zero sets (`server/routes/plans.ts:573-577`); the workout reparse saves overrides only on
@@ -168,19 +168,23 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
   cap, by design. Guarded by `coachInsightsService.test.ts`,
   `overviewAnalysisService.range.test.ts`, `nutritionInsightsService.test.ts`,
   `racePredictionService.test.ts` and `aiSuggestionService.test.ts`.
-- **41. Food-embedding spend is not counted** — Confirmed.
-  `server/services/nutrition/foodEmbeddings.ts` calls `generateEmbeddings` without
-  `trackEmbeddingUsage`, so the embedding cron is neither counted against
-  `AI_GLOBAL_DAILY_LIMIT_CENTS` nor recorded in `ai_usage_logs`.
-- **42. The Clerk profile is fetched once** — Confirmed. `ensureUserExists` copies name,
-  email and image from Clerk only when it creates the row (`server/clerkAuth.ts:257-269`); a
-  failed fetch is logged and never retried (`:304-309`). That athlete has no email on file, so
-  `getUsersWithEmailNotifications` skips them for good, and later changes in Clerk are not
-  synced either.
-- **43. `POST /api/v1/weekly-review/intent` validates `week` by shape only** — Confirmed.
-  `weeklyReviewIntentSchema` uses `dateStringSchema` (`shared/schema/types/requests.ts:74-75`)
-  where the GET uses `isWeekParamValid` (`server/routes/analytics.ts:125`), so `2026-02-31` is
-  accepted and lands in the week of 2 March.
+- ~~**41. Food-embedding spend is not counted**~~ — Resolved 2026-11-18. The backfill's
+  spend belongs to no athlete, and `ai_usage_logs.user_id` was NOT NULL. Migration `0127`
+  makes it nullable; `embedMissingFoods` records each batch with no user (feature
+  `food_embedding`), which counts toward `AI_GLOBAL_DAILY_LIMIT_CENTS` and no athlete's cap or
+  export, and skips the batch once that ceiling is reached (`isGlobalAiBudgetExhausted`,
+  which throws rather than spend unconfirmed). Guarded by `foodEmbeddings.test.ts`,
+  `aiUsageService.test.ts` and `server/storage/__tests__/aiUsage.integration.test.ts`.
+- ~~**42. The Clerk profile is fetched once**~~ — Resolved 2026-11-18. A failed first fetch
+  left the row without an email for good, so email notifications skipped that athlete.
+  `ensureUserExists` now fetches the profile again while the row has no email, at most once
+  an hour per athlete (`PROFILE_RETRY_INTERVAL_MS`, claimed in `server_runtime_cache`).
+  Guarded by `server/clerkAuth.test.ts`. Not in scope: a row that has an email still does
+  not pick up later changes made in Clerk; that needs Clerk's webhooks.
+- ~~**43. `POST /api/v1/weekly-review/intent` validates `week` by shape only**~~ — Resolved
+  2026-11-18. `weeklyReviewIntentSchema` now uses `calendarDateSchema`, the GET's
+  `isIsoCalendarDate` check, so `2026-02-31` is a `400 VALIDATION_ERROR` instead of an intent
+  written to the week of 2 March. Guarded by `server/routes/__tests__/analytics.test.ts`.
 - **44. Repeating a nutrition day stamps noon UTC** — Confirmed.
   `POST /api/v1/nutrition/logs/repeat` writes `${targetDate}T12:00:00Z` under a comment that
   says "local noon" (`server/routes/nutrition/nutritionLogs.routes.ts:116-118`). `logDate` is
@@ -206,10 +210,11 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
   Drizzle rows are plain `number`, so assigning minutes to `durationSeconds` still compiles;
   and rule 4 of `docs/adr-units.md` ("required, not defaulted") is not met by
   `server/prompts/exerciseSetFormatter.ts`, whose `weightUnit` is optional and falls back to kg.
-- **51. The offline queue flushes on `online` without the owner check** — Confirmed. The
-  `online` listener calls `flushQueue()` directly (`client/src/lib/offlineQueue.ts:526-534`);
-  the timer and focus retries go through `retryPendingWrites()`, which waits for
-  `reconciledOwner` (`:207-212`).
+- ~~**51. The offline queue flushes on `online` without the owner check**~~ — Resolved
+  2026-11-18. The `online` listener now goes through `retryPendingWrites()`, like the timer
+  and focus retries, so a reconnect before the signed-in athlete's reconcile (or after a
+  sign-out without a reload) no longer replays the previous athlete's queue. Guarded by
+  `client/src/lib/offlineQueue.test.ts`.
 
 ### Client and UX
 
@@ -371,5 +376,5 @@ not in them.
 | P1 — High | 6/6 | 0 | All resolved |
 | P2 — Medium | 6/6 | 0 | All resolved |
 | P3 — Low | 10/11 | 1 | #22 CSRF resolved via `csrf-csrf` double-submit; #29 dual-TS installs open (blocked on TS 7.1 API + typescript-eslint) |
-| Docs verification, 2026-11-17 | 5/42 | 37 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17 |
-| **Total** | **33/71** | **38** | #29 is intentional interim state; the other 37 of #30–#71 are untriaged |
+| Docs verification, 2026-11-17 | 11/42 | 31 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43 and #51 resolved 2026-11-18 |
+| **Total** | **39/71** | **32** | #29 is intentional interim state; the other 31 of #30–#71 are untriaged |
