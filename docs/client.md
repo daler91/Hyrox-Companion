@@ -53,7 +53,7 @@ When auth is bypassed (dev mode or Cypress tests), ClerkProvider is omitted and 
 
 - A skip-to-content accessibility link
 - `AppSidebar` (navigation sidebar)
-- A mobile header with `SidebarTrigger` and the `Logo` (visible on `md:hidden`)
+- `AppHeader` -- the `SidebarTrigger` and the `Logo`. It always shows below md; on desktop it shows only while the sidebar is collapsed (Ctrl/Cmd+B collapses it, and the `sidebar_state` cookie keeps it collapsed for a week), so the sidebar can always be reopened
 - `<main id="main-content">`, the only scrolling region (html, body and `#root` are locked to the viewport), holding `Breadcrumbs` and the `AuthenticatedRouter`
 - `MobileTabBar` -- Bottom tab bar for the primary destinations (five with the nutrition flag on, four without), visible on `md:hidden`; shares `PRIMARY_NAV_ITEMS` with `AppSidebar` (`client/src/lib/navItems.ts`)
 - `PrivacyConsentBanner`
@@ -319,7 +319,7 @@ Workout detail surfaces live in their own top-level directory so Timeline, Log W
 
 ### `brand/` -- Logo Components
 
-- `Logo` -- The Nexus mark with the wordmark beside it, or the mark alone with `showWordmark={false}`; the wordmark's size follows the mark's. Used in the sidebar, the mobile header and the landing page.
+- `Logo` -- The Nexus mark with the wordmark beside it, or the mark alone with `showWordmark={false}`; the wordmark's size follows the mark's. Used in the sidebar, `AppHeader` and the landing page.
 - `NexusMark`, `Wordmark` -- The two halves. The mark takes a `variant` (`primary`, `ink`, `mono` or `currentColor`), matching the logo files in [`docs/BrandKit/`](BrandKit/BRAND.md).
 
 ### `chat/` -- Chat Markdown

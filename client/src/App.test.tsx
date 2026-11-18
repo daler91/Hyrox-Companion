@@ -37,6 +37,7 @@ vi.mock("@/components/ui/sidebar", () => ({
     className?: string;
   }) => <div className={className} data-testid="sidebar-provider">{children}</div>,
   SidebarTrigger: () => <button data-testid="button-sidebar-toggle" />,
+  useSidebar: () => ({ state: "expanded" }),
 }));
 
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ isAuthenticated: true, isLoading: false, isAppUserLoaded: true }) }));
