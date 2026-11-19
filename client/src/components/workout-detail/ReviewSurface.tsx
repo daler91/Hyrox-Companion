@@ -21,7 +21,7 @@ import { featureFlags } from "@/lib/featureFlags";
 import { hhmmToMinutes, minutesToHhmm } from "@/lib/timeOfDay";
 
 import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
-import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
+import { buildWorkoutCoachSeedMessage } from "./workoutCoachSeed";
 import { ExerciseTable } from "./ExerciseTable";
 import { FuellingAroundSessionPanel } from "./FuellingAroundSessionPanel";
 import { MafTestTagSection } from "./MafTestTagSection";

@@ -15,7 +15,7 @@ import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { featureFlags } from "@/lib/featureFlags";
 
 import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
-import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
+import { buildWorkoutCoachSeedMessage } from "./workoutCoachSeed";
 import { ExerciseTable } from "./ExerciseTable";
 import { FuellingPlanPanel } from "./FuellingPlanPanel";
 import { SessionPriorityControl } from "./SessionPriorityControl";

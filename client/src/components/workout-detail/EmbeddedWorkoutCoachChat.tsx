@@ -1,4 +1,4 @@
-import type { ExerciseSet, TimelineEntry } from "@shared/schema";
+import type { TimelineEntry } from "@shared/schema";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { useCallback, useMemo } from "react";
 
@@ -9,7 +9,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { chatProgressLabel } from "@/hooks/chat/chatProgress";
 import { useChatSession } from "@/hooks/useChatSession";
 import { usePlanProposal } from "@/hooks/usePlanProposal";
-import { groupExerciseSets } from "@/lib/exerciseUtils";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 import { cn } from "@/lib/utils";
 
@@ -22,21 +21,6 @@ interface EmbeddedWorkoutCoachChatProps {
   readonly chatAreaClassName?: string;
   readonly className?: string;
   readonly isHidden?: boolean;
-}
-
-export function buildWorkoutCoachSeedMessage(
-  entry: TimelineEntry,
-  exerciseSets: readonly ExerciseSet[] = [],
-): string {
-  const focus = entry.focus?.trim() || "this workout";
-  const groups = groupExerciseSets([...exerciseSets]);
-  const exerciseLabel = groups.length === 1 ? "exercise" : "exercises";
-  const setLabel = exerciseSets.length === 1 ? "set" : "sets";
-  const stats = groups.length > 0 ? ` (${groups.length} ${exerciseLabel}, ${exerciseSets.length} ${setLabel})` : "";
-
-  return `Can you walk me through your take on my ${focus} workout on ${formatScheduledDate(
-    entry.date,
-  )}${stats}?`;
 }
 
 export function EmbeddedWorkoutCoachChat({

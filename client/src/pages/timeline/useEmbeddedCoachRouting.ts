@@ -1,7 +1,7 @@
 import type { TimelineEntry } from "@shared/schema";
 import { useCallback, useState } from "react";
 
-import { buildWorkoutCoachSeedMessage } from "@/components/workout-detail/EmbeddedWorkoutCoachChat";
+import { buildWorkoutCoachSeedMessage } from "@/components/workout-detail/workoutCoachSeed";
 import type { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
