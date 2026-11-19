@@ -28,7 +28,6 @@ vi.mock("@/hooks/useUnitPreferences", () => ({
 }));
 
 vi.mock("../EmbeddedWorkoutCoachChat", () => ({
-  buildWorkoutCoachSeedMessage: () => "Seeded coach prompt",
   EmbeddedWorkoutCoachChat: () => <div data-testid="embedded-workout-coach-chat" />,
 }));
 

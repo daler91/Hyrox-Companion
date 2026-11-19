@@ -6,7 +6,7 @@ import { type ReactNode, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 
-import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
+import { buildWorkoutCoachSeedMessage } from "./workoutCoachSeed";
 import { CoachRationaleSection, DetailSection } from "./shared/DetailSection";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
 import {
