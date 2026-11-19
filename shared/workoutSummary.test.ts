@@ -37,4 +37,20 @@ describe("generateSummary", () => {
       generateSummary([{ exerciseName: "rowing", sets: [{ distance: 500, notes: "hold 1:50" }, { distance: 500, notes: null }] }], "kg", "km"),
     ).toBe("Rowing: 2 sets, 500 m [S1(cue: hold 1:50) -> S2]");
   });
+
+  it("writes an exercise sent without a sets array as completed, with no step list beside a cued one", () => {
+    expect(generateSummary([{ exerciseName: "wall_balls", sets: null }, { exerciseName: "skierg" }], "kg", "km")).toBe(
+      "Wall Balls: completed; SkiErg: completed",
+    );
+    expect(
+      generateSummary(
+        [
+          { exerciseName: "wall_balls", sets: null },
+          { exerciseName: "rowing", sets: [{ distance: 500, notes: "hold 1:50" }] },
+        ],
+        "kg",
+        "km",
+      ),
+    ).toBe("Wall Balls: completed; Rowing: 500 m [S1(cue: hold 1:50)]");
+  });
 });

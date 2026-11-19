@@ -112,6 +112,23 @@ describe("createWorkout writes the text the athlete left out", () => {
     );
   });
 
+  it.each([
+    ["has no unit preferences stored", { id: USER_ID, weightUnit: null, distanceUnit: null }],
+    ["has no user row", undefined],
+  ])("summarises in kg and km when the athlete %s", async (_case, user) => {
+    vi.mocked(storage.users.getUser).mockResolvedValue(user as never);
+    const exercises = [...PARSED, { exerciseName: "easy_run", category: "running", sets: [{ distance: 5000 }] }];
+
+    await createWorkout({ userId: USER_ID, payload: { ...ROWS, exercises } });
+
+    expect(createWorkoutAndScheduleCoaching).toHaveBeenCalledWith(
+      expect.objectContaining({ mainWorkout: "Back Squat: 5 reps, 100kg; Easy Run: 5000 m" }),
+      exercises,
+      USER_ID,
+      undefined,
+    );
+  });
+
   it("keeps the athlete's own text, and leaves a workout without rows or text empty", async () => {
     await createWorkout({ userId: USER_ID, payload: { ...ROWS, mainWorkout: "Heavy singles" } });
     expect(createWorkoutAndScheduleCoaching).toHaveBeenLastCalledWith(expect.objectContaining({ mainWorkout: "Heavy singles" }), PARSED, USER_ID, undefined);
