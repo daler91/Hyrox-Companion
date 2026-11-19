@@ -74,9 +74,14 @@ async function attemptSend(
       ? await client.emails.send(payload, { idempotencyKey })
       : await client.emails.send(payload);
     if (!result.error) return "sent";
+    // Resend's error is its name, HTTP status and message; it carries neither
+    // the recipient's address nor the email's content.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err: result.error }, "Resend error:");
     return RETRYABLE_RESEND_ERRORS.has(result.error.name) ? "retry" : "failed";
   } catch (error) {
+    // A transport failure (no response from Resend): no address or content.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err: error }, "Failed to send email:");
     return "retry";
   }
@@ -96,6 +101,8 @@ export async function sendEmail(
   try {
     resend = getResendClient();
   } catch (error) {
+    // The only failure here is the unset RESEND_API_KEY: a static message.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err: error }, "Failed to send email:");
     return false;
   }
@@ -150,7 +157,7 @@ export async function sendWeeklySummary(
 ): Promise<boolean> {
   if (!user.email) return false;
   const { subject, html } = buildWeeklySummaryEmail(user, data);
-  return sendEmailToUser(user, subject, html, emailIdempotencyKey("weekly-summary", user.id, localDate));
+  return await sendEmailToUser(user, subject, html, emailIdempotencyKey("weekly-summary", user.id, localDate));
 }
 
 export async function sendMissedWorkoutReminder(
@@ -160,13 +167,13 @@ export async function sendMissedWorkoutReminder(
 ): Promise<boolean> {
   if (!user.email || missed.length === 0) return false;
   const { subject, html } = buildMissedWorkoutEmail(user, missed);
-  return sendEmailToUser(user, subject, html, emailIdempotencyKey("missed-reminder", user.id, localDate));
+  return await sendEmailToUser(user, subject, html, emailIdempotencyKey("missed-reminder", user.id, localDate));
 }
 
 export async function sendMafTestReminder(user: User, localDate: string): Promise<boolean> {
   if (!user.email) return false;
   const { subject, html } = buildMafTestReminderEmail(user);
-  return sendEmailToUser(user, subject, html, emailIdempotencyKey("maf-test-reminder", user.id, localDate));
+  return await sendEmailToUser(user, subject, html, emailIdempotencyKey("maf-test-reminder", user.id, localDate));
 }
 
 export async function sendWeeklyReviewReminder(
