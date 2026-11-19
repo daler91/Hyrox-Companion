@@ -190,6 +190,15 @@ describe("PATCH /api/v1/preferences", () => {
     expect(storage.users.updateUserPreferences).toHaveBeenCalled();
   });
 
+  // Tech debt #35: an unknown style id used to be stored and silently coached
+  // as Balanced.
+  it("refuses a training style the coach does not know", async () => {
+    const response = await request(app).patch("/api/v1/preferences").send({ trainingStyleId: "made_up_style" });
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("VALIDATION_ERROR");
+    expect(storage.users.updateUserPreferences).not.toHaveBeenCalled();
+  });
+
   it("allows non-MAF style switch without MAF fields", async () => {
     const response = await request(app).patch("/api/v1/preferences").send({ trainingStyleId: "balanced_default" });
     expect(response.status).toBe(200);

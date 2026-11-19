@@ -3277,17 +3277,22 @@
           "trainingStyleId": {
             "type": "string",
             "nullable": true,
-            "maxLength": 100
+            "maxLength": 100,
+            "description": "The coaching style, one of balanced_default, maf_method; null for the default (balanced_default). Any other value is refused."
           },
           "trainingStylePreviousId": {
             "type": "string",
             "nullable": true,
-            "maxLength": 100
+            "maxLength": 100,
+            "deprecated": true,
+            "description": "Ignored. The server records the previous style itself when trainingStyleId changes, and returns it"
           },
           "trainingStyleChangedAt": {
             "type": "string",
             "nullable": true,
-            "format": "date-time"
+            "format": "date-time",
+            "deprecated": true,
+            "description": "Ignored. The server records when trainingStyleId changed, and returns it"
           },
           "trainingStyleRecomputeNow": {
             "type": "boolean"

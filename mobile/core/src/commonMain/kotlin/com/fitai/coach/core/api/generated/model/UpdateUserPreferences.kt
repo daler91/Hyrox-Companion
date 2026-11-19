@@ -35,8 +35,17 @@ public data class UpdateUserPreferences(
     public val showAdherenceInsights: Boolean? = null,
     public val aiCoachEnabled: Boolean? = null,
     public val coachAutoApplyPlanChanges: Boolean? = null,
+    /**
+     * The coaching style, one of balanced_default, maf_method; null for the default (balanced_default). Any other value is refused.
+     */
     public val trainingStyleId: Patch<String> = Patch.Absent,
+    /**
+     * Ignored. The server records the previous style itself when trainingStyleId changes, and returns it
+     */
     public val trainingStylePreviousId: Patch<String> = Patch.Absent,
+    /**
+     * Ignored. The server records when trainingStyleId changed, and returns it
+     */
     public val trainingStyleChangedAt: Patch<String> = Patch.Absent,
     public val trainingStyleRecomputeNow: Boolean? = null,
     public val onboardingCompleted: Boolean? = null,

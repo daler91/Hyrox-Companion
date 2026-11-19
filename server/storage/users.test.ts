@@ -12,14 +12,18 @@ vi.mock('../crypto', () => ({
   decryptToken: vi.fn((t) => t.replace('encrypted-', '')),
 }));
 
-vi.mock('../db', () => ({
-  db: {
+vi.mock('../db', () => {
+  const db = {
     select: vi.fn(),
     insert: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
-  },
-}));
+    // updateUserPreferences writes inside a transaction; run its callback
+    // against the same mocks so tx.update / tx.insert are the ones wired below.
+    transaction: vi.fn((fn: (tx: unknown) => unknown) => fn(db)),
+  };
+  return { db };
+});
 
 vi.mock('../logger', () => ({
   logger: {

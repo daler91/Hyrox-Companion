@@ -1,5 +1,6 @@
 import { DEFAULT_NOTIFY_HOUR } from "@shared/notifyHours";
 import { type UpdateUserPreferences,updateUserPreferencesSchema } from "@shared/schema";
+import { DEFAULT_TRAINING_STYLE_ID } from "@shared/trainingStyles";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 
 import { isAuthenticated } from "../clerkAuth";
@@ -13,7 +14,6 @@ import { protectedPatch } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
 
-const DEFAULT_TRAINING_STYLE_ID = "balanced_default";
 
 function hasOwn<T extends object>(obj: T, key: keyof T): boolean {
   return Object.hasOwn(obj, key);

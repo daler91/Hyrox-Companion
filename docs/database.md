@@ -44,8 +44,8 @@ User accounts and preferences.
 | `ai_coach_enabled` | `boolean` | default `false` — **AI consent gate**; no workout data is sent to an AI provider while this is `false` |
 | `coach_auto_apply_plan_changes` | `boolean` | default `false` — apply conversational plan proposals immediately instead of waiting for an explicit Apply |
 | `training_style_id` | `text` | default `'balanced_default'` |
-| `training_style_previous_id` | `text` | nullable |
-| `training_style_changed_at` | `timestamp with time zone` | nullable |
+| `training_style_previous_id` | `text` | nullable — the style before the last change, written by the server (never taken from the client) |
+| `training_style_changed_at` | `timestamp with time zone` | nullable — when the style last changed, written by the server |
 | `training_style_recompute_now` | `boolean` | default `false` |
 | `onboarding_completed` | `boolean` | NOT NULL, default `false` |
 | `division` | `varchar(16)` | default `'open'` — HYROX division; drives station load standards and Race Predictor benchmarks |
@@ -105,7 +105,7 @@ One index besides the PK and the `email` UNIQUE: `idx_users_user_timezone` on (`
 
 ### user_training_style
 
-Historical training-style selections per user.
+Historical training-style selections per user. `updateUserPreferences` (`server/storage/users.ts`) appends a row in the same transaction as the update whenever a preferences save changes the effective style (a null style counts as `balanced_default`): `source` is `onboarding` while `users.onboarding_completed` is still false and `settings` afterwards, and `effective_date` is the athlete's local date. A save that keeps the same style writes nothing. Read by the GDPR data export.
 
 | Column | Type | Constraints |
 |---|---|---|
