@@ -96,7 +96,7 @@ Clerk is optional in development and test: when the keys are unset, you can run 
 | `CLERK_PUBLISHABLE_KEY` | Optional | — | Server (`@clerk/express`). Must be set if Clerk is enabled at all. |
 | `CLERK_SECRET_KEY` | Optional | — | Server. Must be set if Clerk is enabled. Also used by account erasure to delete the Clerk user (`server/services/accountErasureService.ts`). |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Optional | — | **Client** (`client/src/App.tsx`, `client/src/lib/authBypass.ts`). A dev build without it skips Clerk entirely. Browser-visible — do not put the secret key here. |
-| `ALLOW_DEV_AUTH_BYPASS` | Optional | — | Skip auth in dev: only the exact value `"true"` enables it, and only when `NODE_ENV` is `development` or `test`. Requests then run as `dev-user`. When Clerk keys are also set, a request without a valid Clerk session still falls back to `dev-user` unless it sends `x-test-no-bypass: true`. **Hard-blocked in production.** |
+| `ALLOW_DEV_AUTH_BYPASS` | Optional | — | Skip auth in dev: only the exact value `"true"` enables it, and only when `NODE_ENV` is `development` or `test`. Requests then run as `dev-user`. When Clerk keys are also set, a request without a valid Clerk session falls back to `dev-user` only if it sends `x-dev-auth-bypass: true` (the web client does while it bypasses auth: the dev preview and Cypress); any other gets a `401`, as in production. `x-test-no-bypass: true` opts a request out. **Hard-blocked in production.** |
 
 ---
 

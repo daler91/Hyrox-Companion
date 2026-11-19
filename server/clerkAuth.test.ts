@@ -2,9 +2,12 @@ import { clerkClient, getAuth } from "@clerk/express";
 import type { NextFunction,Request, Response } from "express";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DEV_AUTH_BYPASS_HEADER } from "@shared/devAuth";
+
 import {
   clearProfileRetries,
   clearUserSeenCache,
+  DEV_USER_ID,
   evictUserFromSeenCache,
   isAuthenticated,
   PROFILE_RETRY_INTERVAL_MS,
@@ -12,7 +15,9 @@ import {
   USER_SEEN_CACHE_MAX_ENTRIES,
   userSeenCacheSize,
 } from "./clerkAuth";
+import { env } from "./env";
 import { storage } from "./storage";
+import { getUserId } from "./types";
 
 vi.mock("@clerk/express", () => ({
   getAuth: vi.fn(),
@@ -291,6 +296,89 @@ describe("isAuthenticated middleware", () => {
     expect(next).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
+  });
+});
+
+// Tech debt #34: with ALLOW_DEV_AUTH_BYPASS on and real Clerk keys set, any
+// request without a Clerk session ran as the dev user, so a broken sign-in or
+// a route that 401s in production quietly worked in dev. The fallback now
+// needs the header the bypassed web client (dev preview, Cypress) sends.
+describe("dev auth fallback", () => {
+  let res: Response;
+  let next: NextFunction;
+  const original = {
+    bypass: env.ALLOW_DEV_AUTH_BYPASS,
+    publishableKey: env.CLERK_PUBLISHABLE_KEY,
+    secretKey: env.CLERK_SECRET_KEY,
+  };
+
+  function request(headers: Record<string, string> = {}): Request {
+    return { headers, path: "/test" } as unknown as Request;
+  }
+
+  beforeEach(() => {
+    res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
+    next = vi.fn();
+    vi.clearAllMocks();
+    env.ALLOW_DEV_AUTH_BYPASS = "true";
+    vi.mocked(getAuth).mockReturnValue(null as unknown as ReturnType<typeof getAuth>);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: DEV_USER_ID } as never);
+  });
+
+  afterEach(() => {
+    env.ALLOW_DEV_AUTH_BYPASS = original.bypass;
+    env.CLERK_PUBLISHABLE_KEY = original.publishableKey;
+    env.CLERK_SECRET_KEY = original.secretKey;
+    vi.resetAllMocks();
+  });
+
+  it("refuses a signed-out request without the header when Clerk keys are set", async () => {
+    const req = request();
+
+    await isAuthenticated(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+    expect(() => getUserId(req)).toThrow("User not authenticated");
+  });
+
+  it("runs a request carrying the header as the dev user when Clerk keys are set", async () => {
+    const req = request({ [DEV_AUTH_BYPASS_HEADER]: "true" });
+
+    await isAuthenticated(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(getUserId(req)).toBe(DEV_USER_ID);
+  });
+
+  it("still lets x-test-no-bypass opt a request out", async () => {
+    await isAuthenticated(
+      request({ [DEV_AUTH_BYPASS_HEADER]: "true", "x-test-no-bypass": "true" }),
+      res,
+      next,
+    );
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("runs every request as the dev user when there are no Clerk keys, as before", async () => {
+    env.CLERK_PUBLISHABLE_KEY = undefined;
+    env.CLERK_SECRET_KEY = undefined;
+    const req = request();
+
+    await isAuthenticated(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(getUserId(req)).toBe(DEV_USER_ID);
+  });
+
+  it("ignores the header while the bypass is off", async () => {
+    env.ALLOW_DEV_AUTH_BYPASS = undefined;
+
+    await isAuthenticated(request({ [DEV_AUTH_BYPASS_HEADER]: "true" }), res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
   });
 });
 

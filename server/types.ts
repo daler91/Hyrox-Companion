@@ -4,8 +4,7 @@ import "pino-http";
 import { getAuth } from "@clerk/express";
 import type { Request } from "express";
 
-import { DEV_USER_ID } from "./clerkAuth";
-import { env } from "./env";
+import { DEV_USER_ID, devBypassAllowedFor } from "./clerkAuth";
 
 export function getUserId(req: Request): string {
   try {
@@ -17,7 +16,7 @@ export function getUserId(req: Request): string {
     // intentionally empty - fall through to dev user
   }
 
-  if ((env.NODE_ENV === "development" || env.NODE_ENV === "test") && env.ALLOW_DEV_AUTH_BYPASS === "true") {
+  if (devBypassAllowedFor(req)) {
     return DEV_USER_ID;
   }
 

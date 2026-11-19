@@ -1,7 +1,13 @@
 import { QueryFunctionContext } from "@tanstack/react-query";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
+import { devAuthBypassHeaders } from "./authBypass";
 import { apiRequest, getQueryFn, humanizeApiError, resetCsrfToken } from "./queryClient";
+
+// The test environment is a Vite dev build with no Clerk key, which the app
+// treats as the dev preview. Pin "auth not bypassed" so the header assertions
+// below describe a normal session; the dev-preview case has its own test.
+vi.mock("./authBypass", () => ({ devAuthBypassHeaders: vi.fn(() => ({})) }));
 
 describe("queryClient", () => {
   const originalFetch = globalThis.fetch;
@@ -10,6 +16,7 @@ describe("queryClient", () => {
   beforeEach(() => {
     globalThis.fetch = fetchMock;
     fetchMock.mockReset();
+    vi.mocked(devAuthBypassHeaders).mockReturnValue({});
     // queryClient.ts caches the CSRF token at module level, so one test's POST
     // would let a later test skip the csrf-token fetch. Start every test with
     // an empty cache, whatever order the tests run in (issue #2048).
@@ -40,6 +47,31 @@ describe("queryClient", () => {
   }
 
   describe("apiRequest", () => {
+    // Tech debt #34: a dev server with Clerk keys runs a signed-out request as
+    // the dev user only when it asks, so every call made while auth is
+    // bypassed must carry the header.
+    it("sends the dev-auth header on the CSRF fetch, the request and a query while auth is bypassed", async () => {
+      vi.mocked(devAuthBypassHeaders).mockReturnValue({ "x-dev-auth-bypass": "true" });
+      fetchMock.mockImplementation((url: string) => {
+        if (url === "/api/v1/csrf-token") {
+          return Promise.resolve({ ok: true, status: 200, json: vi.fn().mockResolvedValue({ csrfToken: "tok-1" }) });
+        }
+        return Promise.resolve({ ok: true, status: 200, json: vi.fn().mockResolvedValue({}) });
+      });
+
+      await apiRequest("POST", "/api/test", { foo: "bar" });
+      await getQueryFn({ on401: "throw" })({
+        queryKey: ["/api/v1", "workouts"],
+        signal: new AbortController().signal,
+      } as unknown as QueryFunctionContext);
+
+      const sentHeaders = fetchMock.mock.calls.map(([, init]) => (init as RequestInit).headers);
+      expect(sentHeaders).toHaveLength(3);
+      for (const headers of sentHeaders) {
+        expect(headers).toMatchObject({ "x-dev-auth-bypass": "true" });
+      }
+    });
+
     it("should attach CSRF token header on mutating POST requests", async () => {
       const mockResponse = { ok: true, status: 200, statusText: "OK" };
       // First call: GET /api/v1/csrf-token — returns token JSON
@@ -56,6 +88,7 @@ describe("queryClient", () => {
       // csrf-token fetch (W15: now carries an AbortSignal timeout)
       expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/csrf-token", {
         credentials: "include",
+        headers: {},
         signal: expect.any(AbortSignal),
       });
       // actual mutation with token header
@@ -149,6 +182,7 @@ describe("queryClient", () => {
 
       expect(fetchMock).toHaveBeenCalledWith("api/data", {
         credentials: "include",
+        headers: {},
         signal: undefined,
       });
       expect(result).toEqual(mockJson);

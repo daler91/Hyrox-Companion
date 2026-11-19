@@ -2,6 +2,7 @@ import { type ChildProcess,spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
+import { DEV_AUTH_BYPASS_HEADER } from "@shared/devAuth";
 import { afterAll,beforeAll, describe, expect, it } from "vitest";
 
 
@@ -34,12 +35,17 @@ class CookieJar {
 
 const jar = new CookieJar();
 
-/** fetch wrapper that carries cookies automatically */
+/**
+ * fetch wrapper that carries cookies automatically. It also asks for the
+ * dev-user fallback, which a server inheriting Clerk keys from the shell
+ * grants only to requests that ask (shared/devAuth.ts).
+ */
 async function request(urlPath: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(`${BASE}${urlPath}`, {
     ...init,
     headers: {
       cookie: jar.header(),
+      [DEV_AUTH_BYPASS_HEADER]: "true",
       ...init?.headers,
     },
   });

@@ -2,6 +2,7 @@ import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { devAuthBypassHeaders } from "@/lib/authBypass";
 import { apiRequest, humanizeApiError } from "@/lib/queryClient";
 
 export type MigrationReviewAction = "accept" | "reject" | "edit";
@@ -46,7 +47,7 @@ function isOpenReview(row: MigrationReviewRow, workoutLogId: string): boolean {
 async function fetchOpenReview(workoutLogId: string): Promise<MigrationReviewFlag | null> {
   const res = await fetch(
     `/api/v1/workouts/migration/reviews?ownerType=workoutLog&ownerId=${encodeURIComponent(workoutLogId)}`,
-    { credentials: "include" },
+    { credentials: "include", headers: devAuthBypassHeaders() },
   );
   if (!res.ok) return null;
   const rows = (await res.json()) as MigrationReviewRow[];
