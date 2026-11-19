@@ -166,6 +166,18 @@ describe("generateOverviewAnalysis — the selected range", () => {
       await expect(generateOverviewAnalysisIfAllowed("user-1")).rejects.toThrow("db down");
       expect(generateJsonText).not.toHaveBeenCalled();
     });
+
+    it("skips without assembling the overview or calling the model when the athlete is over budget", async () => {
+      vi.mocked(checkAiBudget).mockResolvedValue({ allowed: false } as never);
+      storedPayload({ rangeDays: 30 });
+
+      await expect(generateOverviewAnalysisIfAllowed("user-1")).resolves.toEqual({
+        ok: false,
+        reason: "ai_budget_exceeded",
+      });
+      expect(assembleTrainingOverview).not.toHaveBeenCalled();
+      expect(generateJsonText).not.toHaveBeenCalled();
+    });
   });
 });
 
