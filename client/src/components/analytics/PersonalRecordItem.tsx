@@ -41,7 +41,7 @@ export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordIt
 
       <div className="flex flex-wrap items-center gap-6 text-sm">
         {pr.maxWeight != null && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" aria-label={`Max weight: ${formatRecordAmount(pr.maxWeight)} ${weightLabel}`} role="group">
             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
               <Weight className="h-4 w-4 text-primary" aria-hidden="true" />
             </div>
@@ -55,7 +55,7 @@ export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordIt
         )}
 
         {pr.maxDistance != null && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" aria-label={`Max distance: ${formatRecordAmount(pr.maxDistance)} ${dLabel}`} role="group">
             <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center">
               <Ruler className="h-4 w-4 text-blue-500" aria-hidden="true" />
             </div>
@@ -69,7 +69,7 @@ export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordIt
         )}
 
         {pr.bestTime != null && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" aria-label={`Best time: ${formatRecordTime(pr.bestTime)}`} role="group">
             <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
               <Timer className="h-4 w-4 text-green-500" aria-hidden="true" />
             </div>
@@ -84,7 +84,7 @@ export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordIt
         )}
 
         {pr.estimated1RM != null && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" aria-label={`Estimated 1RM: ${formatRecordAmount(pr.estimated1RM)} ${weightLabel}`} role="group">
             <div className="h-8 w-8 rounded-full bg-purple-500/10 flex items-center justify-center">
               <TrendingUp className="h-4 w-4 text-purple-500" aria-hidden="true" />
             </div>

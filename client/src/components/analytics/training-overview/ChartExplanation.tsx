@@ -1,5 +1,5 @@
 import { ChevronDown, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 
@@ -20,6 +20,7 @@ interface ChartExplanationProps {
  */
 export function ChartExplanation({ explanation }: ChartExplanationProps) {
   const [open, setOpen] = useState(true);
+  const panelId = useId();
   if (!explanation) return null;
 
   return (
@@ -29,6 +30,7 @@ export function ChartExplanation({ explanation }: ChartExplanationProps) {
         onClick={() => setOpen((prev) => !prev)}
         className="flex w-full items-center gap-2 text-sm font-medium text-primary rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         aria-expanded={open}
+        aria-controls={panelId}
         data-testid="chart-explanation-toggle"
       >
         <Sparkles className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -40,6 +42,9 @@ export function ChartExplanation({ explanation }: ChartExplanationProps) {
       </button>
       {open && (
         <div
+          id={panelId}
+          role="region"
+          aria-label="AI explanation"
           className="prose prose-sm dark:prose-invert mt-2 max-w-none prose-p:my-1.5"
           data-testid="chart-explanation-content"
         >
