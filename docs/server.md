@@ -405,7 +405,6 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `GEMINI_API_KEY` | No | Gemini key for the Gemini text provider, RAG embeddings, and image parsing |
 | `CRON_SECRET` | No | Secret for authenticating external cron triggers |
 | `INTERNAL_ANALYTICS_SECRET` | No | Secret for authenticating internal analytics health endpoints |
-| `APP_INSTANCE_COUNT` | No | Declared app replica count (default `1`). Values above `1` are supported after migrations because rate limits/cache state are shared through Postgres. |
 | `STRAVA_CLIENT_ID` | No | Strava OAuth client ID |
 | `STRAVA_CLIENT_SECRET` | No | Strava OAuth client secret |
 | `STRAVA_STATE_SECRET` | Yes (production, when Strava is configured) | 32+ char secret for signing Strava OAuth state tokens. Unset, each replica signs with its own per-process random secret, so a callback landing on a different instance than the one that issued the state fails verification |
@@ -469,7 +468,7 @@ Idempotent jobs use `DEFAULT_JOB_OPTIONS` (retry 3× with exponential backoff); 
 
 **The schedule catalogue lives in [Integrations → Registered Cron Jobs](integrations.md#registered-cron-jobs)** — expression, timezone and advisory lock for each job. As with the queue table above, the copy that used to sit here drifted from it.
 
-Cron jobs run in-process on **each** app replica; the advisory lock above is what keeps only one of them doing the work. Rate limits use `rate_limit_buckets`, while the Clerk seen-cache, the AI circuit-breaker state and the embedding health probe use `server_runtime_cache`, so `APP_INSTANCE_COUNT > 1` no longer weakens abuse prevention or provider-spend cache behavior.
+Cron jobs run in-process on **each** app replica; the advisory lock above is what keeps only one of them doing the work. Rate limits use `rate_limit_buckets`, while the Clerk seen-cache, the AI circuit-breaker state and the embedding health probe use `server_runtime_cache`, so running more than one replica does not weaken abuse prevention or provider-spend cache behavior.
 
 ### Shared Runtime State
 

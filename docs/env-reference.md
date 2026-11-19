@@ -83,7 +83,7 @@ Leave `ENCRYPTION_REENCRYPT_ON_BOOT` at its `"false"` default the rest of the ti
 
 ### Runtime topology
 
-`APP_INSTANCE_COUNT` defaults to `1` and records the declared app replica count. It is validated (a positive integer) but no code reads it: the shared-state mechanisms below are always on, whatever its value. Running more than one replica is supported after applying migrations: route rate limits use PostgreSQL-backed buckets, the Clerk seen-cache and AI/RAG hot caches use `server_runtime_cache`, and cron bodies use PostgreSQL advisory locks so duplicate schedulers skip work.
+No setting declares the replica count: the shared-state mechanisms below are always on. (`APP_INSTANCE_COUNT`, which recorded it without any code reading it, was removed on 2026-11-19; a deployment that still sets it is unaffected.) Running more than one replica is supported after applying migrations: route rate limits use PostgreSQL-backed buckets, the Clerk seen-cache and AI/RAG hot caches use `server_runtime_cache`, and cron bodies use PostgreSQL advisory locks so duplicate schedulers skip work.
 
 ---
 
@@ -224,7 +224,6 @@ The `release` tag is set explicitly in both inits. On the server it is `process.
 | `NODE_ENV` | `development` | `development` \| `production` \| `test`. |
 | `PORT` | `5000` | HTTP listener port. |
 | `LOG_LEVEL` | `info` | Pino level: `trace` \| `debug` \| `info` \| `warn` \| `error` \| `fatal` \| `silent`. Any other value fails startup validation. |
-| `APP_INSTANCE_COUNT` | `1` | Declared app replica count (positive integer). Validated only; no code reads it. Postgres-backed rate limits and cache entries are used at any value, so running more than one replica needs the shared runtime-state migration regardless. |
 | `ALLOW_DEV_AUTH_BYPASS` | — | Dev-only. See [Authentication (Clerk)](#authentication-clerk). |
 
 ---

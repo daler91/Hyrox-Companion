@@ -51,8 +51,8 @@ async function runDrizzleMigrations() {
     // `db` export here because it's bound to the full schema; the migrator only
     // needs a minimal drizzle client.
     const migrator = drizzle(pool);
-    // C3: serialize migrations across instances. On a rolling deploy or
-    // APP_INSTANCE_COUNT>1, two boots would otherwise run DDL concurrently and
+    // C3: serialize migrations across instances. On a rolling deploy or with
+    // more than one replica, two boots would otherwise run DDL concurrently and
     // race on duplicate-key / partial-index states. pg_try_advisory_lock is
     // non-blocking — if another instance holds the lock we skip, since it
     // applies the same migrations.

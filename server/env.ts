@@ -133,7 +133,6 @@ const envSchema = z
       .regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}$/, { error: "MIN_APP_VERSION_IOS must look like 1.4.0" })
       .optional(),
     ALLOW_DEV_AUTH_BYPASS: z.string().optional(),
-    APP_INSTANCE_COUNT: z.coerce.number().int().positive().default(1),
     // Enum-validated so a typo (e.g. "warning") fails here with a message naming
     // the variable, not later inside pino (D33 (CODEBASE_ANALYSIS_2026-10-03)).
     LOG_LEVEL: z
