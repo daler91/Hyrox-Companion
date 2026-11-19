@@ -1,8 +1,7 @@
 import { clerkClient, getAuth } from "@clerk/express";
+import { DEV_AUTH_BYPASS_HEADER } from "@shared/devAuth";
 import type { NextFunction,Request, Response } from "express";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
-
-import { DEV_AUTH_BYPASS_HEADER } from "@shared/devAuth";
 
 import {
   clearProfileRetries,
