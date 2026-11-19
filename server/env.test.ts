@@ -105,3 +105,24 @@ describe("env RAG chunking", () => {
     );
   });
 });
+
+// Tech debt #49: ENCRYPTION_KEY was required, so after a rotation to
+// ENCRYPTION_KEY_V2 the old key could never be removed.
+describe("env encryption keys", () => {
+  const { ENCRYPTION_KEY: _v1, ...withoutV1 } = baseEnv;
+
+  it("accepts ENCRYPTION_KEY_V2 alone, once the v1 key is retired", () => {
+    const env = parseEnv({ ...withoutV1, ENCRYPTION_KEY_V2: "a".repeat(64) });
+
+    expect(env.ENCRYPTION_KEY).toBeUndefined();
+    expect(env.ENCRYPTION_KEY_V2).toBe("a".repeat(64));
+  });
+
+  it("refuses to start with neither key", () => {
+    expect(() => parseEnv(withoutV1)).toThrow();
+  });
+
+  it("still requires the two keys to differ when both are set", () => {
+    expect(() => parseEnv({ ...baseEnv, ENCRYPTION_KEY_V2: baseEnv.ENCRYPTION_KEY })).toThrow();
+  });
+});

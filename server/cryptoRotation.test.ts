@@ -67,3 +67,34 @@ describe("crypto key rotation (W6)", () => {
     expect(after.needsReencryption(legacy)).toBe(true);
   });
 });
+
+// Tech debt #49: once every credential is on v2, the v1 key can be removed.
+describe("crypto with the v1 key retired", () => {
+  it("encrypts and decrypts with v2 alone", async () => {
+    const retired = await loadCrypto({ ENCRYPTION_KEY_V2: KEY_V2 });
+
+    const cipher = retired.encryptToken("secret");
+    expect(cipher.startsWith("v2:")).toBe(true);
+    expect(retired.decryptToken(cipher)).toBe("secret");
+    expect(retired.needsMissingKey(cipher)).toBe(false);
+  });
+
+  it("flags v1 and legacy values as needing the missing key", async () => {
+    const before = await loadCrypto({ ENCRYPTION_KEY: KEY_V1 });
+    const v1Cipher = before.encryptToken("secret");
+    const legacy = v1Cipher.replace(/^v1:/, "");
+
+    const retired = await loadCrypto({ ENCRYPTION_KEY_V2: KEY_V2 });
+    expect(retired.needsMissingKey(v1Cipher)).toBe(true);
+    expect(retired.needsMissingKey(legacy)).toBe(true);
+    expect(() => retired.decryptToken(v1Cipher)).toThrow();
+  });
+
+  it("flags nothing while both keys are configured", async () => {
+    const before = await loadCrypto({ ENCRYPTION_KEY: KEY_V1 });
+    const v1Cipher = before.encryptToken("secret");
+
+    const both = await loadCrypto({ ENCRYPTION_KEY: KEY_V1, ENCRYPTION_KEY_V2: KEY_V2 });
+    expect(both.needsMissingKey(v1Cipher)).toBe(false);
+  });
+});

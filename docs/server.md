@@ -378,7 +378,7 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DATABASE_URL` | Yes | PostgreSQL connection string (main database) |
-| `ENCRYPTION_KEY` | Yes | Minimum 32 characters, used for encrypting sensitive data |
+| `ENCRYPTION_KEY` | Yes (until retired) | Minimum 32 characters, used for encrypting sensitive data. May be removed once `ENCRYPTION_KEY_V2` is set and every stored credential has moved to it; boot refuses to finish while any still needs it. |
 | `NODE_ENV` | No | `"development"` (default), `"production"`, or `"test"` |
 | `PORT` | No | Server listen port (default: `"5000"`) |
 | `CLERK_PUBLISHABLE_KEY` | No | Clerk frontend key |

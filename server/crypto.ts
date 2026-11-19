@@ -29,10 +29,11 @@ function deriveKey(secret: string): Buffer {
 //      migrate v1/legacy ciphertext forward to v2: set
 //      ENCRYPTION_REENCRYPT_ON_BOOT=true and restart, and the boot runs
 //      reencryptStoredCredentials (server/services/keyRotation.ts).
-//   3. Once nothing references v1, the v1 key would no longer be needed. Keep
-//      both keys configured until the migration is verified complete. (The env
-//      schema still requires ENCRYPTION_KEY, so it cannot actually be removed
-//      yet: tech debt #49.)
+//   3. Once nothing references v1, remove ENCRYPTION_KEY. Boot refuses to
+//      finish while any stored credential still needs it
+//      (assertNoCredentialsOnMissingKey in server/services/keyRotation.ts), so
+//      removing it too early leaves the server not ready rather than unable to
+//      read those credentials (tech debt #49).
 type KeyVersion = "v1" | "v2";
 
 const VERSIONS: readonly KeyVersion[] = ["v1", "v2"];
@@ -164,6 +165,21 @@ export function needsReencryption(encryptedData: string): boolean {
   if (!encryptedData) return false;
   try {
     return parseCiphertext(encryptedData).version !== currentKeyVersion();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True when this value can no longer be decrypted because the key for its
+ * version is not configured: a v1 (or legacy unversioned) value once
+ * ENCRYPTION_KEY has been removed. Malformed input returns false, as in
+ * needsReencryption.
+ */
+export function needsMissingKey(encryptedData: string): boolean {
+  if (!encryptedData) return false;
+  try {
+    return !secretForVersion(parseCiphertext(encryptedData).version);
   } catch {
     return false;
   }

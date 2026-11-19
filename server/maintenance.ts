@@ -18,7 +18,7 @@ import {
   readMigrationJournal,
   type UnappliedMigrations,
 } from "./migrationGuards";
-import { maybeReencryptOnBoot } from "./services/keyRotation";
+import { assertNoCredentialsOnMissingKey, maybeReencryptOnBoot } from "./services/keyRotation";
 import type { IStorage } from "./storage";
 import { STALE_AUTO_COACHING_THRESHOLD_MS } from "./storage/users";
 import { vectorPool } from "./vectorDb";
@@ -412,4 +412,7 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   // Opt-in encryption-key rotation sweep (W6). No-op unless ENCRYPTION_KEY_V2
   // is set and ENCRYPTION_REENCRYPT_ON_BOOT=true; swallows its own errors.
   await maybeReencryptOnBoot();
+  // With the v1 key removed, refuse to finish booting while any credential
+  // still needs it (tech debt #49). Deliberately not swallowed.
+  await assertNoCredentialsOnMissingKey();
 }
