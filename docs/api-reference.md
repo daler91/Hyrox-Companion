@@ -2079,7 +2079,7 @@ Returns the Garmin connection state for the authenticated user.
 
 - **Auth:** Required
 - **Rate limit:** `garmin-status` category, 60 per 15 minutes
-- **Response:** `{ connected: false }` or `{ connected: true, garminDisplayName: string | null, lastSyncedAt: string | null, lastError: string | null }`
+- **Response:** `{ connected: false }` or `{ connected: true, garminDisplayName: string | null, lastSyncedAt: string | null, lastError: string | null, syncPausedUntil: string | null }`. `syncPausedUntil` is set while the Garmin circuit breaker is open (read from the shared state first, so a trip on another instance shows), and until then `/connect` and `/sync` answer `503 GARMIN_CIRCUIT_OPEN`.
 
 ### POST /api/v1/garmin/connect
 

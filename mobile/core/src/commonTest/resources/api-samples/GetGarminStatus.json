@@ -7,13 +7,15 @@
       "connected": true,
       "garminDisplayName": "sample text",
       "lastSyncedAt": "2026-11-07T10:15:30.000Z",
-      "lastError": "sample text"
+      "lastError": "sample text",
+      "syncPausedUntil": "2026-11-07T10:15:30.000Z"
     },
     "future": {
       "connected": true,
       "garminDisplayName": "sample text",
       "lastSyncedAt": "2026-11-07T10:15:30.000Z",
       "lastError": "sample text",
+      "syncPausedUntil": "2026-11-07T10:15:30.000Z",
       "zzPropertyFromANewerServer": {
         "added": true
       }

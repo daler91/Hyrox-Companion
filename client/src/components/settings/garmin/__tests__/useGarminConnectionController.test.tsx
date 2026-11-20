@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { formatDistanceToNow } from "date-fns";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useGarminMutations } from "@/hooks/useGarminMutations";
 
@@ -11,7 +11,8 @@ vi.mock("@/hooks/useGarminMutations", () => ({
   useGarminMutations: vi.fn(),
 }));
 
-vi.mock("date-fns", () => ({
+vi.mock("date-fns", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("date-fns")>()),
   formatDistanceToNow: vi.fn(() => "2 hours ago"),
 }));
 
@@ -130,6 +131,42 @@ describe("useGarminConnectionController", () => {
 
       expect(result.current.email).toBe("");
       expect(result.current.password).toBe("");
+    });
+  });
+
+  // Tech debt #55: Sync stayed enabled while Garmin calls were paused, so each
+  // tap got a 503 the athlete could not act on.
+  describe("Sync pause", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("says sync is paused while the status carries a future pause", () => {
+      vi.useFakeTimers({ now: new Date("2026-11-20T12:00:00Z") });
+      const status = { connected: true, lastSyncedAt: null, lastError: null, syncPausedUntil: "2026-11-20T12:20:00Z" };
+      const { result } = renderHook(() => useGarminConnectionController(status));
+
+      expect(result.current.syncPausedText).toMatch(/^Garmin paused syncing after a rate limit\. Try again after /);
+    });
+
+    it("says nothing when there is no pause", () => {
+      const status = { connected: true, lastSyncedAt: null, lastError: null, syncPausedUntil: null };
+      const { result } = renderHook(() => useGarminConnectionController(status));
+
+      expect(result.current.syncPausedText).toBeNull();
+    });
+
+    it("ends the pause at its time without a refetch", () => {
+      vi.useFakeTimers({ now: new Date("2026-11-20T12:00:00Z") });
+      const status = { connected: true, lastSyncedAt: null, lastError: null, syncPausedUntil: "2026-11-20T12:20:00Z" };
+      const { result } = renderHook(() => useGarminConnectionController(status));
+      expect(result.current.syncPausedText).not.toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(20 * 60 * 1000);
+      });
+
+      expect(result.current.syncPausedText).toBeNull();
     });
   });
 });

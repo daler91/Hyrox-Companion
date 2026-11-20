@@ -633,6 +633,23 @@ describe("circuit breaker integration", () => {
     expect(FakeGarminConnect.instances[0].login).not.toHaveBeenCalled();
   });
 
+  // Tech debt #55: Sync stayed enabled while the breaker was open, since the
+  // status gave the client no way to know.
+  it("reports in the status when sync is paused, and until when", async () => {
+    vi.mocked(storage.users.getGarminConnection).mockResolvedValue(conn());
+
+    const before = await request(app).get("/api/v1/garmin/status");
+    expect(before.status).toBe(200);
+    expect(before.body.syncPausedUntil).toBeNull();
+
+    __testing.garminCircuitBreaker.trip("returned 429");
+    const during = await request(app).get("/api/v1/garmin/status");
+
+    expect(during.body.syncPausedUntil).toBe(
+      new Date(__testing.garminCircuitBreaker.blockedUntil).toISOString(),
+    );
+  });
+
   it("answers 503, not a credentials error, when the breaker blocks the /connect login", async () => {
     FakeGarminConnect.onConstruct = tripAfterRouteCheck;
     const res = await request(app)

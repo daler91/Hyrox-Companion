@@ -37,6 +37,22 @@ function extractServerMessage(body: string): string | null {
 }
 
 /**
+ * What to tell the athlete about a 429. Every 429 the server sends carries its
+ * own `error` copy (a rate limiter's "wait N seconds", Garmin's "wait N more
+ * minutes before syncing again", Strava's "retry in about N minutes"), and that
+ * is shown. The generic line, with the Retry-After seconds when known, is only
+ * for a body without one. The server's copy used to be dropped for the generic
+ * line, which lost a Garmin wait given in minutes (tech debt #55).
+ */
+export function rateLimitMessage(error: RateLimitError): string {
+  const serverMessage = extractServerMessage(error.message);
+  if (serverMessage) return serverMessage;
+  return error.retryAfter
+    ? `Please wait ${error.retryAfter} seconds before trying again.`
+    : "Please wait a moment before trying again.";
+}
+
+/**
  * Turn a thrown API error into a short, human-readable message for toasts.
  * `apiRequest` throws `new Error(`${status}: ${body}`)` for non-ok responses;
  * surfacing that raw string (e.g. `500: {"error":...}`) to users is confusing,

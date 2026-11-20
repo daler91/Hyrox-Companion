@@ -1,7 +1,7 @@
 import { useMutation, type UseMutationOptions } from "@tanstack/react-query";
 
 import { useToast } from "@/hooks/use-toast";
-import { AiBudgetExceededError, humanizeApiError, queryClient, RateLimitError } from "@/lib/queryClient";
+import { AiBudgetExceededError, humanizeApiError, queryClient, RateLimitError, rateLimitMessage } from "@/lib/queryClient";
 
 type QueryKeyList = readonly (readonly unknown[])[];
 
@@ -58,12 +58,9 @@ export function useApiMutation<
           variant: "destructive",
         });
       } else if (error instanceof RateLimitError) {
-        const waitMsg = error.retryAfter
-          ? `Please wait ${error.retryAfter} seconds before trying again.`
-          : "Please wait a moment before trying again.";
         toast({
           title: "Too many requests",
-          description: waitMsg,
+          description: rateLimitMessage(error),
           variant: "destructive",
         });
       } else if (errorToast) {

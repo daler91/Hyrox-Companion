@@ -1,7 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createWrapper, mockToast } from "@/test/support/mutationHookMocks";
+import { RateLimitError } from "@/lib/queryClient";
+import { createWrapper, invalidatedKeys, mockToast } from "@/test/support/mutationHookMocks";
 
 import { useGarminMutations } from "../useGarminMutations";
 
@@ -36,6 +37,10 @@ vi.mock("@/lib/api", () => ({
 
 vi.mock("@/hooks/use-toast", async () =>
   (await import("@/test/support/mutationHookMocks")).makeToastMock(),
+);
+
+vi.mock("@/lib/queryClient", async (importOriginal) =>
+  (await import("@/test/support/mutationHookMocks")).makeQueryClientSingletonMock(importOriginal),
 );
 
 type GarminMutations = ReturnType<typeof useGarminMutations>;
@@ -95,6 +100,22 @@ describe("useGarminMutations", () => {
           description: "Garmin rejected your email or password. Check them and try again.",
           variant: "destructive",
         })
+      );
+    });
+
+    it("shows the server's wait when Garmin calls are paused (503)", async () => {
+      const message =
+        "Garmin temporarily blocked us due to rate limits. Please try again in about 12 minutes.";
+      apiMocks.connect.mockRejectedValue(
+        new Error(`503: ${JSON.stringify({ error: message, code: "GARMIN_CIRCUIT_OPEN" })}`),
+      );
+      await runMutation((m) => m.connectGarminMutation, {
+        email: "test@example.com",
+        password: "password123",
+      });
+
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Garmin Connection Failed", description: message }),
       );
     });
 
@@ -180,6 +201,43 @@ describe("useGarminMutations", () => {
           description: "Something went wrong on our end. Please try again in a moment.",
           variant: "destructive",
         })
+      );
+    });
+
+    // Tech debt #55: the server's waits never reached the athlete. The 503 was
+    // masked as "Something went wrong on our end", and the 429 became "wait a
+    // moment" though the server says how many minutes.
+    it("shows the server's wait when Garmin calls are paused (503), and refetches the status", async () => {
+      const message =
+        "Garmin temporarily blocked us due to rate limits. Please try again in about 27 minutes.";
+      apiMocks.sync.mockRejectedValue(
+        new Error(`503: ${JSON.stringify({ error: message, code: "GARMIN_CIRCUIT_OPEN" })}`),
+      );
+      await runMutation((m) => m.syncGarminMutation);
+
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Garmin Sync Failed", description: message, variant: "destructive" }),
+      );
+      expect(invalidatedKeys()).toContainEqual(["/api/v1/garmin/status"]);
+    });
+
+    it("shows the server's wait for a sync too soon after the last (429)", async () => {
+      apiMocks.sync.mockRejectedValue(
+        new RateLimitError(
+          JSON.stringify({
+            error: "Please wait 4 more minutes before syncing again.",
+            code: "GARMIN_SYNC_TOO_SOON",
+          }),
+          null,
+        ),
+      );
+      await runMutation((m) => m.syncGarminMutation);
+
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: "Please wait 4 more minutes before syncing again.",
+          variant: "destructive",
+        }),
       );
     });
 

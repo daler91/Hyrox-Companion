@@ -649,11 +649,19 @@ async function handleGarminStatus(req: Request, res: Response) {
       return;
     }
 
+    // Read the shared breaker first, so a trip seen by another instance shows
+    // here too (W14).
+    await refreshBreakerFromShared();
     res.json({
       connected: true,
       garminDisplayName: conn.garminDisplayName,
       lastSyncedAt: conn.lastSyncedAt,
       lastError: conn.lastError,
+      // While the breaker is open, sync answers 503 GARMIN_CIRCUIT_OPEN, so the
+      // client disables Sync until this time (tech debt #55).
+      syncPausedUntil: garminCircuitBreaker.isOpen()
+        ? new Date(garminCircuitBreaker.blockedUntil).toISOString()
+        : null,
     });
   } catch (error) {
     reqLogger(req).error({ err: error }, "Garmin status error:");

@@ -1,10 +1,31 @@
 import { api, QUERY_KEYS } from "@/lib/api";
+import { parseApiError } from "@/lib/apiError";
+import { humanizeApiError, queryClient } from "@/lib/queryClient";
 import {
   EXERCISE_HISTORY_QUERY_PREFIX,
   WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
 } from "@/lib/workoutInvalidation";
 
 import { useApiMutation } from "./useApiMutation";
+
+/**
+ * The toast text for a failed Garmin call. A 503 GARMIN_CIRCUIT_OPEN means
+ * Garmin rate-limited the server, and its body says roughly how long to wait;
+ * humanizeApiError hides every 5xx body behind "Something went wrong on our
+ * end", so that one is read directly (tech debt #55). Anything else is
+ * described as usual.
+ */
+export function describeGarminError(error: unknown): string {
+  if (error instanceof Error && parseApiError(error)?.code === "GARMIN_CIRCUIT_OPEN") {
+    try {
+      const body = JSON.parse(error.message.slice(error.message.indexOf(":") + 1)) as { error?: unknown };
+      if (typeof body.error === "string" && body.error.trim()) return body.error;
+    } catch {
+      // Not JSON: fall through to the usual description.
+    }
+  }
+  return humanizeApiError(error);
+}
 
 export function useGarminMutations() {
   const connectGarminMutation = useApiMutation<
@@ -23,7 +44,7 @@ export function useGarminMutations() {
     // 2-step verification, bad password). Printing error.message showed the
     // raw `401: {"error":...,"code":"GARMIN_AUTH_FAILED"}`.
     // U28 (CODEBASE_ANALYSIS_2026-10-03)
-    errorToast: "Garmin Connection Failed",
+    errorToast: (error) => ({ title: "Garmin Connection Failed", description: describeGarminError(error) }),
   });
 
   const disconnectGarminMutation = useApiMutation({
@@ -56,7 +77,12 @@ export function useGarminMutations() {
       title: "Sync Complete",
       description: `Imported ${data.imported} new activities. ${data.skipped} already existed.`,
     }),
-    errorToast: "Garmin Sync Failed",
+    errorToast: (error) => ({ title: "Garmin Sync Failed", description: describeGarminError(error) }),
+    onError: () => {
+      // A refused sync can mean the pause began mid-request (another instance
+      // saw Garmin's 429); refetch so the status's syncPausedUntil disables Sync.
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.garminStatus });
+    },
   });
 
   return {
