@@ -651,11 +651,13 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
       recycleBinItems: 'recycleBin',
     };
 
+    // document_chunks is not here: it lives on the vector database and has no
+    // foreign key to users (tech debt #47), so the scan below never reaches
+    // it. It is not exported either: it is a search index derived from
+    // coachingMaterials, whose text is exported verbatim, plus embeddings.
     const EXCLUDED: Record<string, string> = {
       idempotencyKeys:
         'server-internal replay cache: stored responses to the athlete\'s own requests, kept for 7 days, whose data is exported from its source tables',
-      documentChunks:
-        'search index derived from coaching materials: chunk copies of text exported verbatim under coachingMaterials, plus embedding vectors',
       structuredExerciseBackfillReviews:
         'server-internal bookkeeping for a data-migration job (a status and reason per migrated record), not information about the athlete',
     };
