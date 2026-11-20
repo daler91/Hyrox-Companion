@@ -47,6 +47,11 @@ function formatDuration(minutes: number): string {
  * over both sources reads as an impossible >100%. The adherence tile is
  * suppressed entirely for an athlete with no plan that week, where "0 of 0"
  * would be a verdict on a plan they never had.
+ *
+ * While the week is still running, sessions and time get no delta: they only
+ * grow until Sunday, so on a Tuesday they read as a drop against the whole of
+ * last week (spec §6.5, tech debt #58). Average RPE keeps its delta, since an
+ * average is as comparable on Tuesday as on Sunday.
  */
 export function WeeklyReviewSummary({ review }: { readonly review: WeeklyReview }) {
   const { current, previous, weeklyGoal, hasPlan, isCurrentWeek } = review;
@@ -60,11 +65,13 @@ export function WeeklyReviewSummary({ review }: { readonly review: WeeklyReview 
         value={String(current.sessionsLogged)}
         sub={`Goal ${weeklyGoal}/week`}
         delta={
-          <DeltaIndicator
-            current={current.sessionsLogged}
-            previous={previous.sessionsLogged}
-            testIdSuffix="sessions"
-          />
+          isCurrentWeek ? undefined : (
+            <DeltaIndicator
+              current={current.sessionsLogged}
+              previous={previous.sessionsLogged}
+              testIdSuffix="sessions"
+            />
+          )
         }
       />
 
@@ -95,12 +102,14 @@ export function WeeklyReviewSummary({ review }: { readonly review: WeeklyReview 
         icon={Clock}
         value={formatDuration(current.totalDurationMin)}
         delta={
-          <DeltaIndicator
-            current={current.totalDurationMin}
-            previous={previous.totalDurationMin}
-            unit="m"
-            testIdSuffix="duration"
-          />
+          isCurrentWeek ? undefined : (
+            <DeltaIndicator
+              current={current.totalDurationMin}
+              previous={previous.totalDurationMin}
+              unit="m"
+              testIdSuffix="duration"
+            />
+          )
         }
       />
 

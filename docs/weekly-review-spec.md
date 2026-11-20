@@ -215,8 +215,9 @@ a week whenever the athlete's stored timezone differs from the browser's.
 `components/review/`: `WeeklyReviewSummary` (the four tiles, reusing `DeltaIndicator`),
 `WeeklyReviewHighlights` (annotations and named PRs), `WeeklyReviewSessions` (what happened
 and what didn't). PR5 added a fourth, `WeeklyReviewIntent` (§5), between the highlights and
-the sessions. The adherence tile is suppressed entirely when `hasPlan` is false, and the
-RPE delta is suppressed when either week has no RPE.
+the sessions. The adherence tile is suppressed entirely when `hasPlan` is false, the
+RPE delta is suppressed when either week has no RPE, and the session and duration deltas are
+suppressed while the week is in progress (§6.5).
 
 **Entry points — shipped in PR4**, in order of expected traffic.
 
@@ -317,8 +318,10 @@ still read by no prompt, only by the review, the Sunday reminder email and the d
    a report card. No red, no zero-percent hero number.
 5. **The in-progress week.** "So far" framing, no completion verdict, no delta against a week
    that has not finished. As shipped the sessions tile is relabelled "Sessions so far" and the
-   header shows "In progress", but `WeeklyReviewSummary` still renders the session and duration
-   deltas against the previous week while the week is running.
+   header shows "In progress". Since 2026-11-20 (tech debt #58) `WeeklyReviewSummary` also
+   drops the session and duration deltas while the week is running: both only grow until
+   Sunday, so mid-week they read as a drop. The average-RPE delta stays, since an average is
+   as comparable mid-week as at the end.
 6. **Missing or invalid timezone.** `getLocalDateStrSafe` (`server/timezone.ts:208`) already
    handles this; use it rather than assuming `userTimezone` is populated.
 7. **Deleted plans.** `workout_logs.planId` is `ON DELETE SET NULL` — a week whose plan was

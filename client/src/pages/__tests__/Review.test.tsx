@@ -450,6 +450,26 @@ describe("Review page", () => {
     expect(screen.getByTestId("weekly-review-next")).toHaveAttribute("aria-disabled", "true");
   });
 
+  // Tech debt #58: a week still running was compared with the whole of last
+  // week, so its growing totals read as a drop (spec §6.5).
+  it("shows no session or time delta while the week is running, and keeps the RPE one", async () => {
+    mocks.getWeeklyReview.mockResolvedValue(review({ isCurrentWeek: true }));
+    renderPage();
+
+    await waitFor(() => expect(screen.getByTestId("weekly-review-sessions")).toBeInTheDocument());
+    expect(screen.getByTestId("weekly-review-sessions").querySelector("[data-testid$='-sessions']")).toBeNull();
+    expect(screen.getByTestId("weekly-review-duration").querySelector("[data-testid$='-duration']")).toBeNull();
+    expect(screen.getByTestId("delta-up-rpe")).toBeInTheDocument();
+  });
+
+  it("shows the session and time deltas for a finished week", async () => {
+    mocks.getWeeklyReview.mockResolvedValue(review({ isCurrentWeek: false }));
+    renderPage();
+
+    await waitFor(() => expect(screen.getByTestId("delta-up-sessions")).toBeInTheDocument());
+    expect(screen.getByTestId("delta-up-duration")).toBeInTheDocument();
+  });
+
   it("pages back a week from the week the server resolved", async () => {
     const user = userEvent.setup();
     mocks.getWeeklyReview.mockResolvedValue(

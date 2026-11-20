@@ -332,7 +332,7 @@ Workout detail surfaces live in their own top-level directory so Timeline, Log W
 
 ### `review/` -- Weekly Review Sections
 
-- `WeeklyReviewSummary` -- The week's headline numbers, with sessions logged and plan adherence as separate tiles.
+- `WeeklyReviewSummary` -- The week's headline numbers, with sessions logged and plan adherence as separate tiles. A week still in progress gets no session or duration delta against the previous week (they only grow until Sunday); its RPE delta stays.
 - `WeeklyReviewSessions` -- The week's session rows, each with its grade chip.
 - `WeeklyReviewHighlights` -- Records and context: the week's records beside the annotations that change how its numbers read.
 - `WeeklyReviewIntent` -- The one line the athlete carries into next week, and last week's shown back.
