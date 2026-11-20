@@ -713,8 +713,8 @@ Chunked and embedded fragments of coaching materials for vector similarity searc
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
-| `material_id` | `varchar(255)` | NOT NULL, FK -> `coaching_materials.id` ON DELETE CASCADE |
-| `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE |
+| `material_id` | `varchar(255)` | NOT NULL (the material's id; no foreign key) |
+| `user_id` | `varchar(255)` | NOT NULL (the athlete's id; no foreign key) |
 | `content` | `text` | NOT NULL |
 | `chunk_index` | `integer` | NOT NULL |
 | `embedding` | `vector(3072)` | nullable |
@@ -724,7 +724,7 @@ Chunked and embedded fragments of coaching materials for vector similarity searc
 - `idx_document_chunks_material_id` on (`material_id`)
 - `idx_document_chunks_user_id` on (`user_id`)
 
-The two foreign keys exist only in the Drizzle declaration. `ensureVectorSchema()` creates the real table without them (it may sit on a separate database), so neither cascade fires: `CoachingStorage.deleteChunksByMaterialId()` and `deleteChunksByUserId()` delete the chunks explicitly, and `pruneDanglingChunks()` sweeps any whose material is gone. See [Schema Bootstrapping](#schema-bootstrapping).
+The table has no foreign keys: `ensureVectorSchema()` creates it on the vector database, which may be a separate database with no `users` or `coaching_materials` table. The Drizzle declaration used to claim two cascading keys; it declares none since 2026-11-19, and migration `0128` drops them from any database a `drizzle-kit push` created them on. `CoachingStorage.deleteChunksByMaterialId()` and `deleteChunksByUserId()` delete the chunks explicitly, and `pruneDanglingChunks()` sweeps any whose material is gone. See [Schema Bootstrapping](#schema-bootstrapping).
 
 ---
 
@@ -1471,7 +1471,7 @@ CI (`.github/workflows/migrations.yml`) runs `db:check`, then `db:generate` foll
 
 ### Migration Files
 
-Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **128 migrations**, `0000` through `0127`:
+Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **129 migrations**, `0000` through `0128`:
 
 ```
 migrations/
@@ -1533,11 +1533,12 @@ migrations/
   0125_device_push_tokens.sql                        # device_push_tokens table
   0126_health_connect_ids.sql                        # health_connect_id on workout_logs / recycle_bin_items
   0127_ai_usage_logs_system_rows.sql                 # ai_usage_logs.user_id nullable, for spend no athlete caused
+  0128_document_chunks_no_foreign_keys.sql           # drops document_chunks FKs where push created them (no-op on main)
   meta/
     _journal.json
     0000_snapshot.json
     ...
-    0127_snapshot.json
+    0128_snapshot.json
 ```
 
 - **SQL files**: Each migration contains the raw SQL statements.

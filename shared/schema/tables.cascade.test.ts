@@ -52,7 +52,6 @@ describe("user-owned tables cascade on DELETE", () => {
     chatMessages,
     coachingMaterials,
     idempotencyKeys,
-    documentChunks,
     aiUsageLogs,
     pushSubscriptions,
     // Art. 9 health data + training-style history — guard their cascade too (S12).
@@ -78,15 +77,20 @@ describe("user-owned tables cascade on DELETE", () => {
   // members.
   const transitivelyOwnedTables: Array<{
     label: string;
-    table: typeof exerciseSets | typeof documentChunks | typeof planDays;
-    parent: typeof workoutLogs | typeof coachingMaterials | typeof trainingPlans;
+    table: typeof exerciseSets | typeof planDays;
+    parent: typeof workoutLogs | typeof trainingPlans;
   }> = [
     { label: "exerciseSets → workoutLogs", table: exerciseSets, parent: workoutLogs },
     { label: "planDays → trainingPlans", table: planDays, parent: trainingPlans },
-    // documentChunks also has a direct userId FK (verified above), but its
-    // materialId cascade is the second line of defence; both must work.
-    { label: "documentChunks → coachingMaterials", table: documentChunks, parent: coachingMaterials },
   ];
+
+  // Tech debt #47: document_chunks lives on the vector database, which has no
+  // users or coaching_materials table, so it can have no foreign keys at all;
+  // the declaration used to claim two. Its rows are deleted explicitly
+  // (CoachingStorage for a material, the account erasure for an athlete).
+  it("documentChunks declares no foreign keys, matching the vector-database table", () => {
+    expect(getTableConfig(documentChunks).foreignKeys).toEqual([]);
+  });
 
   for (const [label, table] of Object.entries(directUserFkTables)) {
     it(`${label} has a direct users.id FK that cascades`, () => {
