@@ -1,4 +1,3 @@
-import { estimatePlannedSession } from "@shared/plannedSessionEstimate";
 import type { TimelineEntry } from "@shared/schema";
 import { computeSessionFuellingTarget } from "@shared/sessionFuellingTargets";
 import { useQuery } from "@tanstack/react-query";
@@ -11,6 +10,7 @@ import { NumberStepper } from "@/components/ui/number-stepper";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
+import { plannedSessionSeed } from "@/lib/plannedSessionSeed";
 import { hhmmToMinutes, minutesToHhmm } from "@/lib/timeOfDay";
 
 import { PostTargetLine, PreCarbTargetLine } from "./fuelling/targetLines";
@@ -72,17 +72,14 @@ function EntryFuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) {
   const { data: preferences } = useQuery<UserPreferences>({ queryKey: QUERY_KEYS.preferences });
   const bodyweightKg = preferences?.bodyweightKg ?? null;
 
+  // The timeline's pace-personalised estimate, else the exercise-table one: the
+  // same seed the card's fuelling chip starts from (plannedSessionSeed).
   const estimate = useMemo(
-    () =>
-      estimatePlannedSession({
-        structureBlocks: entry.structureBlocks ?? [],
-        exerciseSets: entry.exerciseSets ?? [],
-        distanceUnit: preferences?.distanceUnit ?? null,
-      }),
-    [entry.structureBlocks, entry.exerciseSets, preferences?.distanceUnit],
+    () => plannedSessionSeed(entry, preferences?.distanceUnit ?? null),
+    [entry, preferences?.distanceUnit],
   );
 
-  // Saved expected values win; otherwise seed from the exercise-table estimate.
+  // Saved expected values win; otherwise seed from the estimate above.
   const [durationDraft, setDurationDraft] = useState<number | undefined>(
     entry.expectedDurationMin ?? estimate.durationMin ?? undefined,
   );

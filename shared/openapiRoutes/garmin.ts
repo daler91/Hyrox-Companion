@@ -45,6 +45,10 @@ export function registerGarminPaths(registry: OpenAPIRegistry, common: OpenApiCo
                 description:
                   "Set when a sync failed; the athlete must disconnect and connect again",
               }),
+              syncPausedUntil: z.string().datetime().nullable().optional().openapi({
+                description:
+                  "Set while Garmin calls are paused after Garmin rate-limited the server: until then a sync answers 503 GARMIN_CIRCUIT_OPEN. Null otherwise.",
+              }),
             }),
           },
         },

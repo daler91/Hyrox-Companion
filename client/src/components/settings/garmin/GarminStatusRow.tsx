@@ -1,4 +1,5 @@
 import { Loader2, RefreshCw, Unlink } from "lucide-react";
+import { useId } from "react";
 
 import { GarminIcon } from "@/components/icons/GarminIcon";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,8 @@ interface GarminStatusRowProps {
   readonly isConnected: boolean;
   readonly hasError: boolean;
   readonly statusText: string;
+  /** Why Sync is unavailable right now (Garmin calls are paused), or null. */
+  readonly syncPausedText?: string | null;
   readonly isSyncing: boolean;
   readonly isDisconnecting: boolean;
   readonly onSync: () => void;
@@ -20,11 +23,13 @@ export function GarminStatusRow({
   isConnected,
   hasError,
   statusText,
+  syncPausedText = null,
   isSyncing,
   isDisconnecting,
   onSync,
   onDisconnect,
 }: GarminStatusRowProps) {
+  const pausedTextId = useId();
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="flex items-center gap-3">
@@ -46,6 +51,11 @@ export function GarminStatusRow({
             )}
           </div>
           <p className="text-sm text-muted-foreground">{statusText}</p>
+          {syncPausedText && (
+            <p id={pausedTextId} className="text-sm text-muted-foreground" data-testid="text-garmin-sync-paused">
+              {syncPausedText}
+            </p>
+          )}
         </div>
       </div>
       {isConnected && (
@@ -54,8 +64,9 @@ export function GarminStatusRow({
             variant="outline"
             size="sm"
             onClick={onSync}
-            disabled={isSyncing}
+            disabled={isSyncing || syncPausedText !== null}
             aria-busy={isSyncing}
+            aria-describedby={syncPausedText ? pausedTextId : undefined}
             data-testid="button-sync-garmin"
           >
             {isSyncing ? (

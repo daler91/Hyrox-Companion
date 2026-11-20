@@ -153,7 +153,7 @@ The hooks below are in `client/src/hooks/` unless the File column gives another 
 
 | Hook | File | Purpose |
 |------|------|---------|
-| `useApiMutation` | `useApiMutation.ts` | Generic wrapper around React Query's `useMutation`. Adds toast notifications (success/error), automatic query invalidation, and optional callbacks. A string `errorToast` is the title over `humanizeApiError`'s description; a `RateLimitError` or `AiBudgetExceededError` gets its own toast in place of `errorToast`. |
+| `useApiMutation` | `useApiMutation.ts` | Generic wrapper around React Query's `useMutation`. Adds toast notifications (success/error), automatic query invalidation, and optional callbacks. A string `errorToast` is the title over `humanizeApiError`'s description; a `RateLimitError` or `AiBudgetExceededError` gets its own toast in place of `errorToast`. The rate-limit toast ("Too many requests") describes the wait with `rateLimitMessage()`: the 429 body's own `error` copy when it has one (every server 429 does, e.g. Garmin's "wait N more minutes"), else the `Retry-After` seconds, else "a moment". |
 | `useWorkoutActions` | `useWorkoutActions.ts` | Timeline-entry action mutations: mark complete, skip, change status, delete workout/plan-day, and bulk delete (delegates to `workout-actions/useWorkoutActionMutations`). |
 | `useChatMutations` | `useChatMutations.ts` | Save chat message, clear chat history mutations. |
 | `useStravaMutations` | `useStravaMutations.ts` | Strava connect (fetches the OAuth URL and redirects to it), disconnect and sync mutations. A sync failure naming `STRAVA_REAUTH_REQUIRED` toasts "Strava reconnection needed". |

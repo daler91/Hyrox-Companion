@@ -19,6 +19,8 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { FallbackErrorBoundary } from "./components/FallbackErrorBoundary";
 import { setupErrorReporting } from "./lib/errorReporting";
+import { rootErrorHandlers } from "./lib/rootErrorHandlers";
+import { registerServiceWorker } from "./lib/serviceWorkerUpdate";
 import { migrateLegacyKeys } from "./lib/storageMigration";
 
 migrateLegacyKeys();
@@ -41,30 +43,20 @@ import { registerSW } from "virtual:pwa-register";
 const shouldRegisterServiceWorkers =
   !("Cypress" in globalThis) && "serviceWorker" in globalThis.navigator;
 
-// React 19 no longer re-throws render errors: uncaught ones go to
-// window.reportError and boundary-caught ones only to console.error, so
-// Sentry must hook the root callbacks to keep capturing them. The handlers
-// no-op until Sentry.init runs (deferred behind the privacy notice, S11).
-createRoot(document.getElementById("root")!, {
-  onUncaughtError: Sentry.reactErrorHandler(),
-  onCaughtError: Sentry.reactErrorHandler(),
-  onRecoverableError: Sentry.reactErrorHandler(),
-}).render(
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("index.html has no #root element to render into");
+
+// The root error callbacks report to Sentry; see rootErrorHandlers for why a
+// boundary-caught error is reported once, by its boundary.
+createRoot(rootElement, rootErrorHandlers).render(
   <Sentry.ErrorBoundary fallback={FallbackErrorBoundary}>
     <App />
   </Sentry.ErrorBoundary>
 );
 
-// Register service worker for PWA support
+// Register the service worker for PWA support; a new build prompts a reload.
 if (shouldRegisterServiceWorkers) {
-  registerSW({
-    onNeedRefresh() {
-      // A new version is available - the user can refresh when ready
-    },
-    onOfflineReady() {
-      // The app is ready to work offline
-    },
-  });
+  registerServiceWorker(registerSW);
 }
 
 // Push notifications are handled by the SAME service worker: the Workbox config

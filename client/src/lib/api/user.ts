@@ -155,6 +155,8 @@ export interface GarminStatus {
   garminDisplayName?: string | null;
   lastSyncedAt?: string | null;
   lastError?: string | null;
+  /** Set while Garmin calls are paused after a rate limit; a sync is refused until then. */
+  syncPausedUntil?: string | null;
 }
 
 export interface GarminSyncResponse {

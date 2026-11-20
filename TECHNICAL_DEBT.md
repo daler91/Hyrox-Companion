@@ -249,15 +249,28 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
 - ~~**53. No breadcrumb label for Nutrition or Weekly Review**~~ — Resolved 2026-11-18.
   `ROUTE_LABELS` has `/nutrition` and `/review`. Guarded by
   `client/src/components/__tests__/Breadcrumbs.test.tsx`.
-- **54. Service worker updates have no prompt** — Confirmed. `registerType: "prompt"`
-  (`vite.config.ts:38`) with an empty `onNeedRefresh` (`client/src/main.tsx:61-63`): a new
-  build activates only once every tab is closed.
-- **55. Garmin rate-limit messages do not reach the athlete** — Reported. The server's `429`
-  "wait N more minutes" and `503` circuit-open messages are not shown, and Sync stays enabled
-  while the circuit is open.
-- **56. Feature error boundaries send no feature tag** — Confirmed.
-  `FeatureErrorBoundaryWrapper` takes `featureName` but passes nothing to
-  `Sentry.ErrorBoundary` (`client/src/components/FeatureErrorBoundaryWrapper.tsx:20`).
+- ~~**54. Service worker updates have no prompt**~~ — Resolved 2026-11-20. `onNeedRefresh`
+  now shows "A new version is ready" with a Reload button (`registerServiceWorker`,
+  `client/src/lib/serviceWorkerUpdate.tsx`), which hands over to the waiting worker and reloads
+  onto it. The toast has no timeout; a later toast can replace it (one shows at a time), and it
+  then returns on the next load, since the build still waits. Guarded by
+  `client/src/lib/serviceWorkerUpdate.test.tsx`.
+- ~~**55. Garmin rate-limit messages do not reach the athlete**~~ — Resolved 2026-11-20.
+  Confirmed first: the shared rate-limit toast replaced the `429` copy with "wait a moment",
+  and `humanizeApiError` hid the `503` copy behind its generic 5xx text. The rate-limit toast
+  now shows a 429 body's own message (`rateLimitMessage`), which also reaches Strava's, and the
+  Garmin sync and connect toasts read the `GARMIN_CIRCUIT_OPEN` body (`describeGarminError`).
+  `GET /garmin/status` gained `syncPausedUntil` (optional, so not a contract break), and
+  Settings disables Sync until then, says why, and re-enables it at that time. Guarded by
+  `server/garmin.orchestration.test.ts`, `useGarminMutations.test.tsx`,
+  `useGarminConnectionController.test.tsx` and `GarminStatusRow.test.tsx`.
+- ~~**56. Feature error boundaries send no feature tag**~~ — Resolved 2026-11-20. The wrapper
+  tags each report `feature`. That alone did not reach Sentry: React 19's root `onCaughtError`
+  reported the same error first, and Sentry's duplicate filter dropped the boundary's tagged
+  copy. The root handlers moved to `client/src/lib/rootErrorHandlers.ts`, whose
+  `onCaughtError` skips errors a `Sentry.ErrorBoundary` reports itself. Guarded by
+  `client/src/components/__tests__/FeatureErrorBoundaryWrapper.test.tsx` (a real Sentry client
+  with its duplicate filter).
 - ~~**57. Two messages describe the wrong thing**~~ — Resolved 2026-11-18. The sync-complete
   event counts how many drops expired (`expired`), and the summary toast names each reason
   (more than 7 days queued, or too many failed attempts); the other drop reasons never
@@ -265,13 +278,18 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
   food to log it fetches its micronutrients. Guarded by `client/src/lib/offlineQueue.test.ts`,
   `client/src/components/ui/__tests__/OfflineIndicator.a11y.test.tsx` and
   `client/src/pages/nutrition/MicronutrientPanel.test.tsx`.
-- **58. Weekly review shows deltas for a week still in progress** — Confirmed.
-  `client/src/components/review/WeeklyReviewSummary.tsx:62-68,97-104` renders the session and
-  duration deltas whatever `isCurrentWeek` is; `docs/weekly-review-spec.md` §6.5 asks for
-  none. The streak, coldest station and training-load delta scoped in §2 were never built.
-- **59. The web fuelling chip estimates locally** — Confirmed.
-  `client/src/components/timeline/timeline-workout-card/FuellingTargetChip.tsx` calls
-  `estimatePlannedSession` and never reads the API's `sessionEstimate`, so the chip and the fuelling panel can disagree.
+- ~~**58. Weekly review shows deltas for a week still in progress**~~ — Resolved 2026-11-20.
+  `WeeklyReviewSummary` drops the session and duration deltas while `isCurrentWeek`; the
+  average-RPE delta stays, since an average is as comparable mid-week. Guarded by
+  `client/src/pages/__tests__/Review.test.tsx`. The streak, coldest station and training-load
+  delta that spec §2 scoped are unbuilt features rather than a defect; the spec's status line
+  still lists them.
+- ~~**59. The web fuelling chip estimates locally**~~ — Resolved 2026-11-20. The chip and the
+  fuelling panel both start from `plannedSessionSeed` (`client/src/lib/plannedSessionSeed.ts`):
+  the timeline's pace-personalised `sessionEstimate`, else the local estimate. The chip follows
+  the panel's server estimate once the panel has fetched it, reading it from the query cache
+  and never requesting it. Guarded by `FuellingTargetChip.test.tsx` and
+  `FuellingPlanPanel.test.tsx`.
 - ~~**60. The PWA theme colour is the superseded lime**~~ — Resolved 2026-11-18.
   `theme_color` is `#B1F584`, and `test/build/pwaManifest.test.ts` converts it to HSL and
   pins it to the stylesheet's `--accent`. Still open outside the code: the designed PDF in
@@ -371,5 +389,5 @@ not in them.
 | P1 — High | 6/6 | 0 | All resolved |
 | P2 — Medium | 6/6 | 0 | All resolved |
 | P3 — Low | 10/11 | 1 | #22 CSRF resolved via `csrf-csrf` double-submit; #29 dual-TS installs open (blocked on TS 7.1 API + typescript-eslint) |
-| Docs verification, 2026-11-17 | 27/42 | 15 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43, #51, #52, #53, #57, #60, #66, #68 and #71 resolved 2026-11-18; #34, #35, #39, #48 and #49 resolved 2026-11-19; #44, #45, #46 and #47 resolved 2026-11-20, as were parts (a) and (c) of #38 (its part (b) is open) |
-| **Total** | **55/71** | **16** | #29 is intentional interim state; #38 (b) waits on an API-contract decision; the other 14 of #30–#71 are untriaged |
+| Docs verification, 2026-11-17 | 32/42 | 10 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43, #51, #52, #53, #57, #60, #66, #68 and #71 resolved 2026-11-18; #34, #35, #39, #48 and #49 resolved 2026-11-19; #44, #45, #46, #47, #54, #55, #56, #58 and #59 resolved 2026-11-20, as were parts (a) and (c) of #38 (its part (b) is open) |
+| **Total** | **60/71** | **11** | #29 is intentional interim state; #38 (b) waits on an API-contract decision; the other 9 of #30–#71 are untriaged |

@@ -33,6 +33,7 @@ export function GarminSection({ garminStatus, garminLoading }: Readonly<GarminSe
           isConnected={controller.isConnected}
           hasError={controller.hasError}
           statusText={controller.statusText}
+          syncPausedText={controller.syncPausedText}
           isSyncing={controller.syncGarminMutation.isPending}
           isDisconnecting={controller.disconnectGarminMutation.isPending}
           onSync={() => controller.syncGarminMutation.mutate()}
