@@ -305,7 +305,7 @@ Workout detail surfaces live in their own top-level directory so Timeline, Log W
 - `SessionGradeCard` -- The "Did it do its job?" card on a completed workout; renders nothing for workouts that are not graded.
 - `ReviewActionButtons` -- The review sheet's sticky footer: ask coach, reopen, combine and delete.
 - `MafTestTagSection` / `MafTestForm` -- Tag a workout as a MAF test and correct the heart rate, duration and distance the test is scored from.
-- `FuellingAroundSessionPanel`, `FuellingPlanPanel`, `FuellingGuidanceNote` -- Session fuelling targets and intake on logged and planned sessions (nutrition flag only).
+- `FuellingAroundSessionPanel`, `FuellingPlanPanel`, `FuellingGuidanceNote` -- Session fuelling targets and intake on logged and planned sessions (nutrition flag only). For a planned session the panel and the card's `FuellingTargetChip` start from the same estimate (`plannedSessionSeed`: the timeline's pace-personalised `sessionEstimate`, else the local exercise-table estimate) under any saved expected duration or RPE. The panel then swaps in `GET /nutrition/planned-session-estimate`, and the chip follows once that is in the query cache; the chip never requests it itself.
 - `shared/` -- Pieces the sheets share, among them `PrescriptionEditor`, `WorkoutEffortNotes`, `RpePrompt` and `WorkoutPlanDayPicker`. `exercise-table/` holds `ExerciseTable`'s rows, dialogs, drag-and-drop helpers and the "Last time" row.
 
 ### `exercise-row/` -- Exercise Row Renderer

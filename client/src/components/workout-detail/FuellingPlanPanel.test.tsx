@@ -142,6 +142,22 @@ describe("FuellingPlanPanel", () => {
     );
   });
 
+  // Tech debt #59: the panel seeded from the local estimate, which cannot know
+  // the athlete's run pace, while the card's chip now starts from the
+  // timeline's pace-personalised sessionEstimate; both start from the same seed.
+  it("seeds from the timeline's sessionEstimate before the server estimate arrives", () => {
+    const entry = makeEntry({
+      exerciseSets: [
+        { exerciseName: "recovery_run", plannedDistance: 9000 },
+      ] as unknown as TimelineEntry["exerciseSets"],
+      sessionEstimate: { durationMin: 47, rpe: 3, source: "sets", clamped: false },
+    });
+    renderWithClient(<FuellingPlanPanel entry={entry} />);
+
+    // The local estimate for 9000 m is about 54 minutes.
+    expect(screen.getByTestId("fuelling-plan-adjust")).toHaveTextContent("47 min · RPE 3");
+  });
+
   it("persists an edited expected effort to the plan day", async () => {
     const user = userEvent.setup();
     renderWithClient(<FuellingPlanPanel entry={makeEntry({ expectedDurationMin: 60 })} />);

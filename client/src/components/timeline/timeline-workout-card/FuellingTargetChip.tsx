@@ -1,5 +1,4 @@
-import { estimatePlannedSession } from "@shared/plannedSessionEstimate";
-import type { TimelineEntry } from "@shared/schema";
+import type { PlannedSessionEstimateResponse, TimelineEntry } from "@shared/schema";
 import { computeSessionFuellingTarget } from "@shared/sessionFuellingTargets";
 import { useQuery } from "@tanstack/react-query";
 import { UtensilsCrossed } from "lucide-react";
@@ -7,12 +6,16 @@ import { useMemo } from "react";
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { QUERY_KEYS, type UserPreferences } from "@/lib/api";
+import { plannedSessionSeed } from "@/lib/plannedSessionSeed";
 
 /**
  * Compact pre + post fuelling target on a PLANNED timeline card (Phase 3b).
- * Mirrors the FuellingPlanPanel's inputs — the athlete's saved expected
- * duration/RPE on the plan day, else an estimate from the planned exercise
- * table — so the card and the detail sheet always quote the same numbers.
+ * Mirrors the FuellingPlanPanel's inputs so the card and the detail sheet quote
+ * the same numbers: the athlete's saved expected duration/RPE on the plan day,
+ * else the panel's server estimate once the panel has fetched it, else the
+ * timeline's pace-personalised `sessionEstimate` (plannedSessionSeed). The chip
+ * reads the panel's estimate only from the cache and never fetches it: that
+ * would be a request, and maybe an AI call, per planned card (tech debt #59).
  * Shows the pre-session carbs (when the session is long/hard enough to warrant
  * them) and the post-session recovery carbs + protein, so the card carries the
  * whole fuel plan for the session. Renders nothing only when there's no useful
@@ -28,25 +31,20 @@ export function FuellingTargetChip({ entry }: { readonly entry: TimelineEntry })
   const { data: preferences } = useQuery<UserPreferences>({ queryKey: QUERY_KEYS.preferences });
   const bodyweightKg = preferences?.bodyweightKg ?? null;
 
+  // Cache only (enabled: false): present once the sheet's panel has fetched it.
+  const { data: panelEstimate } = useQuery<PlannedSessionEstimateResponse>({
+    queryKey: QUERY_KEYS.nutritionPlannedSessionEstimate(entry.planDayId ?? ""),
+    enabled: false,
+  });
+
   const target = useMemo(() => {
-    const estimate = estimatePlannedSession({
-      structureBlocks: entry.structureBlocks ?? [],
-      exerciseSets: entry.exerciseSets ?? [],
-      distanceUnit: preferences?.distanceUnit ?? null,
-    });
+    const seed = plannedSessionSeed(entry, preferences?.distanceUnit ?? null);
     return computeSessionFuellingTarget({
-      durationMin: entry.expectedDurationMin ?? estimate.durationMin,
-      rpe: entry.expectedRpe ?? estimate.rpe,
+      durationMin: entry.expectedDurationMin ?? panelEstimate?.durationMin ?? seed.durationMin,
+      rpe: entry.expectedRpe ?? panelEstimate?.rpe ?? seed.rpe,
       bodyweightKg,
     });
-  }, [
-    entry.structureBlocks,
-    entry.exerciseSets,
-    entry.expectedDurationMin,
-    entry.expectedRpe,
-    bodyweightKg,
-    preferences?.distanceUnit,
-  ]);
+  }, [entry, panelEstimate, bodyweightKg, preferences?.distanceUnit]);
 
   const hasPre = target.preCarbG > 0;
   const hasPost = target.postCarbG > 0 || target.postProteinG > 0;

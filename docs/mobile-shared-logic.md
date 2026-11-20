@@ -723,8 +723,11 @@ fixture, so the app's %RDI matches the server's `GET /api/v1/nutrition/micros`.
 6. **The web is already inconsistent here.** `FuellingTargetChip.tsx` uses the local, generic-pace
    estimate. `FuellingPlanPanel.tsx:105` swaps in the server's personalised, possibly AI-refined
    estimate. So the chip and the panel can quote different targets for the same session. API field
-   1 would fix the web too. Field 1 has shipped, but no web file reads `sessionEstimate`, so the
-   web chip still estimates locally.
+   1 would fix the web too. **Fixed 2026-11-20** (tech debt #59): the chip and the panel both
+   start from `sessionEstimate`, falling back to the local estimate only for an entry without
+   one (`client/src/lib/plannedSessionSeed.ts`), and the chip switches to the panel's server
+   estimate once the panel has fetched it. The chip reads that estimate from the query cache
+   and never requests it, so a timeline of planned cards makes no per-card calls.
 7. **`mafHr` has two writers.** Should the server ignore a client-sent `mafHr` once field 3a ships?
    **Answered:** yes. The server drops it and writes its own (field 3a).
 8. **Notes edited offline.** With field 6, a note edited offline is unparsed until it syncs. Show the
@@ -867,10 +870,10 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
   `server/services/sessionEstimate/plannedSessionEstimate.ts`,
   `server/services/sessionEstimate/timelineSessionEstimates.ts` (API field 1) and
   `server/services/missedRecovery/index.ts`.
-  - **Client use:** the instant estimate behind the fuel chip and the panel's seed value.
-  - **Importing files:** `components/timeline/timeline-workout-card/FuellingTargetChip.tsx`,
-    `components/workout-detail/FuellingPlanPanel.tsx`.
-  - **Exports used:** `estimatePlannedSession`.
+  - **Client use:** the fallback behind the fuel chip's and the panel's seed value, for an entry
+    without the API's `sessionEstimate`.
+  - **Importing files:** `lib/plannedSessionSeed.ts`, which the fuel chip and the panel share.
+  - **Exports used:** `estimatePlannedSession`, `PlannedSessionEstimate`.
   - **Dependencies a port would need:** `schema/exercises` and
     `unitConversion.storedDistanceToMetersStamped`.
 - **`nutritionTargets`.** 756 lines. The server uses it in 12 files, for `effectiveTargetWindowed`,
