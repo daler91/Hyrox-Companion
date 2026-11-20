@@ -1,7 +1,7 @@
 import { planDaySkipReasonEnum, workoutStatusEnum } from "../enums";
 import { z } from "../zod";
 import { calendarDateSchema } from "./requests";
-import { structureBlocksPayloadSchema, structureSetRelinksPayloadSchema } from "./workouts";
+import { MAX_WORKOUT_TEXT_LEN, structureBlocksPayloadSchema, structureSetRelinksPayloadSchema } from "./workouts";
 
 // Request schemas for the training-plan routes (server/routes/plans.ts). They
 // live here, not beside their routes, so the route validation and the OpenAPI
@@ -41,8 +41,10 @@ export type PlanDayStructureBody = z.infer<typeof planDayStructureBodySchema>;
 /** `POST /api/v1/plans/days/:dayId/reparse`: text to parse in place of the day's stored text. */
 export const planDayReparseBodySchema = z
   .object({
-    mainWorkout: z.string().nullable().optional(),
-    accessory: z.string().nullable().optional(),
+    // Sent to the AI parser and stored on the day: same ceiling as the
+    // workout reparse route.
+    mainWorkout: z.string().max(MAX_WORKOUT_TEXT_LEN).nullable().optional(),
+    accessory: z.string().max(MAX_WORKOUT_TEXT_LEN).nullable().optional(),
   })
   .strict();
 export type PlanDayReparseBody = z.infer<typeof planDayReparseBodySchema>;

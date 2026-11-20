@@ -6,6 +6,8 @@ import {
   updatePlanDayRouteSchema,
   updateTrainingPlanRetirementSchema,
 } from "./plans";
+import { planDayReparseBodySchema } from "./plansRequests";
+import { MAX_WORKOUT_TEXT_LEN } from "./workouts";
 
 // CL9 (CODEBASE_ANALYSIS_2026-10-03): a past race date (a mistyped year) built
 // a template plan whose every day read as post-race recovery, and nothing can
@@ -138,5 +140,21 @@ describe("plan dates that reach a date column", () => {
   it("refuses an impossible day in a coach proposal's reschedule", () => {
     expect(reschedules("2026-02-30")).toBe(false);
     expect(reschedules("2026-03-02")).toBe(true);
+  });
+});
+
+// Plan-day text is re-sent to the AI on every coach note and reparse, so it
+// carries the same ceiling as workout-log text.
+describe("plan-day free-text length cap", () => {
+  const tooLong = "x".repeat(MAX_WORKOUT_TEXT_LEN + 1);
+
+  it.each(["focus", "mainWorkout", "accessory", "notes"])("rejects an oversized %s on PATCH", (field) => {
+    expect(updatePlanDayRouteSchema.safeParse({ [field]: tooLong }).success).toBe(false);
+    expect(updatePlanDayRouteSchema.safeParse({ [field]: "Tempo run" }).success).toBe(true);
+  });
+
+  it.each(["mainWorkout", "accessory"])("rejects an oversized %s on reparse", (field) => {
+    expect(planDayReparseBodySchema.safeParse({ [field]: tooLong }).success).toBe(false);
+    expect(planDayReparseBodySchema.safeParse({ [field]: "5x1km" }).success).toBe(true);
   });
 });
