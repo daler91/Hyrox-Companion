@@ -574,7 +574,7 @@ Combine multiple workout logs into a single new workout, deleting the sources, i
 - **Rate limit:** `workout` category, 10/min
 - **Body:** `{ newWorkout: InsertWorkoutLog, deleteWorkoutIds: string[] (1-10), skipPlanDayIds?: string[] (max 10) }` — `newWorkout` takes the same client-facing fields as `POST /api/v1/workouts` (no `planId` or device provenance); its `planId` is derived from its `planDayId`
 - **Response:** `201` Created `WorkoutLog`
-- **Errors:** `404` when a source or the kept `planDayId` is not the caller's; `400` when a source is linked to a plan day that is neither the kept one nor in `skipPlanDayIds`. Days in `skipPlanDayIds` (other than the kept one) are marked `skipped`.
+- **Errors:** `404` when a source or the kept `planDayId` is not the caller's; `400` when a source is linked to a plan day that is neither the kept one nor in `skipPlanDayIds`, or when `newWorkout.date` is past the athlete's own tomorrow (the create rule; checked before anything is written). Days in `skipPlanDayIds` (other than the kept one) are marked `skipped`.
 
 ### GET /api/v1/workouts/unstructured
 

@@ -4,12 +4,16 @@ import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { captureWorkoutLogs } from "../storage/recycleBinCapture";
 import { combineWorkouts } from "./combineWorkouts";
+import { assertWorkoutDateNotFuture } from "./workoutDate";
 
 vi.mock("../db", () => ({
   db: { transaction: vi.fn() },
 }));
 vi.mock("../storage/recycleBinCapture", () => ({
   captureWorkoutLogs: vi.fn(),
+}));
+vi.mock("./workoutDate", () => ({
+  assertWorkoutDateNotFuture: vi.fn(),
 }));
 
 const NEW_WORKOUT = { date: "2026-05-04", focus: "Strength", mainWorkout: "Merged session" };
@@ -221,5 +225,27 @@ describe("combineWorkouts", () => {
     await combineWorkouts({ userId: "user-1", newWorkout: NEW_WORKOUT, deleteWorkoutIds: ["w1"] });
 
     expect(captureWorkoutLogs).not.toHaveBeenCalled();
+  });
+});
+
+// Tech debt #46: combine checked the merged log's date with the schema only,
+// which lets through tomorrow wherever that is latest; create and update hold
+// it to the athlete's own tomorrow.
+describe("combineWorkouts date rule", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("holds the merged log's date to the athlete's own tomorrow, as create does", async () => {
+    vi.mocked(assertWorkoutDateNotFuture).mockRejectedValue(
+      new AppError(ErrorCode.VALIDATION_ERROR, "Workout date cannot be in the future", 400),
+    );
+
+    await expect(
+      combineWorkouts({ userId: "user-1", newWorkout: NEW_WORKOUT, deleteWorkoutIds: ["w1", "w2"] }),
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect(assertWorkoutDateNotFuture).toHaveBeenCalledWith("user-1", NEW_WORKOUT.date);
+    expect(db.transaction).not.toHaveBeenCalled();
   });
 });

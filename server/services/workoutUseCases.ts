@@ -8,11 +8,11 @@ import { AppError, ErrorCode } from "../errors";
 import { parseExercisesFromText } from "../gemini";
 import { logger } from "../logger";
 import { storage } from "../storage";
-import { addDaysLocal, getLocalDateStrSafe } from "../timezone";
 import { checkAiBudget } from "./aiUsageService";
 import { invalidateAnalyticsCachesForUser } from "./analyticsRouteCache";
 import { findInconsistentHeartRate } from "./heartRateConsistency";
 import { findPersonalRecordAchievements } from "./personalRecordAchievements";
+import { assertWorkoutDateNotFuture } from "./workoutDate";
 import { assignWorkoutPlanDay, createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
 import { refreshDerivedStateAfterLoggedSetChange } from "./workoutService/loggedSetChange";
 
@@ -89,22 +89,6 @@ async function parseLegacyWorkoutText(userId: string, textToParse: string): Prom
     throw new AppError(ErrorCode.VALIDATION_ERROR, "Text/voice/photo workout content must produce structured exercise sets.", 400);
   }
   return structured;
-}
-
-/**
- * A workout log may be dated no later than the athlete's own tomorrow. The
- * route schema cannot know their timezone, so it lets through tomorrow
- * wherever that is latest (UTC+14) and this holds the date to theirs; it used
- * UTC's, refusing "Move to tomorrow" for a UTC+N athlete until N o'clock.
- * CL70 (CODEBASE_ANALYSIS_2026-10-03)
- */
-async function assertWorkoutDateNotFuture(userId: string, date: string | undefined): Promise<void> {
-  if (date === undefined) return;
-  const user = await storage.users.getUser(userId);
-  const tomorrow = addDaysLocal(getLocalDateStrSafe(new Date(), user?.userTimezone), 1);
-  if (date > tomorrow) {
-    throw new AppError(ErrorCode.VALIDATION_ERROR, "Workout date cannot be in the future", 400);
-  }
 }
 
 /** Whether `planDayId` names a plan day that belongs to the athlete. */

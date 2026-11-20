@@ -7,6 +7,7 @@ import type { z } from "zod";
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { captureWorkoutLogs } from "../storage/recycleBinCapture";
+import { assertWorkoutDateNotFuture } from "./workoutDate";
 
 /**
  * The client-facing create surface: no `planId` and no device provenance.
@@ -52,6 +53,9 @@ export async function combineWorkouts({
   deleteWorkoutIds,
   skipPlanDayIds,
 }: CombineWorkoutsInput): Promise<typeof workoutLogs.$inferSelect> {
+  // The same date rule as create and update: no later than the athlete's own
+  // tomorrow (tech debt #46).
+  await assertWorkoutDateNotFuture(userId, newWorkout.date);
   return await db.transaction(async (tx) => {
     const sourceWorkouts = await tx
       .select({
