@@ -20,6 +20,7 @@ import App from "./App";
 import { FallbackErrorBoundary } from "./components/FallbackErrorBoundary";
 import { setupErrorReporting } from "./lib/errorReporting";
 import { rootErrorHandlers } from "./lib/rootErrorHandlers";
+import { registerServiceWorker } from "./lib/serviceWorkerUpdate";
 import { migrateLegacyKeys } from "./lib/storageMigration";
 
 migrateLegacyKeys();
@@ -50,16 +51,9 @@ createRoot(document.getElementById("root")!, rootErrorHandlers).render(
   </Sentry.ErrorBoundary>
 );
 
-// Register service worker for PWA support
+// Register the service worker for PWA support; a new build prompts a reload.
 if (shouldRegisterServiceWorkers) {
-  registerSW({
-    onNeedRefresh() {
-      // A new version is available - the user can refresh when ready
-    },
-    onOfflineReady() {
-      // The app is ready to work offline
-    },
-  });
+  registerServiceWorker(registerSW);
 }
 
 // Push notifications are handled by the SAME service worker: the Workbox config

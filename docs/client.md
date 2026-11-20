@@ -29,7 +29,7 @@ This is the application entry point. It performs the following in order:
 2. **Storage key migration** -- Calls `migrateLegacyKeys()` (`client/src/lib/storageMigration.ts`), which moves five `localStorage` keys from the old `hyrox-` prefix to `fitai-` (offline queue, workout draft and its announced flag, onboarding-complete, privacy consent).
 3. **Sentry setup** -- Calls `setupErrorReporting()` (`client/src/lib/errorReporting.ts`). It does nothing unless the `VITE_SENTRY_DSN` environment variable is set, and it defers `Sentry.init` until the privacy notice has been acknowledged (see [Sentry Integration](#sentry-integration)).
 4. **Root render** -- Calls `createRoot` on the `#root` DOM element with `rootErrorHandlers` (`client/src/lib/rootErrorHandlers.ts`) as React 19's `onUncaughtError`, `onCaughtError` and `onRecoverableError` callbacks, and renders `<App />` wrapped in a `Sentry.ErrorBoundary` with `FallbackErrorBoundary` as its fallback UI.
-5. **PWA service worker registration** -- Calls `registerSW()` from `virtual:pwa-register` with `onNeedRefresh` (new version available) and `onOfflineReady` (app cached for offline use) callbacks, both of which are empty. Registration is skipped under Cypress and in a browser without service workers.
+5. **PWA service worker registration** -- Calls `registerServiceWorker(registerSW)` (`client/src/lib/serviceWorkerUpdate.tsx`), which registers the worker from `virtual:pwa-register` and, when a new build is waiting (`onNeedRefresh`), shows a "A new version is ready" toast with a Reload button. Registration is skipped under Cypress and in a browser without service workers.
 
 ### `client/src/App.tsx`
 
@@ -550,7 +550,7 @@ File findings on issue #768 or open focused follow-up PRs referencing it.
 
 PWA is enabled via `vite-plugin-pwa` in `vite.config.ts`:
 
-- **Register type**: `prompt` -- A new version is not activated automatically. No prompt is shown either: `onNeedRefresh` in `main.tsx` is an empty callback and nothing calls the update function `registerSW()` returns.
+- **Register type**: `prompt` -- A new version is not activated automatically: it waits, and `onNeedRefresh` shows a toast ("A new version is ready") whose Reload calls the update function `registerSW()` returns, which tells the waiting worker to take over and reloads the page onto the new build. The toast has no timeout, so it stays until used or dismissed, but only one toast shows at a time and a later one replaces it. A dismissed or replaced prompt comes back on the next load, since the new build is still waiting. Without the prompt, the new build took over only once every tab was closed.
 - **Manifest**: App name "fitai.coach" (short name "fitai"), standalone display mode, dark background (`#0a0a0a`), theme colour `#B1F584` (the brand lime, pinned to the stylesheet's `--accent` by `test/build/pwaManifest.test.ts`), and 192px, 512px and maskable 512px PNG icons plus the SVG favicon.
 - **Workbox configuration**:
   - Precaches `js`, `css`, `html`, `ico`, `png` and `svg` files, and of the fonts only the latin-subset `woff2` of each face (`PRECACHE_GLOB_PATTERNS`). Other subsets and the `woff` fallbacks are cached at runtime the first time a page needs them. Fonts are never inlined into the stylesheet as base64 (`build.assetsInlineLimit`), so the entry CSS carries none (PF6).
@@ -560,7 +560,7 @@ PWA is enabled via `vite-plugin-pwa` in `vite.config.ts`:
   - Runtime caching for `/api/` responses — see [Cached API data](#cached-api-data-and-sign-out).
   - Runtime caching for fonts: `CacheFirst` into `font-cache` (20 entries, one year) for font files (`woff`, `woff2`, `ttf`, `otf`, `eot`) and for `fonts.googleapis.com` / `fonts.gstatic.com`.
   - Runtime caching for images (`png`, `jpg`, `jpeg`, `svg`, `webp`): `StaleWhileRevalidate` into `image-cache` (100 entries, 30 days).
-- **Service worker registration**: Called in `main.tsx` after render, with `onNeedRefresh` and `onOfflineReady` callbacks (both empty), and skipped under Cypress. There is exactly **one** registration.
+- **Service worker registration**: Called in `main.tsx` after render through `registerServiceWorker` (`client/src/lib/serviceWorkerUpdate.tsx`), which sets `onNeedRefresh` to the update prompt, and skipped under Cypress. There is exactly **one** registration.
 - **Offline indicator and replay state**: The `OfflineIndicator` component (`client/src/components/ui/OfflineIndicator.tsx`) displays offline status, the count of queued writes awaiting replay (workout creates, plan-day status changes and food logs — see [Offline Queue](state-management.md#offline-queue)), and sync/drop feedback after replay attempts. The drop toast says how many changes were discarded for being queued more than 7 days and how many after too many failed attempts.
 
 ### Push notifications and the service worker

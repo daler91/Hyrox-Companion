@@ -6,11 +6,11 @@ now on `react`/`react-dom` **19.3.1** (with `@types/react`/`@types/react-dom` 19
 three `RefObject` annotations carry `| null`, and `client/src/main.tsx` passes
 `onUncaughtError` / `onCaughtError` / `onRecoverableError` to `createRoot`.
 
-The plan is kept for the §6 follow-up menu, none of which has been taken up yet
-(verified 2026-11-16): no `<StrictMode>` at the root, `onNeedRefresh` in
-`main.tsx` is still an empty callback, the `ElementRef` and `MutableRefObject`
-renames are outstanding (15 and 4 files), and `babel-plugin-react-compiler` is
-not installed. Everything below §5 is therefore still a live menu; §§1–5 are history.
+The plan is kept for the §6 follow-up menu. Only the PWA refresh toast (§6.3)
+has been taken up, on 2026-11-20; as of 2026-11-16 the rest had not: no
+`<StrictMode>` at the root, the `ElementRef` and `MutableRefObject` renames are
+outstanding (15 and 4 files), and `babel-plugin-react-compiler` is not
+installed. Everything below §5 is therefore still a live menu; §§1–5 are history.
 
 Codebase and dependency audit completed 2026-08-01 against `main`; all
 version/peer-range facts below were verified live against the npm registry on
@@ -293,9 +293,9 @@ Ordered by value/effort; none block the upgrade.
    StrictMode; React 19's dev double-invoking (including ref callbacks on
    mount) will surface latent effect bugs. Land alone, soak in dev for a
    sprint.
-3. **PWA refresh toast**: implement `onNeedRefresh` in `main.tsx:53` so users
-   pick up new versions without closing all tabs. Generic hygiene the upgrade
-   makes visible.
+3. ~~**PWA refresh toast**~~: done 2026-11-20 (tech debt #54).
+   `onNeedRefresh` shows a toast whose Reload hands over to the waiting worker
+   (`client/src/lib/serviceWorkerUpdate.tsx`).
 4. **React Compiler evaluation**: `babel-plugin-react-compiler@1.0.0` is
    stable; the client has ~234 manual memoization call sites (70 `useMemo`,
    154 `useCallback`, 10 `memo`) across 85 files the compiler could subsume.
