@@ -110,12 +110,14 @@ async function writeParsedStructure({
     acceptedRows.length > 0
       ? expandExercisesToRows(acceptedRows, owner, context, unitPreferences)
       : [];
+  // Zero when the parse yields no sets: nothing was replaced, and the caller
+  // answers 422 with the old sets intact.
   const setCount = await replaceExerciseSetsAndStructureByOwner(
     owner,
     setRows,
     structureBlocks.length > 0 ? structureBlocks : undefined,
   );
-  trackManualFixCompleted(owner, source);
+  if (setCount > 0) trackManualFixCompleted(owner, source);
   return buildReparseWriteThroughResult(acceptedRows, setCount, rejectedCount, fallbackUsed);
 }
 

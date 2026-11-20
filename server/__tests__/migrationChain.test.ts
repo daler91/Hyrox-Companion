@@ -149,15 +149,12 @@ async function schemaConstraints(): Promise<Set<string>> {
 }
 
 /**
- * document_chunks lives on the vector database, created at boot by
- * ensureVectorTables (server/maintenance.ts) without foreign keys, so no
- * migration creates these two; push-built databases that share one Postgres
- * get them from the schema.
+ * Constraints shared/schema may declare that no migration creates. None now:
+ * document_chunks' two foreign keys were the only ones (the table lives on the
+ * vector database, created without keys at boot), and the schema stopped
+ * declaring them in tech debt #47.
  */
-const SCHEMA_ONLY = new Set([
-  "document_chunks_material_id_coaching_materials_id_fk",
-  "document_chunks_user_id_users_id_fk",
-]);
+const SCHEMA_ONLY = new Set<string>();
 
 describe("migration chain and schema constraints (D25, CODEBASE_ANALYSIS_2026-10-03)", () => {
   it("leaves no constraint that shared/schema does not declare", async () => {

@@ -749,6 +749,26 @@ describe("plan-day exercise routes", () => {
     );
   });
 
+  // Tech debt #38 (a): the typed text was saved even when the parse produced
+  // no sets and the route answered 422, unlike the workout reparse.
+  it("keeps the day's stored text when the parse produces no sets", async () => {
+    const { reparsePlanDay } = await import("../../services/workoutService");
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-1", mainWorkout: "old text", accessory: null });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", aiCoachEnabled: true });
+    vi.mocked(reparsePlanDay).mockResolvedValue({
+      exercises: [],
+      saved: true,
+      setCount: 0,
+      rejectedCount: 2,
+      rejectionReasons: ["schema_validation_failed"],
+    });
+
+    const response = await request(app).post("/api/v1/plans/days/day-1/reparse").send({ mainWorkout: "gibberish" });
+
+    expect(response.status).toBe(422);
+    expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+  });
+
   it("rejects structure writes with 403 when the EMOM builder is disabled (W20)", async () => {
     const { replacePlanDayStructure } = await import("../../services/workoutService");
     const validBlock = {

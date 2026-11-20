@@ -571,7 +571,10 @@ protectedPost(
     void incrementStructuredExerciseCounter("plan_day", "voice", "parse_text_attempted").catch(() => undefined);
     try {
       const result = await reparsePlanDay(parseTarget, unitPreferences, userId);
-      if (result && Object.keys(referencePatch).length > 0) {
+      // Keep the typed text only when the parse produced sets, as the workout
+      // reparse does: a 422 used to leave the day's text replaced by text that
+      // failed to parse (tech debt #38).
+      if (result && result.setCount > 0 && Object.keys(referencePatch).length > 0) {
         await storage.plans.updatePlanDay(planDay.id, referencePatch, userId);
       }
       return sendParseWriteThroughResponse(res, "plan_day", "voice", result);

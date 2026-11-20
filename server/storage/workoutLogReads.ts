@@ -34,7 +34,11 @@ export async function listWorkoutLogs(
     .select()
     .from(workoutLogs)
     .where(workoutLogsOwnedBy(userId, filter))
-    .orderBy(desc(workoutLogs.date))
+    // Newest first, with the timeline's tiebreak for logs on the same day
+    // (start time, then id): by date alone the order among them was
+    // arbitrary, so GET /workouts/latest could name either session and a page
+    // boundary could repeat one and skip another (tech debt #45).
+    .orderBy(desc(workoutLogs.date), desc(workoutLogs.startedAt), desc(workoutLogs.id))
     .$dynamic();
 
   if (limit !== undefined) {

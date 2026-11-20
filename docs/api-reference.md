@@ -305,12 +305,12 @@ List workout logs for the current user with pagination.
 - **Auth:** Required
 - **Rate limit:** `workoutList` category, 60/min
 - **Query params:** `limit` (default 50, max 200), `offset` (default 0)
-- **Response:** `WorkoutLog[]`, newest `date` first (rows only; no exercise sets)
+- **Response:** `WorkoutLog[]`, newest `date` first, logs on the same day by `startedAt` and then `id`, both descending, so pages never repeat or skip one (rows only; no exercise sets)
 - **Errors:** `400 BAD_REQUEST` for a non-numeric or sub-1 `limit` or a negative `offset`; `412 PRECONDITION_FAILED` (with `maxLimit`) for a `limit` above 200 — it is refused, not clamped
 
 ### GET /api/v1/workouts/latest
 
-Get the most recent workout log (latest `date`) for the current user. Unlike `GET /api/v1/workouts/:id`, it does not derive missing sets from structure and carries no `suggestedRpe`.
+Get the most recent workout log for the current user: the first row of the list above (latest `date`, then `startedAt`, then `id`). Unlike `GET /api/v1/workouts/:id`, it does not derive missing sets from structure and carries no `suggestedRpe`.
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 60/min
@@ -574,7 +574,7 @@ Combine multiple workout logs into a single new workout, deleting the sources, i
 - **Rate limit:** `workout` category, 10/min
 - **Body:** `{ newWorkout: InsertWorkoutLog, deleteWorkoutIds: string[] (1-10), skipPlanDayIds?: string[] (max 10) }` — `newWorkout` takes the same client-facing fields as `POST /api/v1/workouts` (no `planId` or device provenance); its `planId` is derived from its `planDayId`
 - **Response:** `201` Created `WorkoutLog`
-- **Errors:** `404` when a source or the kept `planDayId` is not the caller's; `400` when a source is linked to a plan day that is neither the kept one nor in `skipPlanDayIds`. Days in `skipPlanDayIds` (other than the kept one) are marked `skipped`.
+- **Errors:** `404` when a source or the kept `planDayId` is not the caller's; `400` when a source is linked to a plan day that is neither the kept one nor in `skipPlanDayIds`, or when `newWorkout.date` is past the athlete's own tomorrow (the create rule; checked before anything is written). Days in `skipPlanDayIds` (other than the kept one) are marked `skipped`.
 
 ### GET /api/v1/workouts/unstructured
 
@@ -1050,12 +1050,12 @@ Replace the structure blocks of a plan day, moving the rows that follow any renu
 
 ### POST /api/v1/plans/days/:dayId/reparse
 
-Re-parse a plan day's `mainWorkout`/`accessory` text into structured exercise sets, replacing existing prescribed rows. Responds `422 PARSE_WRITE_THROUGH_REQUIRED` when parsing produces no persisted sets.
+Re-parse a plan day's `mainWorkout`/`accessory` text into structured exercise sets, replacing existing prescribed rows. Responds `422 PARSE_WRITE_THROUGH_REQUIRED` when parsing produces no persisted sets; the day's sets and structure are then left as they were (a replacement that would leave none is rolled back, as on the workout reparse).
 
 - **Auth:** Required
 - **Rate limit:** `planDayReparse` category, 5/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Body:** Optional `{ mainWorkout?: string | null, accessory?: string | null }` (unknown keys are `400`). A field sent here is parsed in place of the day's stored text and written to the day when the parse returns a result (a `null` `mainWorkout` is stored as `""`).
+- **Body:** Optional `{ mainWorkout?: string | null, accessory?: string | null }` (unknown keys are `400`; unlike the workout reparse, the text has no length cap). A field sent here is parsed in place of the day's stored text and written to the day only when the parse produces sets (a `null` `mainWorkout` is stored as `""`).
 - **Response:** `{ exercises, saved: true, setCount, rejectedCount, rejectionReasons }` (or 404)
 - **AI errors:** answered by the route rather than the global handler — an `AppError` keeps its status and code (`AI_UNAVAILABLE` becomes `502 AI_UPSTREAM_FAILURE`); a raw provider error is classified as `429 AI_QUOTA_EXCEEDED`, `400 AI_INVALID_INPUT`, `502 AI_UPSTREAM_FAILURE` (provider unavailable) or `502 AI_ERROR`; a non-AI failure is `500 INTERNAL_ERROR` ("Failed to parse plan day"). The photo route below does the same.
 

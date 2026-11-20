@@ -152,14 +152,19 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
   write to drizzle's `.set()`, which throws "No values to set", so three PATCH routes
   answered 500. It now returns the owned day unchanged, as the workout PATCH does. Guarded by
   `server/storage/__tests__/planDayEmptyUpdate.integration.test.ts`.
-- **38. Reparse edge cases** — (a) Confirmed: the plan-day reparse writes the caller's
-  override text whenever the parse returns a result, even when the response is then `422`
-  for zero sets (`server/routes/plans.ts:573-577`); the workout reparse saves overrides only on
-  success. (b) Confirmed: `planDayReparseBodySchema` has no length cap on `mainWorkout` /
-  `accessory` (`shared/schema/types/plansRequests.ts:42-47`); the workout reparse caps each at
-  50,000 characters. (c) Reported: a workout reparse that yields structure blocks but no
-  accepted rows may replace the log's sets with none and then return `422`
-  (`server/services/workoutService/reparse.ts:107-117`).
+- **38. Reparse edge cases** — (a) and (c) resolved 2026-11-20; (b) open. (a) The plan-day
+  reparse saves the typed text only when the parse produced sets, as the workout reparse does.
+  (c) Confirmed and fixed: `replaceExerciseSetsAndStructureByOwner` rolls back a replacement
+  that would leave the owner with no sets, so a 422 keeps the old sets and structure, for
+  workouts and plan days, text or photo. Guarded by `server/routes/__tests__/plans.test.ts`,
+  `server/services/workoutService/reparse.test.ts` and
+  `server/services/workoutService/persistence.integration.test.ts`. **(b) still open:** the
+  plan-day reparse body has no length cap, while the workout reparse takes at most 50,000
+  characters per field (`MAX_WORKOUT_TEXT_LEN`). Adding one tightens the API contract, which
+  the OpenAPI breaking-change check refuses, and rightly: stored plan-day text has no cap
+  either, so an installed app can send more than 50,000 characters. Needs an owner decision:
+  either cap the request (raising `MIN_APP_VERSION_*` and labelling the PR
+  `openapi-breaking-ok`), or first cap the stored plan-day text and then the request.
 - ~~**39. An email is lost when its send fails**~~ — Resolved 2026-11-19. The jobs stay
   no-retry, because each also sends a push that a rerun would repeat; `sendEmail()` retries the
   email alone instead. A failure that may pass (Resend's rate limit or a server error, or no
@@ -197,22 +202,22 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
   2026-11-18. `weeklyReviewIntentSchema` now uses `calendarDateSchema`, the GET's
   `isIsoCalendarDate` check, so `2026-02-31` is a `400 VALIDATION_ERROR` instead of an intent
   written to the week of 2 March. Guarded by `server/routes/__tests__/analytics.test.ts`.
-- **44. Repeating a nutrition day stamps noon UTC** — Confirmed.
-  `POST /api/v1/nutrition/logs/repeat` writes `${targetDate}T12:00:00Z` under a comment that
-  says "local noon" (`server/routes/nutrition/nutritionLogs.routes.ts:116-118`). `logDate` is
-  set explicitly, so the day is right; the instant can fall on another local day far from UTC.
-- **45. Workout list ordering has no tiebreaker** — Confirmed. `listWorkoutLogs` orders by
-  `date` alone (`server/storage/workoutLogReads.ts:37`), so `GET /api/v1/workouts/latest` and
-  page boundaries are arbitrary among logs on the same day.
-- **46. Combine checks the new workout's date less strictly than create does** — Reported.
-  `POST /api/v1/workouts/combine` validates `newWorkout.date` with the schema only; create
-  and update also refuse a date past the athlete's own tomorrow
-  (`server/services/workoutUseCases.ts:101-108`).
-- **47. `document_chunks` declares foreign keys the real table does not have** — Confirmed.
-  `shared/schema/tables.ts` declares cascading keys to `coaching_materials` and `users`;
-  `ensureVectorSchema()` creates the table without them (`server/maintenance.ts:188-198`).
-  Deletes are explicit today. `drizzle-kit generate` would emit the keys if the table ever
-  left its no-op migrations.
+- ~~**44. Repeating a nutrition day stamps noon UTC**~~ — Resolved 2026-11-20. A target date
+  other than today is stamped at the athlete's own local noon (`localTimeOnDate`,
+  `server/timezone.ts`), so the instant always falls on its `logDate`. Guarded by
+  `server/timezone.test.ts` and `server/routes/nutrition/__tests__/nutritionDates.routes.test.ts`.
+- ~~**45. Workout list ordering has no tiebreaker**~~ — Resolved 2026-11-20.
+  `listWorkoutLogs` orders by `date`, `startedAt` and `id`, the timeline's tiebreak, so
+  `GET /api/v1/workouts/latest` and page boundaries are deterministic. Guarded by
+  `server/storage/__tests__/workoutListOrder.integration.test.ts`.
+- ~~**46. Combine checks the new workout's date less strictly than create does**~~ — Resolved
+  2026-11-20. The "no later than the athlete's own tomorrow" check moved to
+  `server/services/workoutDate.ts`, and `combineWorkouts` runs it before its transaction.
+  Guarded by `server/services/combineWorkouts.test.ts`.
+- ~~**47. `document_chunks` declares foreign keys the real table does not have**~~ — Resolved
+  2026-11-20. The declaration has no foreign keys, matching the vector-database table, and
+  migration `0128` drops them from any database a `drizzle-kit push` created them on (a no-op on
+  the main database). Guarded by `shared/schema/tables.cascade.test.ts`.
 - ~~**48. `APP_INSTANCE_COUNT` is dead configuration**~~ — Resolved 2026-11-19. Removed from
   the env schema, `.env.example` and the docs. A deployment that still sets it keeps booting,
   since the schema drops unknown variables; `server/env.test.ts` pins that.
@@ -366,5 +371,5 @@ not in them.
 | P1 — High | 6/6 | 0 | All resolved |
 | P2 — Medium | 6/6 | 0 | All resolved |
 | P3 — Low | 10/11 | 1 | #22 CSRF resolved via `csrf-csrf` double-submit; #29 dual-TS installs open (blocked on TS 7.1 API + typescript-eslint) |
-| Docs verification, 2026-11-17 | 23/42 | 19 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43, #51, #52, #53, #57, #60, #66, #68 and #71 resolved 2026-11-18; #34, #35, #39, #48 and #49 resolved 2026-11-19 |
-| **Total** | **51/71** | **20** | #29 is intentional interim state; the other 19 of #30–#71 are untriaged |
+| Docs verification, 2026-11-17 | 27/42 | 15 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43, #51, #52, #53, #57, #60, #66, #68 and #71 resolved 2026-11-18; #34, #35, #39, #48 and #49 resolved 2026-11-19; #44, #45, #46 and #47 resolved 2026-11-20, as were parts (a) and (c) of #38 (its part (b) is open) |
+| **Total** | **55/71** | **16** | #29 is intentional interim state; #38 (b) waits on an API-contract decision; the other 14 of #30–#71 are untriaged |

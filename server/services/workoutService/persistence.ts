@@ -91,6 +91,15 @@ export async function saveParsedWorkoutsBatch(
   }
 }
 
+/** Aborts a replacement that would leave the owner with no sets. */
+class NothingToReplaceWith extends Error {
+  constructor() {
+    super("The parse produced no sets to replace the existing ones with");
+    this.name = "NothingToReplaceWith";
+  }
+}
+
+
 // Replace-all semantics for an owner (either a logged workout or a plan day):
 // drop the existing rows inside a single tx and insert the new ones, so repeat
 // Parse calls don't accumulate duplicates. Shared by every reparse path.
@@ -100,15 +109,25 @@ export async function replaceExerciseSetsAndStructureByOwner(
   structureBlocks?: StructureBlockInput[],
 ): Promise<number> {
   let structureSetCount = 0;
-  await db.transaction(async (tx) => {
-    await tx.delete(exerciseSets).where(exerciseSetOwnerCondition(owner));
-    await tx.delete(workoutStructureBlocks).where(structureBlockOwnerCondition(owner));
-    if (setRows.length > 0) {
-      await tx.insert(exerciseSets).values(setRows);
-    }
-    if (structureBlocks !== undefined) {
-      structureSetCount = await replaceStructureForOwner(tx, owner, structureBlocks, structureReplacementOptions(setRows.length));
-    }
-  });
+  try {
+    await db.transaction(async (tx) => {
+      await tx.delete(exerciseSets).where(exerciseSetOwnerCondition(owner));
+      await tx.delete(workoutStructureBlocks).where(structureBlockOwnerCondition(owner));
+      if (setRows.length > 0) {
+        await tx.insert(exerciseSets).values(setRows);
+      }
+      if (structureBlocks !== undefined) {
+        structureSetCount = await replaceStructureForOwner(tx, owner, structureBlocks, structureReplacementOptions(setRows.length));
+      }
+      // A parse whose blocks yield no sets would leave the owner with none,
+      // and the caller answers 422: roll back so the old sets and structure
+      // survive the failed parse (tech debt #38).
+      if (setRows.length + structureSetCount === 0) throw new NothingToReplaceWith();
+    });
+  } catch (error) {
+    if (error instanceof NothingToReplaceWith) return 0;
+    throw error;
+  }
   return setRows.length + structureSetCount;
 }
+

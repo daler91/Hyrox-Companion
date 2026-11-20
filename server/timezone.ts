@@ -213,3 +213,54 @@ export function getLocalDateStrSafe(instant: Date, tz: string | null | undefined
     return getLocalDateStr(instant, "UTC");
   }
 }
+
+const OFFSET_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+
+function getOffsetFormatter(tz: string): Intl.DateTimeFormat {
+  let formatter = OFFSET_FORMATTERS.get(tz);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    OFFSET_FORMATTERS.set(tz, formatter);
+  }
+  return formatter;
+}
+
+/** How far `tz`'s wall clock is ahead of UTC at `instant`, in milliseconds. */
+function zoneOffsetMs(instant: number, tz: string): number {
+  const parts = getOffsetFormatter(tz).formatToParts(new Date(instant));
+  const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+  const wallClockAsUtc = Date.UTC(
+    part("year"),
+    part("month") - 1,
+    part("day"),
+    part("hour"),
+    part("minute"),
+    part("second"),
+  );
+  return wallClockAsUtc - Math.floor(instant / 1000) * 1000;
+}
+
+/**
+ * The instant at which `tz`'s wall clock reads `hour`:00 on the calendar date
+ * `dateStr`: local noon by default. The inverse of {@link getLocalDateStr} for
+ * a time of day, for a write that has a date but no moment of its own (a
+ * repeated nutrition day). Noon is safe from DST changes, which happen at
+ * night; an unusable zone falls back to UTC, as getLocalDateStrSafe does.
+ */
+export function localTimeOnDate(dateStr: string, tz: string | null | undefined, hour = 12): Date {
+  const wallClockAsUtc = parseDateStrToUtcMs(dateStr) + hour * 60 * 60 * 1000;
+  if (!tz || !isValidTimezone(tz)) return new Date(wallClockAsUtc);
+  const firstGuess = wallClockAsUtc - zoneOffsetMs(wallClockAsUtc, tz);
+  // A second pass settles the offset when the first guess landed on the
+  // other side of a DST change from the wall-clock time.
+  return new Date(wallClockAsUtc - zoneOffsetMs(firstGuess, tz));
+}

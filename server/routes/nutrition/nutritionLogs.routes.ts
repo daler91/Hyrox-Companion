@@ -14,7 +14,7 @@ import { type Request, type Response, Router } from "express";
 
 import { rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
 import { storage } from "../../storage";
-import { getLocalDateStr } from "../../timezone";
+import { getLocalDateStr, localTimeOnDate } from "../../timezone";
 import { getUserId } from "../../types";
 import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/protectedRouteBuilder";
 import { FOOD_NOT_FOUND, getUserTimezone, LOG_ENTRY_NOT_FOUND } from "./shared";
@@ -113,9 +113,11 @@ export function registerNutritionLogRoutes(router: Router): void {
       const now = new Date();
       const todayStr = getLocalDateStr(now, tz);
       const targetDate = body.targetDate ?? todayStr;
-      // Repeating onto today stamps "now"; onto another date, local noon of that
-      // date so the entry's instant falls within its logDate for most zones.
-      const loggedAt = targetDate === todayStr ? now : new Date(`${targetDate}T12:00:00Z`);
+      // Repeating onto today stamps "now"; onto another date, the athlete's own
+      // local noon on that date, so the entry's instant falls on its logDate in
+      // every zone. It used to be 12:00 UTC, which is the next local day east
+      // of UTC+12 and the day before west of UTC-12 (tech debt #44).
+      const loggedAt = targetDate === todayStr ? now : localTimeOnDate(targetDate, tz);
       const created = await storage.nutrition.repeatDay(userId, {
         sourceDate: body.sourceDate,
         mealType: body.mealType,

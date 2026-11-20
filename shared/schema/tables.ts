@@ -1598,18 +1598,21 @@ export const idempotencyKeys = pgTable(
 );
 
 // Document chunks for RAG pipeline - stores embedded chunks of coaching materials
+// Lives on the VECTOR database (vectorPool), which ensureVectorSchema()
+// (server/maintenance.ts) creates; the main database's migrations for it are
+// no-ops. That database has no users or coaching_materials table, so the real
+// table has no foreign keys and declares none here: they used to be declared,
+// and `drizzle-kit generate` would have emitted them (tech debt #47). Rows are
+// deleted explicitly instead, by CoachingStorage (server/storage/coaching.ts)
+// when a material goes and by the account erasure when the athlete does.
 export const documentChunks = pgTable(
   "document_chunks",
   {
     id: varchar("id", { length: 255 })
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    materialId: varchar("material_id", { length: 255 })
-      .notNull()
-      .references(() => coachingMaterials.id, { onDelete: "cascade" }),
-    userId: varchar("user_id", { length: 255 })
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    materialId: varchar("material_id", { length: 255 }).notNull(),
+    userId: varchar("user_id", { length: 255 }).notNull(),
     content: text("content").notNull(),
     chunkIndex: integer("chunk_index").notNull(),
     embedding: vector("embedding", { dimensions: 3072 }),
