@@ -1,4 +1,4 @@
-import type { RegisterSWOptions } from "virtual:pwa-register";
+import type { RegisterSWOptions } from "vite-plugin-pwa/types";
 
 import { ToastAction } from "@/components/ui/toast";
 import { toast } from "@/hooks/use-toast";
