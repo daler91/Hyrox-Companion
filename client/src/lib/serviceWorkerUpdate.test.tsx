@@ -19,7 +19,7 @@ describe("registerServiceWorker", () => {
 
   function registerWithFake() {
     let options: RegisterSWOptions = {};
-    const updateServiceWorker = vi.fn(async () => undefined);
+    const updateServiceWorker = vi.fn(() => Promise.resolve());
     registerServiceWorker((given) => {
       options = given;
       return updateServiceWorker;

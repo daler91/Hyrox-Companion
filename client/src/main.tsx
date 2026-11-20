@@ -43,9 +43,12 @@ import { registerSW } from "virtual:pwa-register";
 const shouldRegisterServiceWorkers =
   !("Cypress" in globalThis) && "serviceWorker" in globalThis.navigator;
 
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("index.html has no #root element to render into");
+
 // The root error callbacks report to Sentry; see rootErrorHandlers for why a
 // boundary-caught error is reported once, by its boundary.
-createRoot(document.getElementById("root")!, rootErrorHandlers).render(
+createRoot(rootElement, rootErrorHandlers).render(
   <Sentry.ErrorBoundary fallback={FallbackErrorBoundary}>
     <App />
   </Sentry.ErrorBoundary>
