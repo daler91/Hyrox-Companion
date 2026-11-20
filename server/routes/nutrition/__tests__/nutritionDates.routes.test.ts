@@ -87,3 +87,31 @@ describe("impossible calendar dates are a 400 on every nutrition date input (C49
     expect(res.body.logDate).toBe("2028-02-29");
   });
 });
+
+// Tech debt #44: repeating a day onto another date stamped 12:00 UTC, which is
+// another local day for an athlete far from UTC.
+describe("POST /api/v1/nutrition/logs/repeat stamps the athlete's local noon", () => {
+  let app: ReturnType<typeof createTestApp>;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearRateLimitBuckets();
+    const router = Router();
+    registerNutritionRoutes(router);
+    app = createTestApp(router);
+    vi.mocked(storage.nutrition.repeatDay).mockResolvedValue(2);
+  });
+
+  it("stamps noon on the target date in the athlete's own zone", async () => {
+    vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "Pacific/Kiritimati" } as never);
+
+    const res = await request(app)
+      .post("/api/v1/nutrition/logs/repeat")
+      .send({ sourceDate: "2020-01-01", targetDate: "2020-01-02" });
+
+    expect(res.status).toBe(201);
+    const { loggedAt, targetDate } = vi.mocked(storage.nutrition.repeatDay).mock.calls[0][1];
+    expect(targetDate).toBe("2020-01-02");
+    expect(loggedAt.toISOString()).toBe("2020-01-01T22:00:00.000Z");
+  });
+});

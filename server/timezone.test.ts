@@ -7,6 +7,7 @@ import {
   getLocalDayOfWeek,
   isLocalHourDue,
   isValidTimezone,
+  localTimeOnDate,
 } from "./timezone";
 
 describe("getLocalDayOfWeek", () => {
@@ -186,5 +187,33 @@ describe("isLocalHourDue", () => {
     expect(counts.size).toBe(362);
     // Twice at most, and only where a fall-back repeats the hour itself.
     expect(Math.max(...counts.values())).toBeLessThanOrEqual(2);
+  });
+});
+
+// Tech debt #44: a repeated nutrition day was stamped 12:00 UTC, which is
+// another local day for an athlete far from UTC.
+describe("localTimeOnDate", () => {
+  it("is the instant the athlete's clock reads noon on that date", () => {
+    expect(localTimeOnDate("2026-11-10", "UTC").toISOString()).toBe("2026-11-10T12:00:00.000Z");
+    expect(localTimeOnDate("2026-11-10", "America/Chicago").toISOString()).toBe("2026-11-10T18:00:00.000Z");
+    expect(localTimeOnDate("2026-11-10", "Pacific/Kiritimati").toISOString()).toBe("2026-11-09T22:00:00.000Z");
+    expect(localTimeOnDate("2026-11-10", "Asia/Kathmandu").toISOString()).toBe("2026-11-10T06:15:00.000Z");
+  });
+
+  it("lands on its own local date even where noon UTC would not", () => {
+    for (const tz of ["Pacific/Kiritimati", "Pacific/Pago_Pago", "Asia/Tokyo", "America/Los_Angeles"]) {
+      expect(getLocalDateStr(localTimeOnDate("2026-11-10", tz), tz)).toBe("2026-11-10");
+    }
+    expect(getLocalDateStr(new Date("2026-11-10T12:00:00Z"), "Pacific/Kiritimati")).toBe("2026-11-11");
+  });
+
+  it("follows daylight saving on either side of a change", () => {
+    expect(localTimeOnDate("2026-03-07", "America/New_York").toISOString()).toBe("2026-03-07T17:00:00.000Z");
+    expect(localTimeOnDate("2026-03-08", "America/New_York").toISOString()).toBe("2026-03-08T16:00:00.000Z");
+  });
+
+  it("falls back to UTC for an absent or unusable zone", () => {
+    expect(localTimeOnDate("2026-11-10", null).toISOString()).toBe("2026-11-10T12:00:00.000Z");
+    expect(localTimeOnDate("2026-11-10", "Not/AZone").toISOString()).toBe("2026-11-10T12:00:00.000Z");
   });
 });

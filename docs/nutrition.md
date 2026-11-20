@@ -157,7 +157,7 @@ The everyday loop: find a food, log it, see your day.
   older foods ordered by when they were last logged.
 - **Repeat a day / meal** (`POST /logs/repeat`, FR-1.5) — copy a previous day (or
   one of its meals) onto a target day (local today unless the request names one),
-  re-stamped to the target instant. The page's "Repeat previous day" and each empty
+  re-stamped to the target instant: now when the target is today, otherwise noon on the target date in the athlete's own timezone (`localTimeOnDate`, `server/timezone.ts`), so the instant always falls on its `logDate`. The page's "Repeat previous day" and each empty
   meal's "Copy yesterday's" copy from the day before the one on screen.
 - **Edit / delete entries** (`PATCH`/`DELETE /logs/:id`, FR-1.6) — moving an
   entry's instant recomputes its local `logDate`.
