@@ -305,12 +305,12 @@ List workout logs for the current user with pagination.
 - **Auth:** Required
 - **Rate limit:** `workoutList` category, 60/min
 - **Query params:** `limit` (default 50, max 200), `offset` (default 0)
-- **Response:** `WorkoutLog[]`, newest `date` first (rows only; no exercise sets)
+- **Response:** `WorkoutLog[]`, newest `date` first, logs on the same day by `startedAt` and then `id`, both descending, so pages never repeat or skip one (rows only; no exercise sets)
 - **Errors:** `400 BAD_REQUEST` for a non-numeric or sub-1 `limit` or a negative `offset`; `412 PRECONDITION_FAILED` (with `maxLimit`) for a `limit` above 200 — it is refused, not clamped
 
 ### GET /api/v1/workouts/latest
 
-Get the most recent workout log (latest `date`) for the current user. Unlike `GET /api/v1/workouts/:id`, it does not derive missing sets from structure and carries no `suggestedRpe`.
+Get the most recent workout log for the current user: the first row of the list above (latest `date`, then `startedAt`, then `id`). Unlike `GET /api/v1/workouts/:id`, it does not derive missing sets from structure and carries no `suggestedRpe`.
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 60/min
