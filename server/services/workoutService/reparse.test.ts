@@ -186,6 +186,7 @@ describe("reparseWorkout / reparsePlanDay (text)", () => {
 
   it("targets the plan-day owner and plan context", async () => {
     textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
+    replaceMock.mockResolvedValue(1);
     await reparsePlanDay({ id: "p1", mainWorkout: "squats" }, UNITS, USER_ID);
     expect(textMock).toHaveBeenCalledWith("squats", UNITS, undefined, USER_ID);
     expect(expandMock).toHaveBeenCalledWith([ex("squat")], { planDayId: "p1" }, "plan", UNITS);
@@ -233,9 +234,22 @@ describe("reparseWorkoutFromImage / reparsePlanDayFromImage", () => {
 
   it("targets the plan-day owner for plan-day images", async () => {
     imageMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
+    replaceMock.mockResolvedValue(1);
     await reparsePlanDayFromImage({ id: "p1" }, image, UNITS, "user1");
     expect(expandMock).toHaveBeenCalledWith([ex("squat")], { planDayId: "p1" }, "plan", UNITS);
     expect(counterMock).toHaveBeenCalledWith("plan_day", "photo", MANUAL_FIX);
+  });
+
+  // Tech debt #38 (c): a parse that writes no sets replaces nothing, so it
+  // is not a completed manual fix.
+  it("does not count a manual fix when the parse wrote no sets", async () => {
+    imageMock.mockResolvedValue(parseResult({ structureBlocks: [{ sectionType: "main", formatType: "steady", steps: [] }] }));
+    replaceMock.mockResolvedValue(0);
+
+    const result = (await reparsePlanDayFromImage({ id: "p1" }, image, UNITS, "user1")) as WriteResult;
+
+    expect(result.setCount).toBe(0);
+    expect(counterMock).not.toHaveBeenCalledWith("plan_day", "photo", MANUAL_FIX);
   });
 
   it("returns null when the image yields nothing", async () => {

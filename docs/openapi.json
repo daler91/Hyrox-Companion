@@ -23396,11 +23396,13 @@
                 "properties": {
                   "mainWorkout": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "maxLength": 50000
                   },
                   "accessory": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "maxLength": 50000
                   }
                 },
                 "additionalProperties": false
