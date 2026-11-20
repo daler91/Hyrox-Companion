@@ -19,7 +19,7 @@ export function useGarminConnectionController(garminStatus: GarminStatus | undef
   const pausedUntil = isConnected ? (garminStatus?.syncPausedUntil ?? null) : null;
   const [endedPause, setEndedPause] = useState<string | null>(null);
   useEffect(() => {
-    if (!pausedUntil) return;
+    if (!pausedUntil) return undefined;
     const timer = setTimeout(
       () => setEndedPause(pausedUntil),
       Math.max(0, new Date(pausedUntil).getTime() - Date.now()),
