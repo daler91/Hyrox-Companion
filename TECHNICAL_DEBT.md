@@ -122,16 +122,23 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
   full-text fallback) now wrap each piece in a `<coaching_material>` tag the escaped text
   cannot close, and tell the model to treat it strictly as data
   (`COACHING_MATERIALS_ARE_DATA`). Guarded by `materialsBuilder.test.ts`.
-- **34. Dev auth bypass stays active alongside Clerk keys** — Reported. In development or test
-  with `ALLOW_DEV_AUTH_BYPASS=true` and both Clerk keys set, a request without a valid Clerk
-  session runs as `dev-user` unless it sends `x-test-no-bypass: true`
-  (`server/clerkAuth.ts:86-125`). Not reachable in production.
-- **35. Training-style fields are stored as the client sends them, and style history is never
-  written** — Confirmed. `trainingStyleId` is any string up to 100 characters
-  (`shared/schema/types/users.ts:67`); the previous id and changed-at timestamp come from the
-  client (`client/src/pages/settings/usePreferencesForm.tsx`). An unregistered id is stored
-  and coached as Balanced. No runtime code writes `user_training_style`: only migration
-  `0035` and `script/backfill-user-training-style.ts` insert rows.
+- ~~**34. Dev auth bypass stays active alongside Clerk keys**~~ — Resolved 2026-11-19. With
+  Clerk keys set, the dev fallback now serves only a request carrying `x-dev-auth-bypass: true`
+  (`DEV_AUTH_BYPASS_HEADER`, `shared/devAuth.ts`), which the web client sends on every API call
+  while it bypasses auth (the dev preview, Cypress); any other signed-out request gets a `401`,
+  as in production. Without Clerk keys nothing changed. `devBypassAllowedFor()` in
+  `server/clerkAuth.ts` decides for both `isAuthenticated` and `getUserId`. Guarded by
+  `server/clerkAuth.test.ts` and `client/src/lib/queryClient.test.ts`.
+- ~~**35. Training-style fields are stored as the client sends them, and style history is never
+  written**~~ — Resolved 2026-11-19. `trainingStyleId` stays a string on the wire but must be one
+  of `TRAINING_STYLE_IDS` (`shared/trainingStyles.ts`), which `registry.test.ts` keeps in step
+  with the strategies. `updateUserPreferences` drops client-sent `trainingStylePreviousId` and
+  `trainingStyleChangedAt` (still accepted, marked deprecated), sets both itself when a save
+  changes the effective style, and appends a `user_training_style` row in the same transaction
+  (`onboarding` before onboarding is complete, `settings` after). The web client stopped sending
+  the two fields; the Android app still sends them, harmlessly. Guarded by
+  `server/routes/__tests__/preferences.test.ts` and
+  `server/storage/__tests__/userPreferences.integration.test.ts`.
 
 ### Correctness
 
@@ -153,10 +160,15 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
   50,000 characters. (c) Reported: a workout reparse that yields structure blocks but no
   accepted rows may replace the log's sets with none and then return `422`
   (`server/services/workoutService/reparse.ts:107-117`).
-- **39. An email is lost when its send fails** — Confirmed (by design). Every email worker
-  claims its ledger column before sending and the send queues do not retry
-  (`server/emailScheduler.ts:89-98`, `NO_RETRY_JOB_OPTIONS` in `server/queue.ts`), so with Resend
-  failing or `RESEND_API_KEY` unset the claim is spent and that window's email is never sent.
+- ~~**39. An email is lost when its send fails**~~ — Resolved 2026-11-19. The jobs stay
+  no-retry, because each also sends a push that a rerun would repeat; `sendEmail()` retries the
+  email alone instead. A failure that may pass (Resend's rate limit or a server error, or no
+  response) is tried twice more, 2 s and 8 s apart, and one that won't (a bad address, key or
+  quota) is not. Every attempt carries the same Resend `Idempotency-Key`
+  (`emailIdempotencyKey()`: the email kind plus a hash of the athlete and their local date), so
+  an attempt that sent but looked failed cannot deliver twice. With `RESEND_API_KEY` unset
+  nothing changed: the email could never have gone, and the push it shares a claim with still
+  does. Guarded by `server/email.test.ts`.
 - ~~**40. Per-user AI budget lookups fail open in five inline generators**~~ — Resolved
   2026-11-17. Coach insights, overview analysis, nutrition insights, race prediction and the
   structured apply logged a failed lookup and made the provider call. None does now: the
@@ -201,11 +213,16 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
   `ensureVectorSchema()` creates the table without them (`server/maintenance.ts:188-198`).
   Deletes are explicit today. `drizzle-kit generate` would emit the keys if the table ever
   left its no-op migrations.
-- **48. `APP_INSTANCE_COUNT` is dead configuration** — Confirmed. Validated in
-  `server/env.ts:136`, read by no code. Remove it or give it a job.
-- **49. The v1 encryption key cannot be retired** — Reported. `ENCRYPTION_KEY` is required by
-  the schema and `ENCRYPTION_KEY_V2` must differ from it, so the rotation procedure in
-  `docs/env-reference.md` has no supported end state in which the old key is removed.
+- ~~**48. `APP_INSTANCE_COUNT` is dead configuration**~~ — Resolved 2026-11-19. Removed from
+  the env schema, `.env.example` and the docs. A deployment that still sets it keeps booting,
+  since the schema drops unknown variables; `server/env.test.ts` pins that.
+- ~~**49. The v1 encryption key cannot be retired**~~ — Resolved 2026-11-19. `ENCRYPTION_KEY`
+  is optional once `ENCRYPTION_KEY_V2` is set (one of the two is always required). With it
+  unset, the last startup step counts stored credentials still encrypted with it
+  (`assertNoCredentialsOnMissingKey()`, `server/services/keyRotation.ts`) and leaves the server
+  not ready if there are any. The rotation steps in `docs/env-reference.md` now end with
+  removing the key. Guarded by `server/env.test.ts`, `server/cryptoRotation.test.ts` and
+  `server/services/keyRotation.test.ts`.
 - **50. Unit brands stop at the storage boundary** — Reported. `MafTestMetrics` and the
   Drizzle rows are plain `number`, so assigning minutes to `durationSeconds` still compiles;
   and rule 4 of `docs/adr-units.md` ("required, not defaulted") is not met by
@@ -349,5 +366,5 @@ not in them.
 | P1 — High | 6/6 | 0 | All resolved |
 | P2 — Medium | 6/6 | 0 | All resolved |
 | P3 — Low | 10/11 | 1 | #22 CSRF resolved via `csrf-csrf` double-submit; #29 dual-TS installs open (blocked on TS 7.1 API + typescript-eslint) |
-| Docs verification, 2026-11-17 | 18/42 | 24 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43, #51, #52, #53, #57, #60, #66, #68 and #71 resolved 2026-11-18 |
-| **Total** | **46/71** | **25** | #29 is intentional interim state; the other 24 of #30–#71 are untriaged |
+| Docs verification, 2026-11-17 | 23/42 | 19 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43, #51, #52, #53, #57, #60, #66, #68 and #71 resolved 2026-11-18; #34, #35, #39, #48 and #49 resolved 2026-11-19 |
+| **Total** | **51/71** | **20** | #29 is intentional interim state; the other 19 of #30–#71 are untriaged |

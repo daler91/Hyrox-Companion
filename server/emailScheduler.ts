@@ -33,7 +33,7 @@ import { calculatePersonalRecords, countPersonalRecordsInRange } from "./service
 import { getLocalMondayWeekBoundaries } from "./services/weeklyProgress";
 import { buildWeeklyReview } from "./services/weeklyReviewService";
 import type { IStorage } from "./storage";
-import { addDaysLocal, getLocalDateStr, getLocalDayOfWeek, isLocalHourDue } from "./timezone";
+import { addDaysLocal, getLocalDateStr, getLocalDateStrSafe, getLocalDayOfWeek, isLocalHourDue } from "./timezone";
 
 // Claim windows for the send ledgers. Both are shorter than their nominal
 // cadence on purpose: the stamp now lands when the claim is taken rather than
@@ -154,10 +154,11 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
     weekEndDate: weekEndStr,
   };
 
-  // The claim is already recorded; a failed send costs this athlete the week
-  // rather than risking a duplicate. The email queues are no-retry anyway
-  // (queue.ts), so a failure was never going to be retried.
-  const sent = await sendWeeklySummary(user, summaryData);
+  // The claim is already recorded, and the job is never retried (queue.ts),
+  // so a retry here would duplicate the push below. sendEmail retries the
+  // email alone instead, under an idempotency key that stops a retry after an
+  // unclear failure from delivering it twice (tech debt #39).
+  const sent = await sendWeeklySummary(user, summaryData, getLocalDateStrSafe(now, tz));
 
   // Also send push notification (fire-and-forget). The .catch is load-bearing:
   // sendPushToUser awaits a DB read before its own allSettled guard, and an
@@ -213,7 +214,7 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
     mainWorkout: m.mainWorkout,
     planName: m.planName,
   }));
-  const sent = await sendMissedWorkoutReminder(user, missedData);
+  const sent = await sendMissedWorkoutReminder(user, missedData, todayStr);
 
   // Also send push notification (fire-and-forget; .catch is load-bearing —
   // see processWeeklySummary).
@@ -275,7 +276,9 @@ export async function processMafTestReminder(storage: IStorage, user: User, now:
   const claimed = await storage.users.claimMafBaselineTest(user.id, now);
   if (!claimed) return false;
 
-  const emailSent = user.emailNotifications ? await sendMafTestReminder(user) : false;
+  const emailSent = user.emailNotifications
+    ? await sendMafTestReminder(user, getLocalDateStrSafe(now, user.userTimezone))
+    : false;
 
   // Push is fire-and-forget and no-ops when the user has no subscription
   // (.catch is load-bearing — see processWeeklySummary).
@@ -418,7 +421,7 @@ export async function processWeeklyReviewReminder(storage: IStorage, user: User,
     personalRecords: review.personalRecords.map((pr) => ({ exerciseName: pr.exerciseName, metric: pr.metric })),
     previousIntent: review.previousIntent,
   };
-  const sent = await sendWeeklyReviewReminder(user, data);
+  const sent = await sendWeeklyReviewReminder(user, data, getLocalDateStrSafe(now, tz));
 
   // Push rides along fire-and-forget (.catch is load-bearing — see processWeeklySummary).
   void sendPushToUser(user.id, {
@@ -472,7 +475,7 @@ export async function processTodaySessionBrief(storage: IStorage, user: User, no
   if (!claimed) return false;
 
   const data: TodaySessionData = { date: targetDate, isTomorrow, sessions };
-  const sent = await sendTodaySessionBrief(user, data);
+  const sent = await sendTodaySessionBrief(user, data, getLocalDateStrSafe(now, user.userTimezone));
 
   void sendPushToUser(user.id, buildTodaySessionPush(data)).catch((err: unknown) => {
     // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
@@ -579,7 +582,7 @@ export async function processAnalysisDigest(storage: IStorage, user: User, now: 
     coachInsightsMarkdown,
     coachInsightsGeneratedAt: coachInsightsMarkdown ? (coachRow?.generatedAt.toISOString() ?? null) : null,
   };
-  const sent = await sendAnalysisDigest(user, data);
+  const sent = await sendAnalysisDigest(user, data, getLocalDateStrSafe(now, user.userTimezone));
 
   const insightsSuffix = coachInsightsMarkdown ? " · new coach insights" : "";
   const pushBody = racePrediction

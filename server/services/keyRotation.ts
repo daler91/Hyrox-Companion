@@ -3,7 +3,7 @@ import { garminConnections, stravaConnections } from "@shared/schema";
 import { and, type AnyColumn, eq, isNull, type SQL } from "drizzle-orm";
 
 import { withPgAdvisoryLock } from "../advisoryLock";
-import { currentKeyVersion, reencryptToken } from "../crypto";
+import { currentKeyVersion, needsMissingKey, reencryptToken } from "../crypto";
 import { db, pool } from "../db";
 import { env } from "../env";
 import { logger } from "../logger";
@@ -229,5 +229,43 @@ export async function maybeReencryptOnBoot(): Promise<void> {
     // operational failure of the sweep, not credential material.
     // bearer:disable javascript_lang_logger_leak
     logger.error({ context: "crypto", err: error }, "Credential re-encrypt sweep failed");
+  }
+}
+
+/**
+ * How many stored Strava and Garmin credentials need a key that is not
+ * configured, i.e. can no longer be decrypted. Zero unless a key was removed.
+ */
+export async function countCredentialsOnMissingKey(): Promise<number> {
+  const strava = await db
+    .select({ accessToken: stravaConnections.accessToken, refreshToken: stravaConnections.refreshToken })
+    .from(stravaConnections);
+  const garmin = await db
+    .select({
+      encryptedEmail: garminConnections.encryptedEmail,
+      encryptedPassword: garminConnections.encryptedPassword,
+      encryptedOauth1Token: garminConnections.encryptedOauth1Token,
+      encryptedOauth2Token: garminConnections.encryptedOauth2Token,
+    })
+    .from(garminConnections);
+  const stranded = (values: (string | null)[]) => values.some((value) => value !== null && needsMissingKey(value));
+  return [...strava, ...garmin].filter((row) => stranded(Object.values(row))).length;
+}
+
+/**
+ * Startup guard for retiring the v1 key (tech debt #49). ENCRYPTION_KEY may be
+ * left unset once ENCRYPTION_KEY_V2 is set, but not while a stored credential
+ * still needs it: that athlete's connection could never be read again. Throws,
+ * which leaves the server not ready with this reason, as missing Clerk keys do.
+ * Nothing to check while ENCRYPTION_KEY is set.
+ */
+export async function assertNoCredentialsOnMissingKey(): Promise<void> {
+  if (env.ENCRYPTION_KEY) return;
+  const stranded = await countCredentialsOnMissingKey();
+  if (stranded > 0) {
+    throw new Error(
+      `ENCRYPTION_KEY is not set, but ${stranded} stored credential(s) are still encrypted with it. ` +
+        "Set it again, restart once with ENCRYPTION_REENCRYPT_ON_BOOT=true to move them to ENCRYPTION_KEY_V2, then remove it.",
+    );
   }
 }

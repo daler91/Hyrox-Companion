@@ -364,3 +364,35 @@ describe("maybeReencryptOnBoot", () => {
     );
   });
 });
+
+// Tech debt #49: ENCRYPTION_KEY may be removed after a rotation, but boot must
+// not finish while a stored credential still needs it.
+describe("assertNoCredentialsOnMissingKey", () => {
+  it("checks nothing while ENCRYPTION_KEY is set", async () => {
+    const { assertNoCredentialsOnMissingKey } = await loadKeyRotation();
+
+    await expect(assertNoCredentialsOnMissingKey()).resolves.toBeUndefined();
+    expect(selectSpy).not.toHaveBeenCalled();
+  });
+
+  it("refuses to finish booting while a credential is still on the removed key", async () => {
+    const stranded = await makeV1Cipher("garmin-oauth2");
+    const { assertNoCredentialsOnMissingKey, crypto } = await loadKeyRotation({ ENCRYPTION_KEY: undefined });
+    stravaRows = [{ accessToken: crypto.encryptToken("current"), refreshToken: null }];
+    garminRows = [
+      { encryptedEmail: null, encryptedPassword: null, encryptedOauth1Token: null, encryptedOauth2Token: stranded },
+    ];
+
+    await expect(assertNoCredentialsOnMissingKey()).rejects.toThrow(
+      /ENCRYPTION_KEY is not set, but 1 stored credential\(s\) are still encrypted with it/,
+    );
+  });
+
+  it("lets boot finish once every credential is on the remaining key", async () => {
+    const { assertNoCredentialsOnMissingKey, crypto } = await loadKeyRotation({ ENCRYPTION_KEY: undefined });
+    stravaRows = [{ accessToken: crypto.encryptToken("a"), refreshToken: crypto.encryptToken("r") }];
+    garminRows = [];
+
+    await expect(assertNoCredentialsOnMissingKey()).resolves.toBeUndefined();
+  });
+});

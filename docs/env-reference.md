@@ -43,7 +43,7 @@ Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`)
 |---|---|---|---|
 | `DATABASE_URL` | **Required** | — | Server (`server/db.ts`), pg-boss queue. |
 | `VECTOR_DATABASE_URL` | Optional | falls back to `DATABASE_URL` | RAG ingest + retrieval and semantic food search embeddings (`server/vectorDb.ts`; tables created on boot by `server/maintenance.ts`). |
-| `ENCRYPTION_KEY` | **Required** | — | AES-256-GCM for Strava + Garmin tokens at rest (`server/crypto.ts`). Also derives the HMAC key that signs email unsubscribe links (`server/emailUnsubscribeToken.ts`, which signs with `ENCRYPTION_KEY_V2` when set and verifies with either). |
+| `ENCRYPTION_KEY` | **Required** (until retired) | — | AES-256-GCM for Strava + Garmin tokens at rest (`server/crypto.ts`). Also derives the HMAC key that signs email unsubscribe links (`server/emailUnsubscribeToken.ts`, which signs with `ENCRYPTION_KEY_V2` when set and verifies with either). May be left unset only once `ENCRYPTION_KEY_V2` is set and every stored credential has moved to it (see the rotation steps below); one of the two must always be set. |
 | `ENCRYPTION_KEY_V2` | Optional | — | Rotation key for `ENCRYPTION_KEY` (W6). When set, new ciphertext is tagged `v2` and encrypted with this key while `ENCRYPTION_KEY` keeps decrypting existing `v1` data (`server/crypto.ts`). |
 | `ENCRYPTION_REENCRYPT_ON_BOOT` | Optional | `"false"` | `"true"` (and `ENCRYPTION_KEY_V2` set) re-encrypts every stored Strava/Garmin credential to the active key version on boot (`server/services/keyRotation.ts`, invoked from `server/maintenance.ts`). |
 | `CSRF_SECRET` | Required in `production` | per-process random secret in dev/test | `csrf-csrf` middleware (`server/middleware/csrf.ts`). |
@@ -60,6 +60,7 @@ Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`)
 - **Required in production**: `CSRF_SECRET` must be set when `NODE_ENV=production`, and so must `STRAVA_STATE_SECRET` whenever `STRAVA_CLIENT_ID` is set. Either missing is fatal.
 - **Weak-key rejection**: A small set of obvious placeholder keys (all-zeros, `changeme_...`, the CI test key, etc.) is explicitly rejected in production via the `WEAK_ENCRYPTION_KEYS` list in `server/env.ts:17-23`. The same check applies to `ENCRYPTION_KEY_V2`.
 - **Rotation-key separation**: when `ENCRYPTION_KEY_V2` is set it must differ from both `ENCRYPTION_KEY` (an identical rotation key is a no-op that tags ciphertext `v2` with no new material) and `CSRF_SECRET`. If it matches either, the server refuses to boot.
+- **A retired v1 key**: with `ENCRYPTION_KEY` unset (and `ENCRYPTION_KEY_V2` set), startup counts the stored Strava and Garmin credentials still encrypted with it (`assertNoCredentialsOnMissingKey()` in `server/services/keyRotation.ts`, the last step of `runStartupMaintenance()`). Any at all and the server stays not-ready with the count and the fix in its startup error, rather than running with connections it can no longer read.
 - **Dev bypass lockout**: `ALLOW_DEV_AUTH_BYPASS=true` combined with `NODE_ENV=production` is a hard fatal — the server refuses to boot. `server/index.ts` repeats the check and exits, and `server/clerkAuth.ts` ignores the flag in production as a third guard.
 - **Paired variables**: `ANDROID_APP_PACKAGE` / `ANDROID_APP_CERT_SHA256` and `EDAMAM_APP_ID` / `EDAMAM_APP_KEY` must each be set together or not at all; a half-configured pair is fatal.
 - **RAG chunking**: `RAG_CHUNK_SIZE` must be a positive whole number and `RAG_CHUNK_OVERLAP` a whole number from `0` up to one less than it. A size of `0` or less never advanced the chunker, so an embed job looped forever.
@@ -75,7 +76,8 @@ Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`)
 
 1. Generate a fresh key and set it as `ENCRYPTION_KEY_V2`, leaving `ENCRYPTION_KEY` in place. New writes are tagged `v2`; existing `v1` ciphertext still decrypts with the old key.
 2. Set `ENCRYPTION_REENCRYPT_ON_BOOT=true` and redeploy once. The boot sweep re-encrypts stored credentials forward to the active key version.
-3. Set `ENCRYPTION_REENCRYPT_ON_BOOT` back to `"false"`. **Keep both keys configured**: every ciphertext carries the version that produced it (`v1:iv:authTag:ciphertext`), so `v2` rows can only be decrypted while `ENCRYPTION_KEY_V2` is still set. The v1 key may be retired only once the migration is verified complete and nothing references `v1` — and retiring it means removing `ENCRYPTION_KEY`'s old value, never moving the new key into it.
+3. Set `ENCRYPTION_REENCRYPT_ON_BOOT` back to `"false"`. Every ciphertext carries the version that produced it (`v1:iv:authTag:ciphertext`), so `v2` rows can only be decrypted while `ENCRYPTION_KEY_V2` is still set: keep it set from now on.
+4. Retire the v1 key by removing `ENCRYPTION_KEY`, never by moving the new key into it. If any stored credential still needs it (the sweep skipped a row, or one was written before the deploy finished), the server refuses to finish booting and says how many; set the key again, rerun step 2, and try once more. Email unsubscribe links signed with the old key stop working once it is gone; those signed since step 1 use `ENCRYPTION_KEY_V2`.
 
 Leave `ENCRYPTION_REENCRYPT_ON_BOOT` at its `"false"` default the rest of the time so a normal deploy never rewrites the credential tables. See the rotation comment in `server/crypto.ts` for the keyring mechanics.
 
@@ -83,7 +85,7 @@ Leave `ENCRYPTION_REENCRYPT_ON_BOOT` at its `"false"` default the rest of the ti
 
 ### Runtime topology
 
-`APP_INSTANCE_COUNT` defaults to `1` and records the declared app replica count. It is validated (a positive integer) but no code reads it: the shared-state mechanisms below are always on, whatever its value. Running more than one replica is supported after applying migrations: route rate limits use PostgreSQL-backed buckets, the Clerk seen-cache and AI/RAG hot caches use `server_runtime_cache`, and cron bodies use PostgreSQL advisory locks so duplicate schedulers skip work.
+No setting declares the replica count: the shared-state mechanisms below are always on. (`APP_INSTANCE_COUNT`, which recorded it without any code reading it, was removed on 2026-11-19; a deployment that still sets it is unaffected.) Running more than one replica is supported after applying migrations: route rate limits use PostgreSQL-backed buckets, the Clerk seen-cache and AI/RAG hot caches use `server_runtime_cache`, and cron bodies use PostgreSQL advisory locks so duplicate schedulers skip work.
 
 ---
 
@@ -96,7 +98,7 @@ Clerk is optional in development and test: when the keys are unset, you can run 
 | `CLERK_PUBLISHABLE_KEY` | Optional | — | Server (`@clerk/express`). Must be set if Clerk is enabled at all. |
 | `CLERK_SECRET_KEY` | Optional | — | Server. Must be set if Clerk is enabled. Also used by account erasure to delete the Clerk user (`server/services/accountErasureService.ts`). |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Optional | — | **Client** (`client/src/App.tsx`, `client/src/lib/authBypass.ts`). A dev build without it skips Clerk entirely. Browser-visible — do not put the secret key here. |
-| `ALLOW_DEV_AUTH_BYPASS` | Optional | — | Skip auth in dev: only the exact value `"true"` enables it, and only when `NODE_ENV` is `development` or `test`. Requests then run as `dev-user`. When Clerk keys are also set, a request without a valid Clerk session still falls back to `dev-user` unless it sends `x-test-no-bypass: true`. **Hard-blocked in production.** |
+| `ALLOW_DEV_AUTH_BYPASS` | Optional | — | Skip auth in dev: only the exact value `"true"` enables it, and only when `NODE_ENV` is `development` or `test`. Requests then run as `dev-user`. When Clerk keys are also set, a request without a valid Clerk session falls back to `dev-user` only if it sends `x-dev-auth-bypass: true` (the web client does while it bypasses auth: the dev preview and Cypress); any other gets a `401`, as in production. `x-test-no-bypass: true` opts a request out. **Hard-blocked in production.** |
 
 ---
 
@@ -224,7 +226,6 @@ The `release` tag is set explicitly in both inits. On the server it is `process.
 | `NODE_ENV` | `development` | `development` \| `production` \| `test`. |
 | `PORT` | `5000` | HTTP listener port. |
 | `LOG_LEVEL` | `info` | Pino level: `trace` \| `debug` \| `info` \| `warn` \| `error` \| `fatal` \| `silent`. Any other value fails startup validation. |
-| `APP_INSTANCE_COUNT` | `1` | Declared app replica count (positive integer). Validated only; no code reads it. Postgres-backed rate limits and cache entries are used at any value, so running more than one replica needs the shared runtime-state migration regardless. |
 | `ALLOW_DEV_AUTH_BYPASS` | — | Dev-only. See [Authentication (Clerk)](#authentication-clerk). |
 
 ---

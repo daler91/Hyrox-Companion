@@ -77,6 +77,9 @@ describe('Strava OAuth routes: the callback only completes in the browser that c
     }));
     vi.doMock('./clerkAuth', () => ({
       DEV_USER_ID: 'dev-user',
+      // The env above has the bypass on and no Clerk keys, where every
+      // request may fall back to the dev user.
+      devBypassAllowedFor: () => true,
       isAuthenticated: (_req: Request, _res: Response, next: NextFunction) => {
         next();
       },

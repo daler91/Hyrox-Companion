@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { isCypressTest, isDevPreview, shouldBypassAuth } from "./authBypass";
+import { devAuthBypassHeaders, isCypressTest, isDevPreview, shouldBypassAuth } from "./authBypass";
 
 type WithCypress = typeof globalThis & { Cypress?: unknown };
 
@@ -35,5 +35,15 @@ describe("authBypass", () => {
     vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", "");
     expect(isDevPreview()).toBe(false);
     expect(shouldBypassAuth()).toBe(false);
+  });
+
+  // Tech debt #34: a dev server with Clerk keys grants the dev-user fallback
+  // only to requests that ask for it.
+  it("asks for the dev-user fallback only while auth is bypassed", () => {
+    vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", "");
+    expect(devAuthBypassHeaders()).toEqual({ "x-dev-auth-bypass": "true" });
+
+    vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", "configured");
+    expect(devAuthBypassHeaders()).toEqual({});
   });
 });

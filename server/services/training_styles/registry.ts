@@ -1,8 +1,8 @@
+import { DEFAULT_TRAINING_STYLE_ID } from "@shared/trainingStyles";
+
 import type { TrainingContext, UpcomingWorkout, WorkoutSuggestion } from "../../gemini";
 import { logger } from "../../logger";
 import type { ResolvedTrainingStyle, TrainingStyleStrategy } from "./types";
-
-const DEFAULT_TRAINING_STYLE_ID = "balanced_default";
 
 type AnalysisClass = "compliant" | "mostly" | "non-compliant" | "concerning";
 
@@ -154,6 +154,11 @@ const strategies = new Map<string, TrainingStyleStrategy>([
   [defaultStrategy.id, defaultStrategy],
   [mafMethodStrategy.id, mafMethodStrategy],
 ]);
+
+/** The style ids with a strategy here; the test pins them to TRAINING_STYLE_IDS. */
+export function registeredTrainingStyleIds(): string[] {
+  return [...strategies.keys()];
+}
 
 export function resolveTrainingStyle(trainingStyleId?: string | null): ResolvedTrainingStyle {
   const strategy =

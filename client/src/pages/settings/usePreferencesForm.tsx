@@ -317,11 +317,10 @@ export function usePreferencesForm() {
     const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
     const styleChanged = draft.trainingStyleId !== committedStyleId;
     // The recurring field mappings live in snapshotToSavePayload; only the
-    // save-time-only style/MAF bookkeeping is added here.
+    // save-time-only style/MAF bookkeeping is added here. The server records
+    // the previous style and the time of a change itself (tech debt #35).
     const payload: SavePayload = {
       ...snapshotToSavePayload(draftToSnapshot(draft)),
-      trainingStylePreviousId: styleChanged ? committedStyleId : undefined,
-      trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,
       trainingStyleRecomputeNow: styleChanged,
       mafBaselineTestScheduledAt:
         styleChanged && draft.trainingStyleId === "maf_method"

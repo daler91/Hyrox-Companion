@@ -1,6 +1,7 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 import { parseApiError } from "./apiError";
+import { devAuthBypassHeaders } from "./authBypass";
 import { timeoutSignal } from "./timeoutSignal";
 
 export class RateLimitError extends Error {
@@ -82,6 +83,7 @@ async function fetchCsrfToken(): Promise<string> {
   // after load indefinitely (the caller surfaces the failure to the user).
   const res = await fetch("/api/v1/csrf-token", {
     credentials: "include",
+    headers: devAuthBypassHeaders(),
     signal: timeoutSignal(10_000),
   });
   if (!res.ok) {
@@ -172,6 +174,7 @@ export async function apiRequest(
 ): Promise<Response> {
   const isMutation = MUTATING_METHODS.has(method.toUpperCase());
   const baseHeaders: Record<string, string> = {
+    ...devAuthBypassHeaders(),
     ...(data ? { "Content-Type": "application/json" } : {}),
     ...extraHeaders,
   };
@@ -214,6 +217,7 @@ export const getQueryFn: <T>(options: {
     // Query keys are path segments (e.g. ["/api/v1", "workouts"]) joined to form the URL
     const res = await fetch(queryKey.join("/"), {
       credentials: "include",
+      headers: devAuthBypassHeaders(),
       signal,
     });
 

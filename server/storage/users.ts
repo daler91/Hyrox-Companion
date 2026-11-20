@@ -23,13 +23,16 @@ import {
   type UpsertUser,
   type User,
   users,
+  userTrainingStyle,
 } from "@shared/schema";
+import { DEFAULT_TRAINING_STYLE_ID } from "@shared/trainingStyles";
 import { and, type AnyColumn, desc, eq, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 
 import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
 import { isUniqueViolation } from "../dbErrors";
 import { logger } from "../logger";
+import { getLocalDateStrSafe } from "../timezone";
 import { deleteUnreferencedFoods, handReferencedFoodsToReferencers } from "./erasedAccountFoods";
 
 /**
@@ -177,6 +180,23 @@ export function mafResultFor(answers: Partial<MafAnswers> | undefined): MafResul
     consistency: (answers.mafConsistency ?? "moderate") as MafConsistency,
     trend: (answers.mafTrend ?? "flat") as MafTrend,
   });
+}
+
+/**
+ * The style change a preferences save makes, or null when it makes none: no
+ * trainingStyleId in the patch, or the same effective style as before (a null
+ * style is the default one). A change before onboarding is complete is the
+ * wizard's first choice; any later one is a settings change.
+ */
+function trainingStyleChange(
+  before: User | undefined,
+  patch: Pick<UpdateUserPreferences, "trainingStyleId">,
+): { previousId: string; nextId: string; source: "onboarding" | "settings" } | null {
+  if (!before || patch.trainingStyleId === undefined) return null;
+  const previousId = before.trainingStyleId ?? DEFAULT_TRAINING_STYLE_ID;
+  const nextId = patch.trainingStyleId ?? DEFAULT_TRAINING_STYLE_ID;
+  if (previousId === nextId) return null;
+  return { previousId, nextId, source: before.onboardingCompleted ? "settings" : "onboarding" };
 }
 
 /** [before] with what [patch] sends in place of it: the answers as they will be saved. */
@@ -355,18 +375,43 @@ export class UserStorage {
     // The ceiling is the server's to work out, never a client's to send: a
     // client-sent mafHr is dropped, and the one the saved answers give written
     // in the same update (docs/mobile-shared-logic.md, API field 3a). Undoing
-    // a change of answers so puts the old ceiling back with them.
-    const { mafHr: _clientMafHr, ...patch } = preferences;
+    // a change of answers so puts the old ceiling back with them. The same
+    // goes for the record of a style change (tech debt #35): a client-sent
+    // previous style or change time is dropped, and the server writes both,
+    // plus a user_training_style history row, when the style really changes.
+    const {
+      mafHr: _clientMafHr,
+      trainingStylePreviousId: _clientPreviousStyle,
+      trainingStyleChangedAt: _clientStyleChangedAt,
+      ...patch
+    } = preferences;
     const mafHr = mafResultFor(answersAfter(before, patch))?.ceiling;
-    const [user] = await db
-      .update(users)
-      .set({
-        ...patch,
-        ...(mafHr == null ? {} : { mafHr }),
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId))
-      .returning();
+    const now = new Date();
+    const styleChange = trainingStyleChange(before, patch);
+    const [user] = await db.transaction(async (tx) => {
+      const updated = await tx
+        .update(users)
+        .set({
+          ...patch,
+          ...(mafHr == null ? {} : { mafHr }),
+          ...(styleChange
+            ? { trainingStylePreviousId: styleChange.previousId, trainingStyleChangedAt: now }
+            : {}),
+          updatedAt: now,
+        })
+        .where(eq(users.id, userId))
+        .returning();
+      const [row] = updated;
+      if (row && styleChange) {
+        await tx.insert(userTrainingStyle).values({
+          userId,
+          style: styleChange.nextId,
+          effectiveDate: getLocalDateStrSafe(now, row.userTimezone),
+          source: styleChange.source,
+        });
+      }
+      return updated;
+    });
 
     const maf = mafResultFor(user);
     if (user && maf) {

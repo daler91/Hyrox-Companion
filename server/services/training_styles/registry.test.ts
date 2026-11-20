@@ -1,7 +1,8 @@
+import { TRAINING_STYLE_IDS } from "@shared/trainingStyles";
 import { describe, expect, it } from "vitest";
 
 import type { TrainingContext } from "../../gemini";
-import { resolveTrainingStyle } from "./registry";
+import { registeredTrainingStyleIds, resolveTrainingStyle } from "./registry";
 
 const baseContext: TrainingContext = {
   completionRate: 82,
@@ -72,5 +73,13 @@ describe("training style prompt context", () => {
 
     const prompt = resolveTrainingStyle("maf_method").strategy.buildPromptContext(context, []).promptSuffix ?? "";
     expect(prompt).toContain("Phase constraints (RACE WEEK): reduce work only");
+  });
+});
+
+// Tech debt #35: preferences now refuse a style id outside TRAINING_STYLE_IDS,
+// so that list and the strategies here must name the same styles.
+describe("registered training styles", () => {
+  it("has a strategy for every accepted style id, and none other", () => {
+    expect([...registeredTrainingStyleIds()].sort()).toEqual([...TRAINING_STYLE_IDS].sort());
   });
 });

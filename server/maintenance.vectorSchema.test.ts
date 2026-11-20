@@ -20,7 +20,7 @@ vi.mock("./migrationGuards", () => ({
   isBenignIdempotencyError: vi.fn(() => false),
   readMigrationJournal: vi.fn(() => []),
 }));
-vi.mock("./services/keyRotation", () => ({ maybeReencryptOnBoot: vi.fn() }));
+vi.mock("./services/keyRotation", () => ({ maybeReencryptOnBoot: vi.fn(), assertNoCredentialsOnMissingKey: vi.fn() }));
 
 const { connect } = vi.hoisted(() => ({ connect: vi.fn() }));
 vi.mock("./vectorDb", () => ({ vectorPool: { connect } }));

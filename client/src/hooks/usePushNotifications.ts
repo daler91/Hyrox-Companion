@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { devAuthBypassHeaders } from "@/lib/authBypass";
 import { apiRequest } from "@/lib/queryClient";
 import { timeoutSignal } from "@/lib/timeoutSignal";
 
@@ -58,6 +59,7 @@ export function usePushNotifications() {
       // can't hang the "Enable notifications" flow indefinitely).
       const keyRes = await fetch("/api/v1/push/vapid-key", {
         credentials: "include",
+        headers: devAuthBypassHeaders(),
         signal: timeoutSignal(10_000),
       });
       if (!keyRes.ok) return false;

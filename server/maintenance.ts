@@ -18,7 +18,7 @@ import {
   readMigrationJournal,
   type UnappliedMigrations,
 } from "./migrationGuards";
-import { maybeReencryptOnBoot } from "./services/keyRotation";
+import { assertNoCredentialsOnMissingKey, maybeReencryptOnBoot } from "./services/keyRotation";
 import type { IStorage } from "./storage";
 import { STALE_AUTO_COACHING_THRESHOLD_MS } from "./storage/users";
 import { vectorPool } from "./vectorDb";
@@ -51,8 +51,8 @@ async function runDrizzleMigrations() {
     // `db` export here because it's bound to the full schema; the migrator only
     // needs a minimal drizzle client.
     const migrator = drizzle(pool);
-    // C3: serialize migrations across instances. On a rolling deploy or
-    // APP_INSTANCE_COUNT>1, two boots would otherwise run DDL concurrently and
+    // C3: serialize migrations across instances. On a rolling deploy or with
+    // more than one replica, two boots would otherwise run DDL concurrently and
     // race on duplicate-key / partial-index states. pg_try_advisory_lock is
     // non-blocking — if another instance holds the lock we skip, since it
     // applies the same migrations.
@@ -412,4 +412,7 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   // Opt-in encryption-key rotation sweep (W6). No-op unless ENCRYPTION_KEY_V2
   // is set and ENCRYPTION_REENCRYPT_ON_BOOT=true; swallows its own errors.
   await maybeReencryptOnBoot();
+  // With the v1 key removed, refuse to finish booting while any credential
+  // still needs it (tech debt #49). Deliberately not swallowed.
+  await assertNoCredentialsOnMissingKey();
 }

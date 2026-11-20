@@ -1,4 +1,5 @@
 ﻿import { type NumberBound, PREFERENCE_NUMBER_BOUNDS as BOUNDS } from "../../preferenceBounds";
+import { DEFAULT_TRAINING_STYLE_ID, isTrainingStyleId, TRAINING_STYLE_IDS } from "../../trainingStyles";
 import { userConsents, users } from "../tables";
 import { z } from "../zod";
 // User types and schemas
@@ -64,9 +65,25 @@ export const updateUserPreferencesSchema = z.object({
   // Conversational plan editing: apply the coach's chat proposals immediately
   // instead of waiting for an explicit Apply tap.
   coachAutoApplyPlanChanges: z.boolean().optional(),
-  trainingStyleId: z.string().max(100).nullable().optional(),
-  trainingStylePreviousId: z.string().max(100).nullable().optional(),
-  trainingStyleChangedAt: z.coerce.date().nullable().optional(),
+  // A string on the wire so an app built before a style is added still decodes
+  // it, but only one of TRAINING_STYLE_IDS is accepted (tech debt #35).
+  trainingStyleId: z
+    .string()
+    .max(100)
+    .refine(isTrainingStyleId, { error: "must be a known training style" })
+    .nullable()
+    .optional()
+    .openapi({
+      description: `The coaching style, one of ${TRAINING_STYLE_IDS.join(", ")}; null for the default (${DEFAULT_TRAINING_STYLE_ID}). Any other value is refused.`,
+    }),
+  trainingStylePreviousId: z.string().max(100).nullable().optional().openapi({
+    deprecated: true,
+    description: "Ignored. The server records the previous style itself when trainingStyleId changes, and returns it",
+  }),
+  trainingStyleChangedAt: z.coerce.date().nullable().optional().openapi({
+    deprecated: true,
+    description: "Ignored. The server records when trainingStyleId changed, and returns it",
+  }),
   trainingStyleRecomputeNow: z.boolean().optional(),
   onboardingCompleted: z.boolean().optional(),
   // Athlete competition profile for the Race Predictor.

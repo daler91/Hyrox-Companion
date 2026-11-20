@@ -1,6 +1,7 @@
 import { clerkClient,clerkMiddleware, getAuth } from "@clerk/express";
+import { DEV_AUTH_BYPASS_HEADER } from "@shared/devAuth";
 import type { UpsertUser } from "@shared/schema";
-import type { Express, RequestHandler } from "express";
+import type { Express, Request, RequestHandler } from "express";
 
 import { EXTERNAL_API_TIMEOUT_MS } from "./constants";
 import { isUniqueViolation } from "./dbErrors";
@@ -54,6 +55,22 @@ function hasClerkKeys(): boolean {
   return !!(env.CLERK_PUBLISHABLE_KEY && env.CLERK_SECRET_KEY);
 }
 
+/**
+ * Whether a request without a Clerk session may run as the dev user.
+ *
+ * Only with the dev bypass enabled (never in production). Without Clerk keys
+ * that covers every request: local dev without Clerk, and Cypress. With Clerk
+ * keys, only a request carrying DEV_AUTH_BYPASS_HEADER, which the web client
+ * sends while it runs with auth bypassed (the dev preview, whose iframe cannot
+ * hold Clerk's cookies). Any other signed-out request then gets the 401 it
+ * would get in production instead of quietly running as the dev user
+ * (tech debt #34).
+ */
+export function devBypassAllowedFor(req: Request): boolean {
+  if (!isDevBypassEnabled()) return false;
+  return !hasClerkKeys() || req.headers[DEV_AUTH_BYPASS_HEADER] === "true";
+}
+
 async function ensureDevUserExists(): Promise<void> {
   const existing = await storage.users.getUser(DEV_USER_ID);
   if (existing) return;
@@ -80,7 +97,7 @@ export async function setupAuth(app: Express) {
 
   if (isDevBypassEnabled()) {
     await ensureDevUserExists();
-    logger.info("[DEV] Dev auth fallback enabled for iframe/preview contexts");
+    logger.info("[DEV] Dev auth fallback enabled for requests sending x-dev-auth-bypass (iframe/preview contexts)");
   }
 }
 
@@ -111,7 +128,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     }, "Clerk auth failed");
   }
 
-  if (isDevBypassEnabled() && req.headers["x-test-no-bypass"] !== "true") {
+  if (devBypassAllowedFor(req) && req.headers["x-test-no-bypass"] !== "true") {
     try {
       await ensureDevUserExists();
     } catch (error) {

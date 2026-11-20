@@ -64,25 +64,33 @@ Use this checklist whenever adding a new training methodology so implementation 
   `ui/settings/TrainingSettingsModel.kt`, and `trainingStyleLabel()` in
   `ui/coach/CoachModel.kt`. The generated Kotlin models need no change, because
   `trainingStyleId` is a plain string in the API schema.
+- Add the id to `TRAINING_STYLE_IDS` (`shared/trainingStyles.ts`). A preferences save naming
+  any other id is refused with a `400`, and `registry.test.ts` fails until the registry and
+  the list name the same styles.
 - Persist on `users` (see [Database § users](database.md#users)):
-  - `training_style_id` — the active style, default `'balanced_default'`. The API
-    validates it only as a string of at most 100 characters (`updateUserPreferencesSchema`)
-    and the column has no CHECK constraint, so a new id needs no enum, migration or
-    OpenAPI change — and an unregistered id is stored as-is and resolved to the default,
-  - `training_style_previous_id` and `training_style_changed_at` — sent by the client on a
-    switch (`client/src/pages/settings/usePreferencesForm.tsx`) and stored as given,
+  - `training_style_id` — the active style, default `'balanced_default'`. The API keeps it
+    a string on the wire but accepts only an id in `TRAINING_STYLE_IDS`
+    (`updateUserPreferencesSchema`); the column has no CHECK constraint, so a new id needs
+    no migration or OpenAPI type change. Rows saved before that check may still hold an
+    unknown id, which resolves to the default,
+  - `training_style_previous_id` and `training_style_changed_at` — written by the server
+    when a save changes the effective style (`updateUserPreferences`,
+    `server/storage/users.ts`). The request still accepts both fields, marked deprecated,
+    and ignores them,
   - `training_style_recompute_now` — sent as `trainingStyleRecomputeNow: true` on the
     switch's `PATCH /api/v1/preferences`. The handler treats it as a request, not state:
     it queues an immediate refresh of the stored style-aware analyses (the features in
     `STYLE_AWARE_FEATURES`, `server/services/analyticsRecomputeScheduler.ts`; today
     Coach Insights) and leaves the column `false`. A new style whose rules reach another
     stored analysis must add that feature to the list.
-- Append a row to the `user_training_style` history table (`style`, `effective_date`,
-  `source`) so the selection timeline survives later switches. No runtime code writes this
-  table yet: only migration `0035_maf_artifacts.sql` and
-  `script/backfill-user-training-style.ts` insert rows (`source = 'migration_default'`),
-  so the onboarding/settings write path has to be added. `source` is CHECK-constrained to
-  `'onboarding'`, `'settings'` or `'migration_default'`; `style` is free text.
+- The `user_training_style` history table (`style`, `effective_date`, `source`) keeps the
+  selection timeline across switches. `updateUserPreferences` appends a row, in the same
+  transaction as the update, whenever a save changes the effective style: `source` is
+  `'onboarding'` before onboarding is complete and `'settings'` after, and
+  `effective_date` is the athlete's local date. Migration `0035_maf_artifacts.sql` and
+  `script/backfill-user-training-style.ts` add `'migration_default'` rows for athletes
+  who predate it. `source` is CHECK-constrained to those three values; `style` is free
+  text. A new style needs nothing extra here.
 
 ## 5) Data model and migration readiness
 

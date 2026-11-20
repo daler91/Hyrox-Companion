@@ -27,7 +27,11 @@ const envSchema = z
     DATABASE_URL: z.url(),
     CLERK_PUBLISHABLE_KEY: z.string().min(1).optional(),
     CLERK_SECRET_KEY: z.string().min(1).optional(),
-    ENCRYPTION_KEY: z.string().min(32, "Encryption key must be at least 32 characters long"),
+    // The v1 key. Required unless ENCRYPTION_KEY_V2 is set: once every stored
+    // credential has been re-encrypted under v2, the v1 key can be removed, and
+    // boot refuses to finish while any credential still needs it
+    // (assertNoCredentialsOnMissingKey, tech debt #49).
+    ENCRYPTION_KEY: z.string().min(32, "Encryption key must be at least 32 characters long").optional(),
     // Optional second key enabling zero-downtime ENCRYPTION_KEY rotation (W6).
     // When set, new ciphertext is tagged `v2` and encrypted with this key while
     // the v1 ENCRYPTION_KEY stays available to decrypt and migrate existing data.
@@ -133,7 +137,6 @@ const envSchema = z
       .regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}$/, { error: "MIN_APP_VERSION_IOS must look like 1.4.0" })
       .optional(),
     ALLOW_DEV_AUTH_BYPASS: z.string().optional(),
-    APP_INSTANCE_COUNT: z.coerce.number().int().positive().default(1),
     // Enum-validated so a typo (e.g. "warning") fails here with a message naming
     // the variable, not later inside pino (D33 (CODEBASE_ANALYSIS_2026-10-03)).
     LOG_LEVEL: z
@@ -262,6 +265,10 @@ const envSchema = z
       path: ["STRAVA_STATE_SECRET"],
     },
   )
+  .refine((data) => Boolean(data.ENCRYPTION_KEY) || Boolean(data.ENCRYPTION_KEY_V2), {
+    message: "❌ FATAL: set ENCRYPTION_KEY (or, once the v1 key is retired, ENCRYPTION_KEY_V2)",
+    path: ["ENCRYPTION_KEY"],
+  })
   .refine((data) => !data.CSRF_SECRET || data.CSRF_SECRET !== data.ENCRYPTION_KEY, {
     // 🛡️ Sentinel: key separation must hold in all environments, not just
     // production (CODEBASE_REVIEW_2026-04-12.md #42). Dev/test defaults that
@@ -271,13 +278,15 @@ const envSchema = z
     path: ["CSRF_SECRET"],
   })
   .refine(
-    (data) => data.NODE_ENV !== "production" || !WEAK_ENCRYPTION_KEYS.has(data.ENCRYPTION_KEY),
+    (data) =>
+      data.NODE_ENV !== "production" ||
+      ![data.ENCRYPTION_KEY, data.ENCRYPTION_KEY_V2].some((key) => key !== undefined && WEAK_ENCRYPTION_KEYS.has(key)),
     {
       // W10 — reject the CI/test placeholder and any other known-weak keys if
       // they ever make it into a production deploy. A real production secret
       // has ~128 bits of entropy; these patterns have effectively none.
       message:
-        "❌ FATAL: ENCRYPTION_KEY is a known weak/test placeholder; generate a real 32-byte random key",
+        "❌ FATAL: ENCRYPTION_KEY or ENCRYPTION_KEY_V2 is a known weak/test placeholder; generate a real 32-byte random key",
       path: ["ENCRYPTION_KEY"],
     },
   )

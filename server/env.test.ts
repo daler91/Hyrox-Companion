@@ -8,31 +8,13 @@ const baseEnv = {
 };
 
 describe("env topology settings", () => {
-  it("defaults APP_INSTANCE_COUNT to one", () => {
-    const env = parseEnv(baseEnv);
+  // Tech debt #48: APP_INSTANCE_COUNT was validated but read by no code; the
+  // Postgres-backed shared state is always on. A deployment that still sets it
+  // must keep booting, so the variable is ignored rather than rejected.
+  it("ignores a leftover APP_INSTANCE_COUNT", () => {
+    const env = parseEnv({ ...baseEnv, APP_INSTANCE_COUNT: "3" });
 
-    expect(env.APP_INSTANCE_COUNT).toBe(1);
-  });
-
-  it("accepts positive integer APP_INSTANCE_COUNT values outside production", () => {
-    const env = parseEnv({ ...baseEnv, APP_INSTANCE_COUNT: "3", NODE_ENV: "test" });
-
-    expect(env.APP_INSTANCE_COUNT).toBe(3);
-  });
-
-  it("rejects non-positive APP_INSTANCE_COUNT values", () => {
-    expect(() => parseEnv({ ...baseEnv, APP_INSTANCE_COUNT: "0" })).toThrow();
-  });
-
-  it("accepts production multi-instance declarations", () => {
-    const env = parseEnv({
-      ...baseEnv,
-      APP_INSTANCE_COUNT: "2",
-      CSRF_SECRET: "e".repeat(64),
-      NODE_ENV: "production",
-    });
-
-    expect(env.APP_INSTANCE_COUNT).toBe(2);
+    expect(env).not.toHaveProperty("APP_INSTANCE_COUNT");
   });
 });
 
@@ -121,5 +103,26 @@ describe("env RAG chunking", () => {
     expect(() => parseEnv({ ...baseEnv, RAG_CHUNK_SIZE: "500", RAG_CHUNK_OVERLAP: "500" })).toThrow(
       /RAG_CHUNK_OVERLAP must be smaller than RAG_CHUNK_SIZE/,
     );
+  });
+});
+
+// Tech debt #49: ENCRYPTION_KEY was required, so after a rotation to
+// ENCRYPTION_KEY_V2 the old key could never be removed.
+describe("env encryption keys", () => {
+  const { ENCRYPTION_KEY: _v1, ...withoutV1 } = baseEnv;
+
+  it("accepts ENCRYPTION_KEY_V2 alone, once the v1 key is retired", () => {
+    const env = parseEnv({ ...withoutV1, ENCRYPTION_KEY_V2: "a".repeat(64) });
+
+    expect(env.ENCRYPTION_KEY).toBeUndefined();
+    expect(env.ENCRYPTION_KEY_V2).toBe("a".repeat(64));
+  });
+
+  it("refuses to start with neither key", () => {
+    expect(() => parseEnv(withoutV1)).toThrow();
+  });
+
+  it("still requires the two keys to differ when both are set", () => {
+    expect(() => parseEnv({ ...baseEnv, ENCRYPTION_KEY_V2: baseEnv.ENCRYPTION_KEY })).toThrow();
   });
 });

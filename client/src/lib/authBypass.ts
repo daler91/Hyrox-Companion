@@ -1,3 +1,5 @@
+import { DEV_AUTH_BYPASS_HEADER } from "@shared/devAuth";
+
 /**
  * When the app runs without Clerk.
  *
@@ -23,4 +25,13 @@ export function isDevPreview(): boolean {
 
 export function shouldBypassAuth(): boolean {
   return isCypressTest() || isDevPreview();
+}
+
+/**
+ * Headers for every API call. While auth is bypassed they ask a dev server for
+ * the dev-user fallback, which one with Clerk keys grants only to requests
+ * that ask (tech debt #34, shared/devAuth.ts). Empty otherwise.
+ */
+export function devAuthBypassHeaders(): Record<string, string> {
+  return shouldBypassAuth() ? { [DEV_AUTH_BYPASS_HEADER]: "true" } : {};
 }

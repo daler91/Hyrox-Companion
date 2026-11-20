@@ -450,6 +450,8 @@ Each session becomes a standalone `workout_logs` row with `source = 'health_conn
 - `server/emailScheduler.ts` -- Logic for deciding which emails to send to which users
 - `server/routes/email.ts` -- HTTP endpoints for triggering email checks
 
+**Delivery.** Each email's claim is taken before it is built and its job never reruns (the job also sends a push, which a rerun would duplicate), so `sendEmail()` retries the send itself: a failure that may pass (Resend's `rate_limit_exceeded`, `application_error` or `internal_server_error`, a concurrent-request clash, or no response at all) is tried twice more, 2 s and 8 s apart (`EMAIL_SEND_RETRY_DELAYS_MS`); a failure that won't (a bad address, key or quota) ends the send at once. Every attempt carries the same Resend `Idempotency-Key` from `emailIdempotencyKey()`, the email kind plus a hash of the athlete id and their local date, and Resend drops a repeat of a key within 24 hours, so an attempt that was delivered but looked failed cannot arrive twice. Before 2026-11-19 a single failed attempt cost the athlete that window's email (tech debt #39).
+
 ### Environment Variables
 
 | Variable | Required | Description |
@@ -465,7 +467,7 @@ Each scheduled email goes out at its own **send hour** (0–23 in the athlete's 
 #### 1. Weekly Training Summary
 
 - **Trigger**: Sent on the athlete's local Monday at its send hour
-- **Guard**: Claims `user.lastWeeklySummaryAt` before sending (`storage.users.claimWeeklySummary()`, 6-day window). The Monday gate sets the weekly cadence; the claim stops a second send on the same day. A claimed summary that fails to deliver is not retried
+- **Guard**: Claims `user.lastWeeklySummaryAt` before sending (`storage.users.claimWeeklySummary()`, 6-day window). The Monday gate sets the weekly cadence; the claim stops a second send on the same day. The job is not retried, but the send is: see Delivery below
 - **Data gathered**: For the previous Monday-to-Sunday week in the athlete's timezone: completed workouts, plan days completed/planned/missed/skipped (excused and let-go days excluded), a completion rate taken from plan days alone (none when no plan day was due), current streak, new PRs, total training duration
 - **Subject line**: `Your Week in Review: X workout(s) completed`
 - **Template**: Full HTML email with stat cards (completed count, total time, and completion rate when plan days were due), a progress bar for the same case, the streak and new-PR cards when there are any, and a CTA into `/review?week=<weekStart>`. The push that rides along opens the same link
@@ -505,7 +507,7 @@ Each scheduled email goes out at its own **send hour** (0–23 in the athlete's 
 #### 6. MAF Test Reminder
 
 - **Trigger**: One-shot, for athletes on the MAF training style (`training_style_id = 'maf_method'`) once `users.maf_baseline_test_scheduled_at` has passed — the Settings form sets it seven days out when the athlete switches to that style. The hourly scan finds these athletes with its own query (`storage.users.getUsersWithDueMafBaselineTest()`) rather than through `planEmailJobsForUser()`, so the reminder has no per-type toggle and no send hour of its own. It is enqueued on the first tick at the athlete's default notify hour after the schedule comes due (`isMafReminderHour()`), not the moment it comes due.
-- **Guard**: `storage.users.claimMafBaselineTest()` clears the schedule in one conditional UPDATE, and only the job that wins that claim sends. A claimed reminder that fails to deliver is not retried.
+- **Guard**: `storage.users.claimMafBaselineTest()` clears the schedule in one conditional UPDATE, and only the job that wins that claim sends. The job is not retried; the send is retried as for every email (see Delivery below).
 - **Data gathered**: None beyond the athlete's name
 - **Subject line**: `Time for your MAF test`
 - **Template**: How to run the test (a fixed distance or time at or just under the MAF heart-rate ceiling) and a CTA to `/log`. The email needs only an address and the master toggle; the push that accompanies it (same `/log` link) goes out even when email is off.

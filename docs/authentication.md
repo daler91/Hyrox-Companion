@@ -113,14 +113,14 @@ The `setupAuth` function is called during server startup and configures authenti
 2. **No Clerk keys, dev bypass enabled** -- Skips Clerk middleware and seeds a hardcoded dev user in the database.
 3. **No Clerk keys, no bypass** -- Throws. `setupAuth` runs inside `registerRoutes`, after the HTTP server is already listening, so the process stays up but startup fails in the `routes` phase: no API route is mounted and the health endpoints answer `503`.
 
-If the dev bypass is enabled (regardless of whether Clerk keys are also present), the dev user is always seeded as a fallback.
+If the dev bypass is enabled (regardless of whether Clerk keys are also present), the dev user is always seeded as a fallback. With Clerk keys set, that fallback serves only requests that ask for it (step 2 below).
 
 ### isAuthenticated Middleware
 
 The `isAuthenticated` request handler is applied to all protected routes. It runs in this order:
 
 1. If Clerk keys are configured, call `getAuth(req)` from `@clerk/express` to extract the `userId` from the validated JWT. If a `userId` is present, sync the user to the database (see User Sync Flow below) and proceed. Two failures end the request here: an account that was just erased gets the same `401` as step 3, and any other sync error gets `500 { "error": "Failed to initialize user session", "code": "INTERNAL_SERVER_ERROR" }`.
-2. If Clerk auth fails and the dev bypass is enabled, fall through to the dev user identity (unless the request carries an `x-test-no-bypass: true` header, used for testing 401 behavior). The dev user row is created if it is missing; a failure there is a `500`.
+2. If Clerk auth fails and the dev bypass is enabled, fall through to the dev user identity (`devBypassAllowedFor`), unless the request carries an `x-test-no-bypass: true` header, used for testing 401 behavior. Without Clerk keys every request qualifies. With Clerk keys only a request carrying `x-dev-auth-bypass: true` (`DEV_AUTH_BYPASS_HEADER` in `shared/devAuth.ts`) does; the web client sends it on every API call while auth is bypassed (the dev preview, Cypress), so any other signed-out request gets the same `401` as in production. The dev user row is created if it is missing; a failure there is a `500`.
 3. Otherwise, return a `401 Unauthorized` JSON response.
 
 ### getUserId Helper
@@ -140,7 +140,7 @@ export function getUserId(req: Request): string {
     // intentionally empty - fall through to dev user
   }
 
-  if ((env.NODE_ENV === "development" || env.NODE_ENV === "test") && env.ALLOW_DEV_AUTH_BYPASS === "true") {
+  if (devBypassAllowedFor(req)) {
     return DEV_USER_ID;
   }
 
@@ -229,7 +229,7 @@ export const useAuth = shouldBypassAuth() ? useTestAuthImpl : useClerkAuthImpl;
 
 - **Client:** `ClerkProvider` is not rendered. The `<Show>` gate is skipped and `<AuthenticatedLayout>` renders directly. An amber "DEV MODE" banner appears at the top of the page in dev preview mode. The `useTestAuthImpl` hook is used instead of `useClerkAuthImpl`, and `useSignOut` only clears this device's local data, since there is no Clerk session to end.
 
-- **Server:** The `isAuthenticated` middleware falls through to the dev user path when Clerk auth is not present. Every request without a Clerk identity is treated as coming from the `"dev-user"` identity. The `x-test-no-bypass: true` request header can be used to opt out of the bypass for specific requests (useful for testing unauthenticated behavior).
+- **Server:** The `isAuthenticated` middleware falls through to the dev user path when Clerk auth is not present. Without Clerk keys every request without a Clerk identity is treated as coming from the `"dev-user"` identity; with Clerk keys, only one sending `x-dev-auth-bypass: true`, which `devAuthBypassHeaders()` (`client/src/lib/authBypass.ts`) adds to every API call while the client bypasses auth. The `x-test-no-bypass: true` request header can be used to opt out of the bypass for specific requests (useful for testing unauthenticated behavior).
 
 - **Cypress:** Specs that call `setupAuthIntercepts()` (`cypress/support/authIntercepts.ts`) stub `GET /api/v1/auth/user` and `GET /api/v1/csrf-token` with fixtures, so the athlete those specs see is `test-user-123` rather than `dev-user`.
 
