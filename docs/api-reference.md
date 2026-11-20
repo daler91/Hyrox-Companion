@@ -1055,7 +1055,7 @@ Re-parse a plan day's `mainWorkout`/`accessory` text into structured exercise se
 - **Auth:** Required
 - **Rate limit:** `planDayReparse` category, 5/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Body:** Optional `{ mainWorkout?: string | null, accessory?: string | null }`, each at most 50,000 characters, as on the workout reparse (unknown keys or longer text are `400`). A field sent here is parsed in place of the day's stored text and written to the day only when the parse produces sets (a `null` `mainWorkout` is stored as `""`).
+- **Body:** Optional `{ mainWorkout?: string | null, accessory?: string | null }` (unknown keys are `400`; unlike the workout reparse, the text has no length cap). A field sent here is parsed in place of the day's stored text and written to the day only when the parse produces sets (a `null` `mainWorkout` is stored as `""`).
 - **Response:** `{ exercises, saved: true, setCount, rejectedCount, rejectionReasons }` (or 404)
 - **AI errors:** answered by the route rather than the global handler — an `AppError` keeps its status and code (`AI_UNAVAILABLE` becomes `502 AI_UPSTREAM_FAILURE`); a raw provider error is classified as `429 AI_QUOTA_EXCEEDED`, `400 AI_INVALID_INPUT`, `502 AI_UPSTREAM_FAILURE` (provider unavailable) or `502 AI_ERROR`; a non-AI failure is `500 INTERNAL_ERROR` ("Failed to parse plan day"). The photo route below does the same.
 

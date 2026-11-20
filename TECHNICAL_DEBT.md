@@ -152,14 +152,19 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
   write to drizzle's `.set()`, which throws "No values to set", so three PATCH routes
   answered 500. It now returns the owned day unchanged, as the workout PATCH does. Guarded by
   `server/storage/__tests__/planDayEmptyUpdate.integration.test.ts`.
-- ~~**38. Reparse edge cases**~~ — Resolved 2026-11-20. (a) The plan-day reparse saves the
-  typed text only when the parse produced sets, as the workout reparse does. (b) Its body takes
-  at most 50,000 characters per field (`MAX_WORKOUT_TEXT_LEN`). (c) Confirmed and fixed:
-  `replaceExerciseSetsAndStructureByOwner` rolls back a replacement that would leave the owner
-  with no sets, so a 422 keeps the old sets and structure, for workouts and plan days, text or
-  photo. Guarded by `server/routes/__tests__/plans.test.ts`,
+- **38. Reparse edge cases** — (a) and (c) resolved 2026-11-20; (b) open. (a) The plan-day
+  reparse saves the typed text only when the parse produced sets, as the workout reparse does.
+  (c) Confirmed and fixed: `replaceExerciseSetsAndStructureByOwner` rolls back a replacement
+  that would leave the owner with no sets, so a 422 keeps the old sets and structure, for
+  workouts and plan days, text or photo. Guarded by `server/routes/__tests__/plans.test.ts`,
   `server/services/workoutService/reparse.test.ts` and
-  `server/services/workoutService/persistence.integration.test.ts`.
+  `server/services/workoutService/persistence.integration.test.ts`. **(b) still open:** the
+  plan-day reparse body has no length cap, while the workout reparse takes at most 50,000
+  characters per field (`MAX_WORKOUT_TEXT_LEN`). Adding one tightens the API contract, which
+  the OpenAPI breaking-change check refuses, and rightly: stored plan-day text has no cap
+  either, so an installed app can send more than 50,000 characters. Needs an owner decision:
+  either cap the request (raising `MIN_APP_VERSION_*` and labelling the PR
+  `openapi-breaking-ok`), or first cap the stored plan-day text and then the request.
 - ~~**39. An email is lost when its send fails**~~ — Resolved 2026-11-19. The jobs stay
   no-retry, because each also sends a push that a rerun would repeat; `sendEmail()` retries the
   email alone instead. A failure that may pass (Resend's rate limit or a server error, or no
@@ -366,5 +371,5 @@ not in them.
 | P1 — High | 6/6 | 0 | All resolved |
 | P2 — Medium | 6/6 | 0 | All resolved |
 | P3 — Low | 10/11 | 1 | #22 CSRF resolved via `csrf-csrf` double-submit; #29 dual-TS installs open (blocked on TS 7.1 API + typescript-eslint) |
-| Docs verification, 2026-11-17 | 28/42 | 14 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43, #51, #52, #53, #57, #60, #66, #68 and #71 resolved 2026-11-18; #34, #35, #39, #48 and #49 resolved 2026-11-19; #38, #44, #45, #46 and #47 resolved 2026-11-20 |
-| **Total** | **56/71** | **15** | #29 is intentional interim state; the other 14 of #30–#71 are untriaged |
+| Docs verification, 2026-11-17 | 27/42 | 15 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43, #51, #52, #53, #57, #60, #66, #68 and #71 resolved 2026-11-18; #34, #35, #39, #48 and #49 resolved 2026-11-19; #44, #45, #46 and #47 resolved 2026-11-20, as were parts (a) and (c) of #38 (its part (b) is open) |
+| **Total** | **55/71** | **16** | #29 is intentional interim state; #38 (b) waits on an API-contract decision; the other 14 of #30–#71 are untriaged |

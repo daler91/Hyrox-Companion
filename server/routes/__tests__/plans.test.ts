@@ -769,18 +769,6 @@ describe("plan-day exercise routes", () => {
     expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
   });
 
-  // Tech debt #38 (b): the plan-day text had no length cap; the workout's is 50,000.
-  it("refuses text longer than the workout reparse allows", async () => {
-    const { reparsePlanDay } = await import("../../services/workoutService");
-
-    const response = await request(app)
-      .post("/api/v1/plans/days/day-1/reparse")
-      .send({ mainWorkout: "a".repeat(50_001) });
-
-    expect(response.status).toBe(400);
-    expect(reparsePlanDay).not.toHaveBeenCalled();
-  });
-
   it("rejects structure writes with 403 when the EMOM builder is disabled (W20)", async () => {
     const { replacePlanDayStructure } = await import("../../services/workoutService");
     const validBlock = {
