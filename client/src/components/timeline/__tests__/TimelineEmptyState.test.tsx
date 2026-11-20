@@ -50,8 +50,8 @@ function renderEmptyState({
   setSchedulingPlanId = vi.fn(),
   importPending = false,
 }: RenderProps = {}) {
-  // The welcome variant eagerly mounts GeneratePlanDialog, which uses
-  // react-query hooks internally — so this test needs a provider.
+  // The welcome variant mounts GeneratePlanDialog (lazily, on first open),
+  // which uses react-query hooks internally — so this test needs a provider.
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
