@@ -19,6 +19,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { FallbackErrorBoundary } from "./components/FallbackErrorBoundary";
 import { setupErrorReporting } from "./lib/errorReporting";
+import { rootErrorHandlers } from "./lib/rootErrorHandlers";
 import { migrateLegacyKeys } from "./lib/storageMigration";
 
 migrateLegacyKeys();
@@ -41,15 +42,9 @@ import { registerSW } from "virtual:pwa-register";
 const shouldRegisterServiceWorkers =
   !("Cypress" in globalThis) && "serviceWorker" in globalThis.navigator;
 
-// React 19 no longer re-throws render errors: uncaught ones go to
-// window.reportError and boundary-caught ones only to console.error, so
-// Sentry must hook the root callbacks to keep capturing them. The handlers
-// no-op until Sentry.init runs (deferred behind the privacy notice, S11).
-createRoot(document.getElementById("root")!, {
-  onUncaughtError: Sentry.reactErrorHandler(),
-  onCaughtError: Sentry.reactErrorHandler(),
-  onRecoverableError: Sentry.reactErrorHandler(),
-}).render(
+// The root error callbacks report to Sentry; see rootErrorHandlers for why a
+// boundary-caught error is reported once, by its boundary.
+createRoot(document.getElementById("root")!, rootErrorHandlers).render(
   <Sentry.ErrorBoundary fallback={FallbackErrorBoundary}>
     <App />
   </Sentry.ErrorBoundary>
