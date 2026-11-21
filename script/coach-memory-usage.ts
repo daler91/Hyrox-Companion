@@ -74,12 +74,12 @@ export async function collectCoachMemoryUsage(): Promise<UsageCount[]> {
 async function main(): Promise<void> {
   const counts = await collectCoachMemoryUsage();
   // A report script for a human at a terminal — console, not the pino logger.
-  console.log("\nCoach memory — capture-surface usage\n");
+  console.log("\nCoach memory — capture-surface usage\n"); // skipcq: JS-0002
   for (const { metric, users } of counts) {
     // Static metric labels and aggregate integer counts from the query above —
     // no per-user data ever reaches a row here.
     // bearer:disable javascript_lang_logger_leak
-    console.log(`  ${metric.padEnd(48)} ${users}`);
+    console.log(`  ${metric.padEnd(48)} ${users}`); // skipcq: JS-0002
   }
   process.exit(0);
 }
@@ -92,7 +92,7 @@ if (process.argv[1]?.endsWith("coach-memory-usage.ts")) {
     // A DB/connection failure from a read-only admin script, printed to the
     // operator's own terminal so they can fix their DATABASE_URL.
     // bearer:disable javascript_lang_logger_leak
-    console.error("coach-memory-usage failed:", err);
+    console.error("coach-memory-usage failed:", err); // skipcq: JS-0002
     process.exit(1);
   }
 }
