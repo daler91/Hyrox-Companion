@@ -1,6 +1,7 @@
 import { countsAsTraining } from "@shared/deviceSportTypes";
 import type { HealthConnectSessionInput } from "@shared/schema";
 import type { DistanceUnit } from "@shared/unitConversion";
+import { minutes } from "@shared/units";
 
 import { formatActivityDistance, formatActivityDuration, formatActivityPace } from "./activityFormatting";
 import type { ActivityMeasurements } from "./deviceActivitySets";
@@ -68,7 +69,8 @@ export function mapHealthConnectSessionToWorkout(
       : `${formatActivityDuration(seconds)} session`,
     accessory: avgSpeed ? `Pace: ${formatActivityPace(avgSpeed, distanceUnit)}` : null,
     notes: notesFor(session),
-    duration: Math.round(seconds / 60),
+    // workout_logs.duration is whole minutes (docs/adr-units.md).
+    duration: minutes(Math.round(seconds / 60)),
     rpe: null as number | null,
     planDayId: null,
     source: "health_connect" as const,

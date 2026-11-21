@@ -1,5 +1,6 @@
 import { addDaysToISODate } from "@shared/dateUtils";
 import type { EffectiveTargetSummary, FuellingDayPoint, NutritionTarget } from "@shared/schema";
+import { minutesOrAbsent } from "@shared/units";
 import { Router } from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -79,7 +80,7 @@ describe("a day's effective target is the same on /summary and /summary-range (C
     return makeWorkoutLog({
       id: `log-${i}`,
       date: addDaysToISODate(DAY, -daysBack),
-      duration: daysBack > 7 && i % 7 === 3 ? null : 45 + (i % 5) * 10,
+      duration: minutesOrAbsent(daysBack > 7 && i % 7 === 3 ? null : 45 + (i % 5) * 10),
       rpe,
     });
   });

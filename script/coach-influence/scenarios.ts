@@ -50,6 +50,8 @@ function baseCtx(overrides: Partial<TrainingContext> = {}): TrainingContext {
     completionRate: 75,
     currentStreak: 4,
     weeklyGoal: 5,
+    weightUnit: "kg",
+    distanceUnit: "km",
     recentWorkouts: Array.from({ length: 10 }, (_, i) => ({
       date: `2026-04-${String(9 - i).padStart(2, "0")}`,
       focus: "moderate",

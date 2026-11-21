@@ -6,6 +6,7 @@ import {
   standardizeParsedDistanceUnit,
   storedDistanceToMeters,
 } from "@shared/unitConversion";
+import { type Minutes, minutes } from "@shared/units";
 
 /**
  * "Shorten it": the missed session, cut to about {@link SHORTEN_KEEP_FRACTION}
@@ -50,8 +51,8 @@ export interface ShortenedSetUpdate {
   readonly plannedReps?: number;
   readonly distance?: number;
   readonly plannedDistance?: number;
-  readonly time?: number;
-  readonly plannedTime?: number;
+  readonly time?: Minutes;
+  readonly plannedTime?: Minutes;
 }
 
 export interface ShortenPlan {
@@ -123,7 +124,7 @@ type ScalableField = Exclude<keyof ShortenedSetUpdate, "id">;
 function changedFields(
   set: ShortenableSet,
   scaled: Partial<Record<ScalableField, number | null>>,
-): Partial<Record<ScalableField, number>> {
+): Omit<ShortenedSetUpdate, "id"> {
   const current = new Map<ScalableField, number | null>([
     ["plannedDistance", set.plannedDistance],
     ["distance", set.distance],
@@ -135,7 +136,13 @@ function changedFields(
   const changed = (Object.entries(scaled) as [ScalableField, number | null][]).filter(
     (entry): entry is [ScalableField, number] => entry[1] !== null && entry[1] !== current.get(entry[0]),
   );
-  return Object.fromEntries(changed);
+  const { time, plannedTime, ...counts }: Partial<Record<ScalableField, number>> = Object.fromEntries(changed);
+  // Both times were scaled from the set's minutes columns, so they are still minutes.
+  return {
+    ...counts,
+    ...(time === undefined ? {} : { time: minutes(time) }),
+    ...(plannedTime === undefined ? {} : { plannedTime: minutes(plannedTime) }),
+  };
 }
 
 interface ScaledSingle {

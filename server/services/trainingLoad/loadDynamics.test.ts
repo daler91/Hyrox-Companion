@@ -1,5 +1,6 @@
 import { addDaysToISODate as addDays } from "@shared/dateUtils";
 import type { WorkoutLog } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { describe, expect, it } from "vitest";
 
 import { calculateTrainingLoad } from "../trainingLoadService";
@@ -16,7 +17,7 @@ const FIRST_DAY = "2026-04-01";
 
 /** 60 min at RPE 6: 79.2 UTSS, the steady day every scenario returns to. */
 function steadyLog(date: string): WorkoutLog {
-  return makeWorkoutLog({ id: `steady-${date}`, date, duration: 60, rpe: 6 });
+  return makeWorkoutLog({ id: `steady-${date}`, date, duration: minutes(60), rpe: 6 });
 }
 
 /** The ACWR zone on each day from the gate opening (day 14) to `lastDay`. */
@@ -39,7 +40,7 @@ describe("applyLoadDynamics — the first logged day does not dominate the basel
   it("does not call a steady athlete undertrained because their first session was long", () => {
     // 3 h at RPE 8 (338 UTSS), then 79 UTSS a day. The seeded EWMAs read 0.47
     // on day 14 and were still "undertraining" on day 28.
-    const zones = gatedZones(firstSessionThenSteady({ duration: 180, rpe: 8 }, 28), 28);
+    const zones = gatedZones(firstSessionThenSteady({ duration: minutes(180), rpe: 8 }, 28), 28);
     expect(zones).toHaveLength(15);
     for (const { date, zone } of zones) expect(zone, date).toBe("sweet_spot");
   });
@@ -47,7 +48,7 @@ describe("applyLoadDynamics — the first logged day does not dominate the basel
   it("does not put a steady athlete in yellow because their first session was short", () => {
     // 15 min at RPE 3 (12 UTSS), then 79 UTSS a day. The seeded EWMAs read 1.48
     // ("yellow") when the gate opened.
-    const zones = gatedZones(firstSessionThenSteady({ duration: 15, rpe: 3 }, 28), 28);
+    const zones = gatedZones(firstSessionThenSteady({ duration: minutes(15), rpe: 3 }, 28), 28);
     for (const { date, zone } of zones) expect(zone, date).toBe("sweet_spot");
   });
 
@@ -64,7 +65,7 @@ describe("applyLoadDynamics — the first logged day does not dominate the basel
   });
 
   it("keeps the 14-day gate: no ratio or Form before it", () => {
-    const logs = firstSessionThenSteady({ duration: 60, rpe: 6 }, 13);
+    const logs = firstSessionThenSteady({ duration: minutes(60), rpe: 6 }, 13);
     const { dailyLoads } = calculateTrainingLoad(logs, [], [], {
       currentDate: addDays(FIRST_DAY, 12),
     });

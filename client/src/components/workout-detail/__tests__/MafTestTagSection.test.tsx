@@ -1,4 +1,5 @@
 import type { WorkoutLog } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -46,7 +47,7 @@ describe("MafTestTagSection", () => {
   // 60x too fast when the athlete accepted the prefill.
   it("prefills a 45-minute run as 45:00 and submits it as 2700 seconds", async () => {
     const user = userEvent.setup();
-    renderSection({ duration: 45, distanceMeters: 8000, avgHeartrate: 138, maxHeartrate: 146 });
+    renderSection({ duration: minutes(45), distanceMeters: 8000, avgHeartrate: 138, maxHeartrate: 146 });
 
     await user.click(await screen.findByTestId("maf-test-tag-button-log-1"));
 

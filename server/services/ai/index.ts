@@ -777,8 +777,9 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     mafHr: user?.mafHr ?? null,
     ...(mafTrend ? { mafTrend } : {}),
     weeklyGoal: user?.weeklyGoal ?? undefined,
-    ...(user?.weightUnit ? { weightUnit: user.weightUnit } : {}),
-    ...(user?.distanceUnit ? { distanceUnit: user.distanceUnit } : {}),
+    // Resolved above (resolveUnitPreferences), so always present.
+    weightUnit,
+    distanceUnit,
     ...(nutrition ? { nutrition } : {}),
     ...exerciseSelectionField,
     ...trainingTargetsField,

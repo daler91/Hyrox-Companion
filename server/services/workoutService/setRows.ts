@@ -1,5 +1,6 @@
 import { type InsertExerciseSet, type ParsedExercise } from "@shared/schema";
 import { stampForPreferences, type UnitPreferences } from "@shared/unitConversion";
+import { minutesOrAbsent } from "@shared/units";
 
 import { AppError, ErrorCode } from "../../errors";
 import { ownerColumns } from "./owners";
@@ -99,9 +100,9 @@ function buildExerciseSetRow(
     weightUnit: stamp.weightUnit,
     distanceUnit: stamp.distanceUnit,
     reps: measurements.reps,
-    time: measurements.time,
+    time: minutesOrAbsent(measurements.time),
     plannedReps: measurements.plannedReps,
-    plannedTime: measurements.plannedTime,
+    plannedTime: minutesOrAbsent(measurements.plannedTime),
     blockId: measurements.blockId,
     stepNumber: measurements.stepNumber,
     intervalMinute: measurements.intervalMinute,

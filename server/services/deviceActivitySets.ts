@@ -51,7 +51,7 @@ import {
   type WorkoutLog,
 } from "@shared/schema";
 import { normalizeParsedDistance, stampForPreferences, type UnitPreferences } from "@shared/unitConversion";
-import { seconds, secondsToMinutes, unitless } from "@shared/units";
+import { seconds, secondsToMinutes } from "@shared/units";
 import { eq } from "drizzle-orm";
 
 import { db } from "../db";
@@ -221,7 +221,7 @@ export function recordingSetRow(
         ? normalizeParsedDistance(measurements.distanceMeters, "m", preferences)
         : null,
     // exercise_sets.time is MINUTES, fractional (docs/adr-units.md).
-    time: unitless(secondsToMinutes(seconds(measurements.movingSeconds))),
+    time: secondsToMinutes(seconds(measurements.movingSeconds)),
     weightUnit: stamp.weightUnit,
     distanceUnit: stamp.distanceUnit,
     sortOrder: 0,

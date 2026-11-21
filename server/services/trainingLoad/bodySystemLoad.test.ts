@@ -1,6 +1,7 @@
 import { describeBodySystemDivergence } from "@shared/bodySystemLoad";
 import { addDaysToISODate } from "@shared/dateUtils";
 import type { BodySystem, BodySystemLoadOverview, BodySystemLoadSummary } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { describe, expect, it } from "vitest";
 
 import { makeWorkoutLog } from "../trainingLoadService.testHelpers";
@@ -42,7 +43,7 @@ function session(
 
 /** 45 min at RPE 4: 180 AU — aerobic 180, impact 180, legs 90. */
 function easyRun(date: string): Session {
-  return session(date, { focus: "Easy run", duration: 45, rpe: 4 }, [
+  return session(date, { focus: "Easy run", duration: minutes(45), rpe: 4 }, [
     { exerciseName: "easy_run", category: "running", time: 45 },
   ]);
 }
@@ -50,12 +51,12 @@ function easyRun(date: string): Session {
 /** 45 min at RPE 6: 270 AU — legs 270, aerobic 40.5 (the lifting share). */
 function legDay(date: string): Session {
   const squat = { exerciseName: "back_squat", category: "strength", reps: 5 };
-  return session(date, { focus: "Legs", duration: 45, rpe: 6 }, [squat, squat, squat, squat]);
+  return session(date, { focus: "Legs", duration: minutes(45), rpe: 6 }, [squat, squat, squat, squat]);
 }
 
 /** 30 min at RPE 6 on the rower: 180 AU — pull 90, legs 108, aerobic 180. */
 function rowSession(date: string): Session {
-  return session(date, { focus: "Row", duration: 30, rpe: 6 }, [
+  return session(date, { focus: "Row", duration: minutes(30), rpe: 6 }, [
     { exerciseName: "rowing", category: "functional", time: 30 },
   ]);
 }
@@ -159,7 +160,7 @@ describe("calculateBodySystemLoad", () => {
     // 40 min at RPE 5 = 200 AU. A 20-min run and four squat sets (3 min each):
     // the run is 20/32 of the time.
     const overview = run([
-      session(day(0), { duration: 40, rpe: 5 }, [
+      session(day(0), { duration: minutes(40), rpe: 5 }, [
         { exerciseName: "easy_run", category: "running", time: 20 },
         ...Array.from({ length: 4 }, () => ({
           exerciseName: "back_squat",
@@ -223,7 +224,7 @@ describe("calculateBodySystemLoad", () => {
       // (150 - 60) / 130 = 0.69 of reserve → RPE 7; 30 min → 210 AU.
       const overview = run(
         [
-          session(day(0), { duration: 30, rpe: null, avgHeartrate: 150 }, [
+          session(day(0), { duration: minutes(30), rpe: null, avgHeartrate: 150 }, [
             { exerciseName: "easy_run", category: "running", time: 30 },
           ]),
         ],
@@ -236,7 +237,7 @@ describe("calculateBodySystemLoad", () => {
     it("falls back to the effort of what was logged without a rating or heart rate", () => {
       // An easy run's default effort is RPE 3: 30 min → 90 AU.
       const overview = run([
-        session(day(0), { duration: 30, rpe: null }, [
+        session(day(0), { duration: minutes(30), rpe: null }, [
           { exerciseName: "easy_run", category: "running", time: 30 },
         ]),
       ]);
@@ -250,7 +251,7 @@ describe("calculateBodySystemLoad", () => {
           session(
             day(0),
             {
-              duration: 60,
+              duration: minutes(60),
               rpe: null,
               avgHeartrate: 150,
               source: "strava",
@@ -292,7 +293,7 @@ describe("calculateBodySystemLoad", () => {
   describe("sessions with no sets", () => {
     it("reads the sport from the title", () => {
       const overview = run([
-        session(day(0), { focus: "Morning Run", mainWorkout: "", duration: 30, rpe: 5 }),
+        session(day(0), { focus: "Morning Run", mainWorkout: "", duration: minutes(30), rpe: 5 }),
       ]);
       expect(overview.systems.map((s) => [s.system, s.current])).toEqual([
         ["aerobic", 150],
@@ -304,7 +305,7 @@ describe("calculateBodySystemLoad", () => {
 
     it("leaves a session nothing is known about unattributed rather than guessing", () => {
       const overview = run([
-        session(day(0), { focus: "WeightTraining", mainWorkout: "", duration: 60, rpe: 7 }),
+        session(day(0), { focus: "WeightTraining", mainWorkout: "", duration: minutes(60), rpe: 7 }),
       ]);
       expect(overview.unattributedSessions).toBe(1);
       for (const summary of overview.systems) expect(summary.current, summary.system).toBe(0);

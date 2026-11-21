@@ -1,4 +1,5 @@
 import type { StravaActivitySummary, WorkoutLog } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import { createMockPlanDay } from "../../test/factories";
@@ -76,7 +77,7 @@ function firstCallArg(builderMock: Mock): Record<string, unknown> {
 describe("attachStravaActivityToLogInTx", () => {
   it("records the value it wrote into each column it filled, and only those", async () => {
     const tx = makeTx();
-    const existing = makeWorkoutLog({ id: "log-1", duration: 50 });
+    const existing = makeWorkoutLog({ id: "log-1", duration: minutes(50) });
     tx.for.mockResolvedValue([existing]);
     tx.returning.mockResolvedValue([{ ...existing, stravaActivityId: "9001" }]);
 
@@ -158,7 +159,7 @@ describe("unlinkDeviceActivity", () => {
     // Nothing recorded to tell an edit by, and today's mapper output is no
     // stand-in (it has changed since), so every filled column goes back.
     givenOwnLinkedLog({
-      duration: 50,
+      duration: minutes(50),
       distanceMeters: 8100,
       deviceActivity: {
         provider: "strava",
@@ -209,7 +210,7 @@ describe("hasAthleteEdits", () => {
       prescribedNotes: "Strava: Morning Run",
       plannedSetCount: 0,
       planDayId: "pd-1",
-      duration: 45,
+      duration: minutes(45),
       distanceMeters: 8100,
       startedAt: new Date("2026-09-08T11:30:00Z"),
       stravaActivityId: "9001",

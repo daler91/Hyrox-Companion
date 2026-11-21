@@ -17,7 +17,7 @@ import {
 } from "../gemini/index";
 import { rethrowCoachCallFailure } from "../gemini/suggestionService";
 import { logger } from "../logger";
-import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
+import { buildWorkoutSearchText, type FormatOptions } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
 import {
@@ -445,9 +445,9 @@ async function applyReviewNote(
 async function getCoachingMaterialsString(
   userId: string,
   upcomingWorkouts: UpcomingWorkout[],
-  unitPreferences: UnitPreferences,
+  units: FormatOptions,
 ): Promise<{ text: string | undefined; source: "rag" | "legacy" | null }> {
-  const query = upcomingWorkouts.map((w) => buildWorkoutSearchText(w, unitPreferences)).join("; ");
+  const query = upcomingWorkouts.map((w) => buildWorkoutSearchText(w, units)).join("; ");
   return retrieveCoachingText(userId, query);
 }
 
@@ -818,11 +818,10 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       upcomingWorkouts,
     );
 
-    const coachingContext = await getCoachingMaterialsString(
-      userId,
-      upcomingWorkouts,
-      unitPreferences,
-    );
+    const coachingContext = await getCoachingMaterialsString(userId, upcomingWorkouts, {
+      weightUnit: trainingContext.weightUnit,
+      distanceUnit: trainingContext.distanceUnit,
+    });
     const inputsUsed = buildCoachNoteInputs(
       trainingContext,
       coachingContext.source === "rag",

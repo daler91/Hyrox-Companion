@@ -6,6 +6,7 @@ import {
   users,
   workoutLogs,
 } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -142,7 +143,7 @@ describe("unlinking a recording from a log the athlete edited (D40)", () => {
 
   it("keeps the RPE and duration the athlete changed on their log, and the recording gets its own", async () => {
     const log = await ownLogWithRecording();
-    await updateWorkout(log.id, { rpe: 8, duration: 45 }, undefined, ATHLETE);
+    await updateWorkout(log.id, { rpe: 8, duration: minutes(45) }, undefined, ATHLETE);
 
     const { log: kept, standalone } = await unlink(log.id);
 

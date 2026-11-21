@@ -5,6 +5,7 @@
  * in the AI coach's context and in the weekly email's PR count.
  */
 
+import { minutes } from "@shared/units";
 import { describe, expect, it } from "vitest";
 
 import type { SlimLoggedExerciseSet } from "../../storage/shared";
@@ -28,7 +29,7 @@ function makeSet(overrides: Partial<SlimLoggedExerciseSet> = {}): SlimLoggedExer
 }
 
 const ski = (distance: number | null, time: number, date: string, workoutLogId: string) =>
-  makeSet({ distance, time, date, workoutLogId });
+  makeSet({ distance, time: minutes(time), date, workoutLogId });
 
 describe("best time compares like-for-like work only (C1)", () => {
   it("does not crown a shorter piece as the best time", () => {
@@ -44,8 +45,8 @@ describe("best time compares like-for-like work only (C1)", () => {
     // A bare time on distance-carrying work is a duration: the shortest easy
     // run is not the athlete's best one.
     const prs = calculatePersonalRecords([
-      makeSet({ exerciseName: "easy_run", category: "running", time: 30, date: "2026-01-10", workoutLogId: "w1" }),
-      makeSet({ exerciseName: "easy_run", category: "running", time: 20, date: "2026-01-15", workoutLogId: "w2" }),
+      makeSet({ exerciseName: "easy_run", category: "running", time: minutes(30), date: "2026-01-10", workoutLogId: "w1" }),
+      makeSet({ exerciseName: "easy_run", category: "running", time: minutes(20), date: "2026-01-15", workoutLogId: "w2" }),
     ]);
     // With no best time there may be no record at all; either way, none here.
     expect(new Map(Object.entries(prs)).get("easy_run")?.bestTime).toBeUndefined();
@@ -75,7 +76,7 @@ describe("best time compares like-for-like work only (C1)", () => {
     // A Strava runner's history: every run a different length. None of them is
     // a record of anything, least of all the shortest.
     const run = (distance: number, time: number, date: string, workoutLogId: string) =>
-      makeSet({ exerciseName: "run", category: "running", distance, time, date, workoutLogId });
+      makeSet({ exerciseName: "run", category: "running", distance, time: minutes(time), date, workoutLogId });
     const prs = calculatePersonalRecords([
       run(8000, 42, "2026-01-05", "w1"),
       run(3000, 15, "2026-01-08", "w2"),
@@ -87,7 +88,7 @@ describe("best time compares like-for-like work only (C1)", () => {
 
   it("treats distances within a small tolerance, read through their unit stamps, as one piece", () => {
     const row = (distance: number, distanceUnit: string, time: number, date: string, workoutLogId: string) =>
-      makeSet({ exerciseName: "rowing", distance, distanceUnit, time, date, workoutLogId });
+      makeSet({ exerciseName: "rowing", distance, distanceUnit, time: minutes(time), date, workoutLogId });
     const prs = calculatePersonalRecords(
       [
         row(1000, "m", 3.8, "2026-01-05", "w1"),
@@ -111,7 +112,7 @@ describe("best time compares like-for-like work only (C1)", () => {
 
   it("compares rep-sized timed work only at the same reps", () => {
     const balls = (reps: number, time: number, date: string, workoutLogId: string) =>
-      makeSet({ exerciseName: "wall_balls", reps, time, date, workoutLogId });
+      makeSet({ exerciseName: "wall_balls", reps, time: minutes(time), date, workoutLogId });
     const prs = calculatePersonalRecords([
       balls(100, 5, "2026-01-05", "w1"),
       balls(100, 4.8, "2026-01-08", "w2"),
@@ -122,7 +123,7 @@ describe("best time compares like-for-like work only (C1)", () => {
 
   it("still keeps the LONGEST hold, however many holds a set records", () => {
     const plank = (reps: number | null, time: number, date: string, workoutLogId: string) =>
-      makeSet({ exerciseName: "plank", category: "strength", reps, time, date, workoutLogId });
+      makeSet({ exerciseName: "plank", category: "strength", reps, time: minutes(time), date, workoutLogId });
     const prs = calculatePersonalRecords([
       plank(null, 1.5, "2026-01-05", "w1"),
       plank(3, 1, "2026-01-12", "w2"),

@@ -1,3 +1,5 @@
+import type { Metres, Seconds } from "./units";
+
 export type MafConsistency = "low" | "moderate" | "high";
 export type MafTrend = "improving" | "flat" | "declining";
 
@@ -201,8 +203,8 @@ export function computeMafCompliance(input: MafComplianceInput): MafComplianceRe
  * subject to does not apply here.
  */
 export interface MafTestMetrics {
-  durationSeconds: number | null;
-  distanceMeters: number | null;
+  durationSeconds: Seconds | null;
+  distanceMeters: Metres | null;
   avgHeartRate: number | null;
   maxHeartRate: number | null;
   mafCeilingUsed: number;

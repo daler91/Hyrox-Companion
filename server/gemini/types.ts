@@ -152,8 +152,13 @@ export interface TrainingContext {
   /** MAF test history/trend summary; present only for MAF-method athletes. */
   mafTrend?: MafTrendSummary;
   weeklyGoal?: number;
-  weightUnit?: string;
-  distanceUnit?: string;
+  /**
+   * The athlete's units, with an unset preference already resolved to the
+   * column defaults (kg, km) by buildTrainingContext. Required, so a prompt
+   * renderer never has to guess (docs/adr-units.md rule 4, tech debt #50).
+   */
+  weightUnit: string;
+  distanceUnit: string;
   /** Recent fuelling vs training load + targets; present only when the nutrition feature is on and the athlete has logged food or set a target. */
   nutrition?: NutritionCoachContext;
   /**

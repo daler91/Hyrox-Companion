@@ -17,6 +17,8 @@ const baseTrainingContext: TrainingContext = {
   skippedWorkouts: 0,
   completionRate: 0,
   currentStreak: 0,
+  weightUnit: "kg",
+  distanceUnit: "km",
   recentWorkouts: [],
   exerciseBreakdown: {},
 };

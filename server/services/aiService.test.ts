@@ -75,6 +75,9 @@ describe("buildTrainingContext", () => {
       completionRate: 0,
       currentStreak: 0,
       currentDate: "2026-01-15",
+      // An unset preference resolves to the column defaults (tech debt #50).
+      weightUnit: "kg",
+      distanceUnit: "km",
       // An athlete with no declared constraints or absences: present but empty,
       // so the prompt renderer self-suppresses.
       trainingConstraints: null,

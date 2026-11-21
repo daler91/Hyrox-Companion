@@ -23,10 +23,16 @@ export interface PromptExerciseSet {
   readonly distanceUnit?: string | null;
 }
 
-/** The athlete's CURRENT units: every value is converted into, and labelled with, these. */
-interface FormatOptions {
-  readonly weightUnit?: string | null;
-  readonly distanceUnit?: string | null;
+/**
+ * The athlete's CURRENT units: every value is converted into, and labelled
+ * with, these. Required, not defaulted (docs/adr-units.md, rule 4): a
+ * formatter that does not know the unit must not guess kilograms and print the
+ * guess as fact (tech debt #50). The athlete's unset preference is resolved to
+ * the column defaults where it is read, not here.
+ */
+export interface FormatOptions {
+  readonly weightUnit: string;
+  readonly distanceUnit: string;
 }
 
 interface ExerciseGroup {
@@ -104,7 +110,7 @@ function distanceSuffix(distanceUnit?: string | null): "m" | "ft" {
 function formatSetMeasurements(set: PromptExerciseSet, options: FormatOptions): string {
   const parts: string[] = [];
   if (set.reps != null) parts.push(`${set.reps} reps`);
-  if (set.weight != null) parts.push(`${formatNumber(set.weight)} ${options.weightUnit || "kg"}`);
+  if (set.weight != null) parts.push(`${formatNumber(set.weight)} ${options.weightUnit}`);
   if (set.distance != null)
     parts.push(`${formatNumber(set.distance)}${distanceSuffix(options.distanceUnit)}`);
   // exercise_sets.time is minutes and this module is the prompt formatter, so
@@ -178,7 +184,7 @@ function toDisplayUnits(set: PromptExerciseSet, options: FormatOptions): PromptE
 
 export function formatExerciseSetsForPrompt(
   sets: readonly PromptExerciseSet[] | null | undefined,
-  options: FormatOptions = {},
+  options: FormatOptions,
 ): string {
   if (!sets || sets.length === 0) return "";
   return groupExerciseSets(sets.map((set) => toDisplayUnits(set, options)))
@@ -194,7 +200,7 @@ export function buildWorkoutSearchText(
     readonly notes?: string | null;
     readonly exerciseDetails?: readonly PromptExerciseSet[] | null;
   },
-  options: FormatOptions = {},
+  options: FormatOptions,
 ): string {
   const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, options);
   const details = exerciseSummary

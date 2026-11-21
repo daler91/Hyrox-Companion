@@ -1,4 +1,5 @@
 import type { ExerciseName, ExerciseSet, StructureBlockInput } from "@shared/schema";
+import { minutesOrAbsent } from "@shared/units";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { ExerciseTable } from "@/components/workout-detail/ExerciseTable";
@@ -140,11 +141,11 @@ export function DraftExerciseTable({
           weightUnit: null,
           distance: s.distance ?? null,
           distanceUnit: null,
-          time: s.time ?? null,
+          time: minutesOrAbsent(s.time ?? null),
           plannedReps: s.plannedReps ?? null,
           plannedWeight: s.plannedWeight ?? null,
           plannedDistance: s.plannedDistance ?? null,
-          plannedTime: s.plannedTime ?? null,
+          plannedTime: minutesOrAbsent(s.plannedTime ?? null),
           blockId: s.blockId ?? null,
           stepNumber: s.stepNumber ?? null,
           intervalMinute: s.intervalMinute ?? null,

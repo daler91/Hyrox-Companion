@@ -12,6 +12,8 @@ function context(overrides: Partial<TrainingContext> = {}): TrainingContext {
     skippedWorkouts: 0,
     completionRate: 70,
     currentStreak: 3,
+    weightUnit: "kg",
+    distanceUnit: "km",
     recentWorkouts: [],
     exerciseBreakdown: {},
     ...overrides,
