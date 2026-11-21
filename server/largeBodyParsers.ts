@@ -54,7 +54,8 @@ export function needsLargeJsonBody(path: string): boolean {
  * rate-limited the caller.
  */
 export function skipLargeJsonBodyPaths(parser: RequestHandler): RequestHandler {
-  return (req, res, next) => {
+  // Named so server/__tests__/middlewareOrder.test.ts can find it in the stack.
+  return function jsonBodyParserUnlessLarge(req, res, next) {
     if (needsLargeJsonBody(req.path)) {
       next();
       return;
