@@ -5,11 +5,15 @@ import { format } from "date-fns";
 import { BookOpen, CheckCircle2, Circle, Database, FileText, Loader2, Square } from "lucide-react";
 import React, { useMemo, useState } from "react";
 
+// Import from the module, not the `missed-recovery` barrel: the barrel also
+// re-exports `MissedRecoveryDialog` (~17 kB source), which would pull the
+// dialog into the eager Timeline route chunk. Only the lazy
+// `TimelineWorkoutSurfaces` renders the dialog.
 import {
   isRecoverableEntry,
   MissedRecoveryPrompt,
   type RecoverEntryHandler,
-} from "@/components/timeline/missed-recovery";
+} from "@/components/timeline/missed-recovery/MissedRecoveryPrompt";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
