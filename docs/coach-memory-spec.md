@@ -2,10 +2,11 @@
 
 **Status.** **Paths A, B and C shipped.** Path C (§2–§6) went in as the five PRs in §6, built
 ahead of the §7 measurement at the owner's call, so `pnpm tsx script/coach-memory-usage.ts`
-is no longer a gate on building it. The script still counts only the capture surfaces that
-came before the card (the `training_constraints` note, `principles` materials, timeline
-annotations, skip reasons); it has no query on `athlete_facts`, so it does not show whether
-athletes use the card. The chat-proposed facts §8 deferred ("v1 has no AI writes") shipped
+is no longer a gate on building it. It now shows whether athletes use the card: it counts
+athletes with an active `athlete_facts` row, split by where the facts came from (Settings, the
+plan wizard, onboarding, a coach proposal saved from chat), and those who retired one,
+alongside the capture surfaces that came before the card (the `training_constraints` note,
+`principles` materials, timeline annotations, skip reasons). The chat-proposed facts §8 deferred ("v1 has no AI writes") shipped
 too, as proposals the athlete saves or turns down, never writes (AI coach chat review, I5).
 Where each piece lives: [AI and RAG → The Athlete Card](ai-and-rag.md#the-athlete-card).
 Register entry: recommendation #8 in [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md).
@@ -331,7 +332,8 @@ Consent is enforced where facts are _read_ — every render path already sits be
   `type='principles'` chunks ahead of the topK search — which is about a day and no schema
   change. That pin has since shipped (`listPinnedPrincipleChunks`,
   `server/services/ragService.ts`; see §0), and `script/coach-memory-usage.ts` counts the
-  athletes with a `principles` material and those with a stored `training_constraints` note.
+  athletes with a `principles` material, those with a stored `training_constraints` note and
+  those using the athlete card.
 
 ---
 
