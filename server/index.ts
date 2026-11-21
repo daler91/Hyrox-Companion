@@ -313,7 +313,8 @@ app.use(pinoHttp({
   }
 }));
 
-app.use((req, _res, next) => {
+// Named so server/__tests__/middlewareOrder.test.ts can find it in the stack.
+app.use(function bindRequestContext(req, _res, next) {
   const reqWithId = req as Request & { id?: string };
   // Binds requestId only. This middleware is mounted here, at module scope,
   // but `clerkMiddleware()` is registered much later — inside registerRoutes()

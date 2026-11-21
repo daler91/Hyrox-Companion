@@ -1,4 +1,5 @@
 import type { StravaActivitySummary, WorkoutLog } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay } from "../../test/factories";
@@ -215,7 +216,7 @@ describe("hasAthleteEdits — an auto link since D12", () => {
       prescribedNotes: "Strava: Morning Run",
       plannedSetCount: null,
       planDayId: "pd-tempo",
-      duration: 30,
+      duration: minutes(30),
       distanceMeters: 6100,
       stravaActivityId: "9001",
       deviceLinkSource: "auto",
@@ -240,7 +241,7 @@ describe("hasAthleteEdits — an auto link since D12", () => {
     plannedWeight: null,
     distance: 6100,
     plannedDistance: null,
-    time: 30,
+    time: minutes(30),
     plannedTime: null,
     distanceUnit: "m",
   } as const;

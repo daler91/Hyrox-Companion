@@ -1,6 +1,7 @@
 import { LOAD_GOVERNOR_CUE_PREFIX } from "@shared/coachNotes";
 import { dayDiff as daysBetween, toIsoDateUtc } from "@shared/dateUtils";
 import type { InsertExerciseSet, TrainingLoadOverview, WorkoutSuggestion } from "@shared/schema";
+import { minutes, minutesOrAbsent } from "@shared/units";
 
 import {
   type LoadGovernorSuggestion,
@@ -124,7 +125,7 @@ function buildEasyRunRows(planDayId: string, workout: UpcomingWorkoutForLoad): I
     reps: null,
     weight: null,
     distance: run?.distance ?? null,
-    time: run ? null : SYNTHESIZED_RECOVERY_RUN_MINUTES,
+    time: run ? null : minutes(SYNTHESIZED_RECOVERY_RUN_MINUTES),
     plannedReps: null,
     plannedWeight: null,
     plannedDistance: null,
@@ -231,7 +232,7 @@ function buildReducedRows(
       reps: row.reps ?? null,
       weight: row.weight ?? null,
       distance: row.distance ?? null,
-      time: row.time ?? null,
+      time: minutesOrAbsent(row.time ?? null),
       plannedReps: null,
       plannedWeight: null,
       plannedDistance: null,

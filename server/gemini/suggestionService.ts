@@ -342,8 +342,8 @@ export function buildPromptDataSections(
     formatMafContext(trainingContext),
     formatExerciseFrequency(trainingContext.exerciseBreakdown),
     formatPerformanceStats(trainingContext.structuredExerciseStats, {
-      weightUnit: trainingContext.weightUnit || "kg",
-      distanceUnit: trainingContext.distanceUnit ?? "km",
+      weightUnit: trainingContext.weightUnit,
+      distanceUnit: trainingContext.distanceUnit,
     }),
     formatRecentWorkouts(trainingContext),
   ];

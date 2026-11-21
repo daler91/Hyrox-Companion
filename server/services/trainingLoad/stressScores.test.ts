@@ -1,4 +1,5 @@
 import type { StravaActivitySummary, WorkoutLog } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { describe, expect, it } from "vitest";
 
 import { calculateTrainingLoad } from "../trainingLoadService";
@@ -38,7 +39,7 @@ function recording(sportType: string): StravaActivitySummary {
 
 function liftingHour(overrides: Partial<WorkoutLog>): WorkoutLog {
   return makeWorkoutLog({
-    duration: 60,
+    duration: minutes(60),
     avgHeartrate: 105,
     rpe: 8,
     mainWorkout: "Weight Training",

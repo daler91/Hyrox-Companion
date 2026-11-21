@@ -1,4 +1,5 @@
 import type { HealthConnectSessionInput, WorkoutLog } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { storage } from "../storage";
@@ -72,7 +73,7 @@ describe("importHealthConnectSessions", () => {
   it("keeps one of two apps' copies of a session, and none that Strava already recorded", async () => {
     vi.mocked(storage.workouts.listDeviceRecordingsForDates).mockImplementation(async (_user, _dates, provider) =>
       provider === "strava"
-        ? [{ startedAt: new Date("2026-11-08T18:00:30Z"), duration: 40, focus: "Ride", deviceActivity: null }]
+        ? [{ startedAt: new Date("2026-11-08T18:00:30Z"), duration: minutes(40), focus: "Ride", deviceActivity: null }]
         : [],
     );
     const result = await importHealthConnectSessions(USER, {

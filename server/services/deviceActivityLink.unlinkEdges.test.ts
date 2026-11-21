@@ -1,4 +1,5 @@
 import { exerciseSets, type StravaActivitySummary, type WorkoutLog, workoutLogs } from "@shared/schema";
+import { minutes } from "@shared/units";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
@@ -93,7 +94,7 @@ const RECORDING_SET = {
   plannedWeight: null,
   distance: 8100 as number | null,
   plannedDistance: null,
-  time: 45,
+  time: minutes(45),
   plannedTime: null,
   distanceUnit: "m",
 };
@@ -111,7 +112,7 @@ function autoLinkLog(overrides: Partial<WorkoutLog> = {}): WorkoutLog {
     prescribedNotes: "Hold 4:30/km\nStrava: Morning Run",
     planDayId: "pd-1",
     planId: "plan-1",
-    duration: 45,
+    duration: minutes(45),
     distanceMeters: 8100,
     stravaActivityId: "9001",
     deviceLinkSource: "auto",
@@ -465,8 +466,8 @@ describe("isUncorrectedRecordingSet", () => {
 
   it.each<[string, SetChange]>([
     ["the recording's set with its distance corrected", { distance: 8000, version: 2 }],
-    ["the recording's set with its time corrected", { time: 47, version: 2 }],
-    ["a run typed in place of the recording's set", { distance: 5000, time: 25 }],
+    ["the recording's set with its time corrected", { time: minutes(47), version: 2 }],
+    ["a run typed in place of the recording's set", { distance: 5000, time: minutes(25) }],
     ["a set of another exercise", { exerciseName: "tempo_run", version: 2 }],
     ["a set given reps", { reps: 6, version: 2 }],
     ["a set seeded from the plan", { plannedDistance: 8000, version: 2 }],
@@ -489,7 +490,7 @@ describe("isUncorrectedRecordingSet", () => {
       {},
       { version: 2 },
       { distance: 8000, version: 2 },
-      { time: 47, version: 2 },
+      { time: minutes(47), version: 2 },
       { customLabel: "Hills", version: 2 },
     ];
     for (const change of changes) {

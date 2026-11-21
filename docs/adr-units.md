@@ -85,10 +85,24 @@ operators, so `someMinutes + someSeconds` compiles. That gap is covered by rule 
 identifier holding a duration ends in `Seconds` or `Minutes`, so mixed arithmetic is
 visible on the line. This is a real limitation and is why the naming rule comes first.
 
-A brand also only guards a slot that is typed with it. The Drizzle row types and
-`MafTestMetrics.durationSeconds` (`shared/maf.ts`) are plain `number`, so a stored value is
-tagged where it is read (`minutes(workout.duration)`) and unwrapped with `unitless` where
-it is written, as `server/services/mafTestService.ts` does for the MAF duration.
+A brand also only guards a slot that is typed with it, so the storage types carry the brands
+too (tech debt #50, resolved 2026-11-21):
+
+- The Drizzle minutes columns are typed `Minutes`: `workout_logs.duration`, `exercise_sets.time`
+  and `exercise_sets.planned_time` (`.$type<Minutes>()` in `shared/schema/tables.ts`). A row read
+  from them is already `Minutes`; a plain number written to them must be tagged first, with
+  `minutes()` or, for a nullable value, `minutesOrAbsent()`. Seconds reaching one fail to
+  compile, so a device import converts with `secondsToMinutes(seconds(...))` or
+  `minutes(Math.round(seconds / 60))` for the whole-minute `duration`.
+- The zod schemas that feed them are typed to match: the insert schemas and the request bodies'
+  set `time` / `plannedTime` and workout `duration` output `Minutes` (`minutesColumn`,
+  `setMinutesSchema` in `shared/schema/types/workouts.ts`). Each returns the same runtime
+  `z.number()` schema with only its type changed, so validation and the OpenAPI document did
+  not change. drizzle-zod's types otherwise read a branded number as an object.
+- `MafTestMetrics` (`shared/maf.ts`) holds `Seconds` and `Metres`.
+
+`shared/units.storageBrands.test.ts` pins all of this at the type level (`pnpm check:test`).
+Structure-step targets (`targetTime` inside a block's JSON) are not branded.
 
 ### 4. No hardcoded unit suffix outside a formatter
 
@@ -96,9 +110,13 @@ it is written, as `server/services/mafTestService.ts` does for the MAF duration.
 Route through `formatWeight` / `formatDistance` / `formatMinutes`, or take the athlete's
 preference as a **required** parameter.
 
-Required, not defaulted. `serializeWorkoutStructure` and `computeProgressionFlags` now each
-demand both the weight unit and the distance preference, because a default is what produced
-H16 and M8 — the code did not know the unit, guessed metric, and rendered the guess as fact.
+Required, not defaulted. `serializeWorkoutStructure`, `computeProgressionFlags` and the coaching
+prompt's set formatter (`formatExerciseSetsForPrompt` / `buildWorkoutSearchText` in
+`server/prompts/exerciseSetFormatter.ts`, which used to fall back to kg) each demand both the
+weight unit and the distance preference, because a default is what produced H16 and M8 — the
+code did not know the unit, guessed metric, and rendered the guess as fact. An athlete's unset
+preference is resolved once, where it is read: `buildTrainingContext` resolves it to the column
+defaults (kg, km), so `TrainingContext.weightUnit` / `distanceUnit` are always present.
 
 ## Consequences
 

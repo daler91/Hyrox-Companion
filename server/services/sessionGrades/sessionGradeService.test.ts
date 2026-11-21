@@ -1,4 +1,5 @@
 import type { PlanDay, WorkoutLog, WorkoutLogStream } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay, createMockTrainingPlanWithDays, createMockUser } from "../../../test/factories";
@@ -41,7 +42,7 @@ function stravaRun(overrides: Partial<WorkoutLog> = {}): WorkoutLog {
     stravaActivityId: "9001",
     planDayId: EASY_DAY.id,
     planId: "plan-1",
-    duration: 40,
+    duration: minutes(40),
     avgHeartrate: 139,
     maxHeartrate: 146,
     avgSpeed: 2.7,
@@ -163,7 +164,7 @@ describe("gradeWorkoutLogs", () => {
       source: "manual",
       planDayId: EASY_DAY.id,
       avgHeartrate: 155,
-      duration: 40,
+      duration: minutes(40),
     });
     const grade = (await gradeWorkoutLogs(storage, USER, [manual], { now: NOW })).get("manual");
     expect(grade).toMatchObject({ verdict: "too_hard", dataSource: "summary", streamStatus: "not_applicable" });
@@ -175,8 +176,8 @@ describe("gradeWorkoutLogs", () => {
       storage,
       USER,
       [
-        stravaRun({ id: "summary-only", stravaActivityId: "1", duration: 60 }),
-        stravaRun({ id: "with-stream", stravaActivityId: "2", duration: 40 }),
+        stravaRun({ id: "summary-only", stravaActivityId: "1", duration: minutes(60) }),
+        stravaRun({ id: "with-stream", stravaActivityId: "2", duration: minutes(40) }),
       ],
       { now: NOW },
     );
@@ -190,9 +191,9 @@ describe("gradeWorkoutLogs", () => {
       storage,
       USER,
       [
-        stravaRun({ id: "short", stravaActivityId: "1", duration: 20 }),
-        stravaRun({ id: "long", stravaActivityId: "2", duration: 45 }),
-        stravaRun({ id: "medium", stravaActivityId: "3", duration: 30 }),
+        stravaRun({ id: "short", stravaActivityId: "1", duration: minutes(20) }),
+        stravaRun({ id: "long", stravaActivityId: "2", duration: minutes(45) }),
+        stravaRun({ id: "medium", stravaActivityId: "3", duration: minutes(30) }),
       ],
       { now: NOW },
     );
@@ -208,8 +209,8 @@ describe("gradeWorkoutLogs", () => {
 
     const bare = createMockPlanDay({ id: "bare", planId: "plan-1", focus: "Easy Run", mainWorkout: "40 min easy" });
     const history = [
-      makeWorkoutLog({ id: "h1", date: "2026-09-01", focus: "Run", distanceMeters: 5000, duration: 25, avgSpeed: 5000 / 1500 }),
-      makeWorkoutLog({ id: "h2", date: "2026-09-08", focus: "Run", distanceMeters: 10000, duration: 52, avgSpeed: 10000 / 3120 }),
+      makeWorkoutLog({ id: "h1", date: "2026-09-01", focus: "Run", distanceMeters: 5000, duration: minutes(25), avgSpeed: 5000 / 1500 }),
+      makeWorkoutLog({ id: "h2", date: "2026-09-08", focus: "Run", distanceMeters: 10000, duration: minutes(52), avgSpeed: 10000 / 3120 }),
     ];
     const noPace = makeStorage({ days: [bare], history });
     const grade = (

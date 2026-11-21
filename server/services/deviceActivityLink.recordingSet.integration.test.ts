@@ -6,6 +6,7 @@ import {
   users,
   workoutLogs,
 } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -361,7 +362,7 @@ describe("the recording's set leaves with the recording (real Postgres)", () => 
       category: "running",
       setNumber: 1,
       distance: 5000,
-      time: 25,
+      time: minutes(25),
       distanceUnit: "m",
       sortOrder: 0,
     });

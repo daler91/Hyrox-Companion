@@ -14,7 +14,7 @@ import {
   workoutStructureSteps,
 } from "@shared/schema";
 import type { UnitPreferences } from "@shared/unitConversion";
-import { seconds, secondsToMinutes, unitless } from "@shared/units";
+import { type Minutes, minutes, seconds, secondsToMinutes } from "@shared/units";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "../../db";
@@ -104,12 +104,12 @@ function stringTarget(targets: StructureBlockInput["steps"][number]["targets"], 
  * entered the column as 45 MINUTES and `plannedSessionEstimate` added 45 minutes
  * of planned work to the session (audit C7).
  */
-export function resolveStructureStepTimeTarget(targets: StructureBlockInput["steps"][number]["targets"]): number | null {
+export function resolveStructureStepTimeTarget(targets: StructureBlockInput["steps"][number]["targets"]): Minutes | null {
   const targetMinutes = numericTarget(targets, "targetTime", "time");
-  if (targetMinutes != null) return targetMinutes;
+  if (targetMinutes != null) return minutes(targetMinutes);
 
   const targetSeconds = numericTarget(targets, "durationSeconds");
-  return targetSeconds == null ? null : unitless(secondsToMinutes(seconds(targetSeconds)));
+  return targetSeconds == null ? null : secondsToMinutes(seconds(targetSeconds));
 }
 
 function isWorkStep(step: StructureBlockInput["steps"][number]): boolean {

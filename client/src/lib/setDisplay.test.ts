@@ -1,3 +1,4 @@
+import { minutes } from "@shared/units";
 import { describe, expect, it } from "vitest";
 
 import { makeExerciseSet } from "@/test/factories/exerciseSetFactory";
@@ -75,7 +76,7 @@ describe("toPreferenceScale", () => {
   });
 
   it("does not drop the fields it does not touch", () => {
-    const set = makeExerciseSet({ id: "s-9", reps: 5, time: 12, notes: "hard", weight: 100, weightUnit: "kg" });
+    const set = makeExerciseSet({ id: "s-9", reps: 5, time: minutes(12), notes: "hard", weight: 100, weightUnit: "kg" });
 
     expect(toPreferenceScale(set, LB_ATHLETE)).toMatchObject({ id: "s-9", reps: 5, time: 12, notes: "hard" });
   });

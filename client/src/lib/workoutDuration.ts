@@ -1,8 +1,11 @@
-export function normalizeDurationMinutes(value: string | number | null | undefined): number | null {
+import { type Minutes, minutes } from "@shared/units";
+
+/** The workout form's duration field, in whole minutes (`workout_logs.duration`), or null when not entered. */
+export function normalizeDurationMinutes(value: string | number | null | undefined): Minutes | null {
   if (value == null) return null;
   const parsed = typeof value === "number" ? value : Number(value.trim());
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return Math.round(parsed);
+  return minutes(Math.round(parsed));
 }
 
 /**

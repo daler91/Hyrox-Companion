@@ -1,6 +1,7 @@
 import { countsAsTraining, isRunSportType } from "@shared/deviceSportTypes";
 import type { StravaActivitySummary } from "@shared/schema";
 import { type DistanceUnit, formatElevation } from "@shared/unitConversion";
+import { minutes } from "@shared/units";
 
 import {
   formatActivityDistance,
@@ -118,7 +119,8 @@ function getNotes(activity: StravaActivity): string | null {
 }
 
 export function mapStravaActivityToWorkout(activity: StravaActivity, userId: string, distanceUnit: DistanceUnit = "km") {
-  const durationMinutes = Math.round(activity.moving_time / 60);
+  // workout_logs.duration is whole minutes (docs/adr-units.md); Strava reports seconds.
+  const durationMinutes = minutes(Math.round(activity.moving_time / 60));
   const isDistanceActivity = activity.distance > 100;
 
   const mainWorkout = isDistanceActivity

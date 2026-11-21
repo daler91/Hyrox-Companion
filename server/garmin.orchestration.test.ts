@@ -1,4 +1,5 @@
 import type { GarminConnect as GarminConnectType } from "@flow-js/garmin-connect";
+import { minutes } from "@shared/units";
 import express from "express";
 import request from "supertest";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -245,7 +246,7 @@ describe("POST /sync import accounting", () => {
     vi.mocked(storage.workouts.listDeviceRecordingsForDates).mockResolvedValue([
       {
         startedAt: new Date("2026-07-01T07:00:05Z"),
-        duration: 25,
+        duration: minutes(25),
         focus: "Run",
         deviceActivity: null,
       },

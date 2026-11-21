@@ -1,5 +1,5 @@
 import { computeMafCompliance, type MafTestMetrics } from "@shared/maf";
-import { minutes, minutesToSeconds, unitless } from "@shared/units";
+import { metresOrAbsent, minutesToSeconds, secondsOrAbsent, unitless } from "@shared/units";
 
 import { AppError, ErrorCode } from "../errors";
 import { storage } from "../storage";
@@ -59,8 +59,8 @@ function buildMetricsAndAnalysis(
   const distanceMeters = pickMetric(manual?.distanceMeters, base.distanceMeters);
 
   const metrics: MafTestMetrics = {
-    durationSeconds,
-    distanceMeters,
+    durationSeconds: secondsOrAbsent(durationSeconds),
+    distanceMeters: metresOrAbsent(distanceMeters),
     avgHeartRate,
     maxHeartRate,
     mafCeilingUsed: ceiling,
@@ -134,8 +134,7 @@ export async function recordMafTestFromWorkout(
       // 60 minutes read as 0:06/km instead of 6:00/km, breaking the trend the
       // MAF test exists to produce (audit H1). The manual override below is
       // already seconds and is not touched.
-      durationSeconds:
-        workout.duration == null ? null : unitless(minutesToSeconds(minutes(workout.duration))),
+      durationSeconds: workout.duration == null ? null : unitless(minutesToSeconds(workout.duration)),
       distanceMeters: workout.distanceMeters ?? null,
       avgHeartRate: workout.avgHeartrate ?? null,
       maxHeartRate: workout.maxHeartrate ?? null,
