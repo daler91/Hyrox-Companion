@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toISODateString } from "@/lib/dateUtils";
 
 import { CHART_CARD_CLASS } from "./chartConstants";
@@ -152,30 +153,38 @@ export function WorkoutHeatmap({ workoutDates, rangeStart, explanation }: Workou
               ))}
             </div>
 
-            <div
-              className="grid flex-1 gap-x-2"
-              style={{ gridTemplateColumns: WEEK_GRID_TEMPLATE }}
-              data-testid="workout-heatmap-grid"
-              role="img"
-              aria-label="Workout activity heatmap: each square is a day, shaded when a workout was logged, arranged by week."
-            >
-              {grid.map((week) => (
-                <div
-                  key={week[0].date}
-                  className="flex flex-col items-center gap-1"
-                  data-testid="workout-heatmap-week"
-                >
-                  {week.map((cell) => (
-                    <div
-                      key={cell.date}
-                      className={`aspect-square w-full max-w-7 rounded-sm ${getHeatmapCellColor(cell)}`}
-                      title={getHeatmapCellTitle(cell)}
-                      data-testid="workout-heatmap-cell"
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
+            <TooltipProvider>
+              <div
+                className="grid flex-1 gap-x-2"
+                style={{ gridTemplateColumns: WEEK_GRID_TEMPLATE }}
+                data-testid="workout-heatmap-grid"
+                role="img"
+                aria-label="Workout activity heatmap: each square is a day, shaded when a workout was logged, arranged by week."
+              >
+                {grid.map((week) => (
+                  <div
+                    key={week[0].date}
+                    className="flex flex-col items-center gap-1"
+                    data-testid="workout-heatmap-week"
+                  >
+                    {week.map((cell) => (
+                      <Tooltip key={cell.date}>
+                        <TooltipTrigger asChild>
+                          <div
+                            className={`aspect-square w-full max-w-7 rounded-sm ${getHeatmapCellColor(cell)}`}
+                            aria-label={getHeatmapCellTitle(cell)}
+                            data-testid="workout-heatmap-cell"
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          {getHeatmapCellTitle(cell)}
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </TooltipProvider>
           </div>
 
           <div className="flex items-center gap-3 mt-3 text-[10px] text-muted-foreground">
@@ -188,8 +197,14 @@ export function WorkoutHeatmap({ workoutDates, rangeStart, explanation }: Workou
               <span>Workout logged</span>
             </span>
             {hasOutOfRange && (
-              <span className="inline-flex items-center gap-1" data-testid="workout-heatmap-out-of-range-legend">
-                <span className={`h-[10px] w-[10px] rounded-sm ${OUT_OF_RANGE_CELL_CLASS}`} aria-hidden="true" />
+              <span
+                className="inline-flex items-center gap-1"
+                data-testid="workout-heatmap-out-of-range-legend"
+              >
+                <span
+                  className={`h-[10px] w-[10px] rounded-sm ${OUT_OF_RANGE_CELL_CLASS}`}
+                  aria-hidden="true"
+                />
                 <span>Outside selected range</span>
               </span>
             )}
