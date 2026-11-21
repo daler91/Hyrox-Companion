@@ -693,8 +693,13 @@ only to a CI-based scan, and the scan job for one is commented out in
   Comments that read as code — method chains like `select().from().where()`, or
   `last3 = [8, 8, 8]` — can be flagged as commented-out code; describe the intent
   instead of pasting a snippet.
-- **Coverage on New Code** and **Security Hotspots reviewed.** New production code
-  should ship with tests, and any flagged hotspots must be triaged.
+- **Security Hotspots reviewed.** Any flagged hotspots must be triaged.
+- **Coverage on New Code is not measured.** Automatic Analysis cannot import a
+  coverage report, so the gate comment's "Coverage on New Code" reads 0.0% on
+  every PR, however well tested. CI's coverage gate is the vitest thresholds
+  that `pnpm test:coverage` enforces in `test.yml` (see
+  [Coverage reporting](#coverage-reporting)). New production code should still
+  ship with tests.
 
 `.sonarcloud.properties` sets `sonar.exclusions` to Drizzle SQL migrations
 (`migrations/**`, `**/*.sql`; the PL/SQL analyzer would otherwise flag them with
@@ -705,10 +710,13 @@ the Kotlin test source sets (`mobile/**/src/*Test/**`). It also declares the
 same test patterns through `sonar.tests`/`sonar.test.inclusions`, and
 `sonar.cpd.exclusions` drops three curated data tables
 (`server/prompts/exerciseSelection.ts`, `server/services/ai/exerciseKnowledge.ts`,
-`client/src/pages/landing/landingCopy.ts`) from duplication detection only. The
-`coverage/lcov.info` report path (`sonar.javascript.lcov.reportPaths`) lives
-only in `sonar-project.properties`, so it takes effect only if the project
-switches to the CI scanner. A failing
+`client/src/pages/landing/landingCopy.ts`) from duplication detection only.
+`sonar-project.properties` carries the same test classification, exclusions
+and duplication exclusions, so switching to the CI scanner would not change
+what counts as test code; `test/build/sonarConfig.test.ts` keeps the two files
+in step. The `coverage/lcov.info` report path
+(`sonar.javascript.lcov.reportPaths`) lives only in `sonar-project.properties`,
+since only a CI-based scan can import coverage. A failing
 gate posts a "Quality Gate failed" comment listing the failed conditions; a
 passing gate may still list non-blocking new issues worth cleaning up.
 
@@ -766,8 +774,10 @@ pnpm exec vitest run --coverage
 ```
 
 This is what CI runs (`pnpm test:coverage`). It enforces the thresholds defined
-in `vitest.config.ts` and fails if any metric drops below them. It also writes
-`coverage/lcov.info`.
+in `vitest.config.ts` and fails if any metric drops below them: this is the
+project's coverage gate, since SonarCloud's Automatic Analysis cannot import
+coverage (see [SonarCloud Quality Gate](#sonarcloud-quality-gate)). It also
+writes `coverage/lcov.info`, which only a CI-based Sonar scan would read.
 
 ### Running integration tests locally
 

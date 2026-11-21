@@ -1,4 +1,5 @@
 import type { StravaActivitySummary } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { storage } from "../storage";
@@ -116,7 +117,7 @@ describe("isSameRecording", () => {
 describe("recordingTimingFromLog", () => {
   it("reads a Strava row's recording from its snapshot, not the duration the athlete typed", () => {
     const enriched = makeWorkoutLog({
-      duration: 60,
+      duration: minutes(60),
       startedAt: null,
       focus: "Tempo",
       deviceActivity: { provider: "strava", raw: stravaRun(), filledColumns: [], linkedAt: "x" },
@@ -189,8 +190,8 @@ describe("supersedeHealthConnectRecordings", () => {
 
   it("bins the Health Connect import of a session Strava or Garmin now recorded", async () => {
     vi.mocked(storage.workouts.listUntouchedHealthConnectLogsForDates).mockResolvedValue([
-      { id: "hc-run", startedAt: new Date(START + MIN), duration: 45, focus: "Run" },
-      { id: "hc-walk", startedAt: new Date(START + 300 * MIN), duration: 30, focus: "Walk" },
+      { id: "hc-run", startedAt: new Date(START + MIN), duration: minutes(45), focus: "Run" },
+      { id: "hc-walk", startedAt: new Date(START + 300 * MIN), duration: minutes(30), focus: "Walk" },
     ]);
     const binned = await supersedeHealthConnectRecordings(USER, [{ date: "2026-09-08", timing: timing() }]);
     expect(binned).toBe(1);

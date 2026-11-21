@@ -11,6 +11,7 @@ import {
   workoutStructureBlocks,
   workoutStructureSteps,
 } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -395,7 +396,7 @@ describe("unlinking an auto-linked log whose recorded run the athlete only annot
       setNumber: 1,
       distance: 6123,
       distanceUnit: "m",
-      time: 31,
+      time: minutes(31),
       notes: "typed by me",
       sortOrder: 0,
     });

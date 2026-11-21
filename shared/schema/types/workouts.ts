@@ -1,6 +1,7 @@
 ﻿import type { CoachCueParts } from "../../coachNotes";
 import type { MafComplianceClass } from "../../maf";
 import type { PlannedSessionEstimate } from "../../plannedSessionEstimate";
+import type { Minutes } from "../../units";
 import type {
   DeviceLinkSource,
   PlanDayPriority,
@@ -23,6 +24,16 @@ import { calendarDateSchema } from "./requests";
  * into a minutes field, which is exactly the error that shipped (audit C7, H1).
  */
 export const SET_TIME_MAX_MINUTES = 1_440;
+
+/**
+ * A set's duration in a request body: minutes, from 0 to a day, typed `Minutes`
+ * so it can reach the branded `exercise_sets.time` / `planned_time` columns
+ * without a cast (tech debt #50). The runtime schema is a plain bounded
+ * `z.number()`, so validation and the OpenAPI document are unchanged.
+ */
+function setMinutesSchema(): z.ZodType<Minutes, number> {
+  return minutesColumn(z.number().min(0).max(SET_TIME_MAX_MINUTES));
+}
 
 /**
  * Highest `setNumber` a set can carry, so also the most sets one exercise can
@@ -83,6 +94,18 @@ export const WORKOUT_METRIC_MAX = {
   avgWatts: 3_000,
   sufferScore: 10_000,
 } as const;
+
+/**
+ * A minutes column's own `z.number()` schema, typed as `Minutes`.
+ *
+ * The column is typed `Minutes` in Drizzle (docs/adr-units.md, tech debt #50),
+ * and drizzle-zod's types read a branded number as an object, so without this
+ * the insert type would be nonsense. The runtime schema is returned untouched:
+ * request validation and the OpenAPI document do not change.
+ */
+function minutesColumn(schema: z.ZodType): z.ZodType<Minutes, number> {
+  return schema as unknown as z.ZodType<Minutes, number>;
+}
 
 export const insertWorkoutLogSchema = createInsertSchema(workoutLogs)
   .omit({
@@ -146,12 +169,15 @@ export const insertWorkoutLogSchema = createInsertSchema(workoutLogs)
       .max(250, "Max heart rate looks too high")
       .optional()
       .nullable(),
-    // D56 — see WORKOUT_METRIC_MAX.
-    duration: z
-      .number()
-      .int()
-      .min(0, "Duration must be at least 0")
-      .max(WORKOUT_METRIC_MAX.durationMinutes, "Duration is too long (minutes)")
+    // D56 — see WORKOUT_METRIC_MAX. Typed Minutes like the column it fills
+    // (tech debt #50); the runtime schema is the plain bounded integer.
+    duration: minutesColumn(
+      z
+        .number()
+        .int()
+        .min(0, "Duration must be at least 0")
+        .max(WORKOUT_METRIC_MAX.durationMinutes, "Duration is too long (minutes)"),
+    )
       .optional()
       .nullable(),
     calories: z
@@ -339,7 +365,12 @@ export type WorkoutStructureBlock = typeof workoutStructureBlocks.$inferSelect;
 export type ExerciseLoadTag = typeof exerciseLoadTags.$inferSelect;
 
 // Exercise set types and schemas
-export const insertExerciseSetSchema = createInsertSchema(exerciseSets).omit({
+// drizzle-zod's types leave a refined column required (if nullable), though it
+// is optional at runtime, so the refinement returns it optional itself.
+export const insertExerciseSetSchema = createInsertSchema(exerciseSets, {
+  time: (schema) => minutesColumn(schema).optional(),
+  plannedTime: (schema) => minutesColumn(schema).optional(),
+}).omit({
   id: true,
 });
 
@@ -600,12 +631,12 @@ const setMetricFields = {
   reps: z.number().int().min(1).max(10_000).optional().nullable(),
   weight: z.number().min(0).max(2_000).optional().nullable(),
   distance: z.number().min(0).max(1_000_000).optional().nullable(),
-  time: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
+  time: setMinutesSchema().optional().nullable(),
 };
 const plannedSetMetricFields = {
   plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
   plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
-  plannedTime: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
+  plannedTime: setMinutesSchema().optional().nullable(),
 };
 
 export const exerciseSetSchema = withBlockStepPairing(
@@ -948,7 +979,7 @@ const measurableSetFields = {
   reps: z.number().int().min(1).max(10_000).nullable().optional(),
   weight: z.number().min(0).max(2_000).nullable().optional(),
   distance: z.number().min(0).max(1_000_000).nullable().optional(),
-  time: z.number().min(0).max(SET_TIME_MAX_MINUTES).nullable().optional(),
+  time: setMinutesSchema().nullable().optional(),
   ...setStructureMetadataFieldsOptional,
   notes: z.string().max(1000).nullable().optional(),
 };

@@ -24,10 +24,13 @@
  * //               ^ Minutes is not assignable to Seconds
  * ```
  *
- * Only a branded receiver checks anything. The storage types are plain
- * `number` (`MafTestMetrics.durationSeconds`, the Drizzle rows), so handing
- * them minutes still compiles; the brand has to be checked before the value
- * reaches them (tech debt #50).
+ * Only a branded receiver checks anything, so the storage types carry the
+ * brands too: the Drizzle minutes columns (`workout_logs.duration`,
+ * `exercise_sets.time` and `planned_time`) are typed `Minutes`, and
+ * `MafTestMetrics` holds `Seconds` and `Metres`. A plain number reaching one of
+ * them must be tagged first (`minutes()`, `minutesOrAbsent()`), which is where
+ * its unit is asserted; seconds reaching a minutes column fail to compile
+ * (tech debt #50).
  *
  * Mixed arithmetic is covered by the naming rule in the ADR instead: an
  * identifier holding a duration must end in `Seconds` or `Minutes`, so mixing
@@ -61,6 +64,25 @@ export const METRES_PER_MILE = 1609.344;
 /** Tag a number that is already in minutes. */
 export function minutes(value: number): Minutes {
   return value as Minutes;
+}
+
+/**
+ * Tag a value that is already in minutes, passing an absent one through:
+ * the shape of a nullable minutes column (`workout_logs.duration`,
+ * `exercise_sets.time`) on its way into an insert or update.
+ */
+export function minutesOrAbsent<Absent extends null | undefined>(value: number | Absent): Minutes | Absent {
+  return value as Minutes | Absent;
+}
+
+/** Tag a value that is already in seconds, passing an absent one through. */
+export function secondsOrAbsent<Absent extends null | undefined>(value: number | Absent): Seconds | Absent {
+  return value as Seconds | Absent;
+}
+
+/** Tag a value that is already in metres, passing an absent one through. */
+export function metresOrAbsent<Absent extends null | undefined>(value: number | Absent): Metres | Absent {
+  return value as Metres | Absent;
 }
 
 /** Tag a number that is already in seconds. */

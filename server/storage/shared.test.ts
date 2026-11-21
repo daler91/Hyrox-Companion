@@ -1,3 +1,4 @@
+import { minutes } from "@shared/units";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../db";
@@ -55,8 +56,8 @@ describe("prescribedSetToLogRow", () => {
       plannedWeight: 100,
       distance: 400,
       plannedDistance: 380,
-      time: 90,
-      plannedTime: 85,
+      time: minutes(90),
+      plannedTime: minutes(85),
     });
 
     const row = prescribedSetToLogRow(prescribed, "log-1", KG_ATHLETE);
@@ -167,7 +168,7 @@ describe("structureTargetsFromExerciseSet", () => {
       plannedWeight: null, // no planned weight — falls back to actual
       distance: 500,
       plannedDistance: 450,
-      time: 60,
+      time: minutes(60),
       plannedTime: null, // falls back to actual
     });
 

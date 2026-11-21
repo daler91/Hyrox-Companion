@@ -228,10 +228,16 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
   not ready if there are any. The rotation steps in `docs/env-reference.md` now end with
   removing the key. Guarded by `server/env.test.ts`, `server/cryptoRotation.test.ts` and
   `server/services/keyRotation.test.ts`.
-- **50. Unit brands stop at the storage boundary** — Reported. `MafTestMetrics` and the
-  Drizzle rows are plain `number`, so assigning minutes to `durationSeconds` still compiles;
-  and rule 4 of `docs/adr-units.md` ("required, not defaulted") is not met by
-  `server/prompts/exerciseSetFormatter.ts`, whose `weightUnit` is optional and falls back to kg.
+- ~~**50. Unit brands stop at the storage boundary**~~ — Resolved 2026-11-21 (full scope, at
+  the owner's call). `workout_logs.duration`, `exercise_sets.time` and `planned_time` are typed
+  `Minutes`, and `MafTestMetrics` holds `Seconds` and `Metres`. The insert and request schemas
+  output `Minutes` through a type-only wrapper on the same runtime `z.number()`, so validation,
+  the OpenAPI document and the Kotlin models are unchanged. Every write site tags its number
+  (`minutes()`, the new `minutesOrAbsent()`, or a real conversion), test fixtures included.
+  `formatExerciseSetsForPrompt` / `buildWorkoutSearchText` require both units (rule 4), and
+  `buildTrainingContext` always sets the resolved kg/km on `TrainingContext`, whose renderers
+  each used to fall back to kg themselves. Guarded at the type level by
+  `shared/units.storageBrands.test.ts` and `exerciseSetFormatter.test.ts`.
 - ~~**51. The offline queue flushes on `online` without the owner check**~~ — Resolved
   2026-11-18. The `online` listener now goes through `retryPendingWrites()`, like the timer
   and focus retries, so a reconnect before the signed-in athlete's reconcile (or after a
@@ -312,23 +318,31 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
 
 ### CI and tooling
 
-- **65. SonarCloud may not be evaluating coverage** — Reported. Under Automatic Analysis no
-  lcov report is uploaded, so "Coverage on New Code" may never be computed.
+- ~~**65. SonarCloud may not be evaluating coverage**~~ — Resolved 2026-11-21, documented
+  rather than switched (the owner's call). Confirmed: every PR's gate comment reads "0.0%
+  Coverage on New Code", since Automatic Analysis cannot import coverage. `docs/testing.md` now
+  says so, and that the vitest thresholds `pnpm test:coverage` enforces in `test.yml` are the
+  coverage gate. Moving to a CI-based scan (token, settings change) stays possible.
 - ~~**66. `mobile.yml` runs on a push that touches `mobile-release.yml` but not on a pull
   request that does**~~ — Resolved 2026-11-18. The pull-request paths now match the push
   paths. Guarded by `test/build/workflowPaths.test.ts`, which compares the two lists for
   every workflow that filters both.
-- **67. `sonar-project.properties` declares a much narrower test set than
-  `.sonarcloud.properties`** — Confirmed
-  (`sonar.tests=client/src/hooks/__tests__,server/routes/__tests__`). It would misclassify
-  tests if the CI scanner were switched back on.
+- ~~**67. `sonar-project.properties` declares a much narrower test set than
+  `.sonarcloud.properties`**~~ — Resolved 2026-11-21. It now carries the same `sonar.tests`,
+  `test.inclusions`, exclusions and duplication exclusions, and keeps test files out of its
+  sources as a CI scan requires. Guarded by `test/build/sonarConfig.test.ts`.
 - ~~**68. `pnpm/action-setup` is labelled two ways**~~ — Resolved 2026-11-18. The pinned
   commit is tag v6.1.1, and all eight uses now say so. Guarded by
   `test/build/workflowPins.test.ts`: every pin of one commit must name one release.
-- **69. `script/coach-memory-usage.ts` cannot measure the athlete card** — Confirmed. It has
-  no query on `athlete_facts`, though its header still calls it the gate for that decision.
-- **70. No test pins the middleware order** — Reported. `docs/adr-startup-pattern.md` names
-  such a test as the precondition for changing the order.
+- ~~**69. `script/coach-memory-usage.ts` cannot measure the athlete card**~~ — Resolved
+  2026-11-21. It counts athletes with an active card fact, by source (Settings, the plan
+  wizard, onboarding, a chat proposal), and those who retired one; its header no longer calls
+  it a gate. Guarded by `script/coach-memory-usage.integration.test.ts` (real Postgres).
+- ~~**70. No test pins the middleware order**~~ — Resolved 2026-11-21.
+  `server/__tests__/middlewareOrder.test.ts` boots the real `server/index.ts` with its I/O
+  mocked, captures the app from `createServer`, and checks the stack against the ADR's order in
+  development and production mode; swapping two middlewares fails it. The ADR and `server.md`
+  point at it.
 
 ### Stale code comments
 
@@ -389,5 +403,5 @@ not in them.
 | P1 — High | 6/6 | 0 | All resolved |
 | P2 — Medium | 6/6 | 0 | All resolved |
 | P3 — Low | 10/11 | 1 | #22 CSRF resolved via `csrf-csrf` double-submit; #29 dual-TS installs open (blocked on TS 7.1 API + typescript-eslint) |
-| Docs verification, 2026-11-17 | 32/42 | 10 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43, #51, #52, #53, #57, #60, #66, #68 and #71 resolved 2026-11-18; #34, #35, #39, #48 and #49 resolved 2026-11-19; #44, #45, #46, #47, #54, #55, #56, #58 and #59 resolved 2026-11-20, as were parts (a) and (c) of #38 (its part (b) is open) |
-| **Total** | **60/71** | **11** | #29 is intentional interim state; #38 (b) waits on an API-contract decision; the other 9 of #30–#71 are untriaged |
+| Docs verification, 2026-11-17 | 37/42 | 5 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43, #51, #52, #53, #57, #60, #66, #68 and #71 resolved 2026-11-18; #34, #35, #39, #48 and #49 resolved 2026-11-19; #44, #45, #46, #47, #54, #55, #56, #58 and #59 resolved 2026-11-20, as were parts (a) and (c) of #38 (its part (b) is open); #50, #65, #67, #69 and #70 resolved 2026-11-21 |
+| **Total** | **65/71** | **6** | #29 is intentional interim state; #38 (b) waits on an API-contract decision; the other 4 of #30–#71 (#61–#64, the Android app) are untriaged |

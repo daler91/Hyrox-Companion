@@ -48,7 +48,9 @@ If any phase throws, `startupError` is set, the process stays bound, and `/api/v
 
 ## Middleware Stack
 
-Middleware is applied in the following order in `server/index.ts`:
+Middleware is applied in the following order in `server/index.ts`. `server/__tests__/middlewareOrder.test.ts`
+boots the real module with its I/O mocked and fails if the order changes (see
+[the startup ADR](adr-startup-pattern.md#canonical-middleware-order)):
 
 | Order | Middleware | Description |
 |-------|-----------|-------------|

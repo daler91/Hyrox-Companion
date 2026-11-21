@@ -38,7 +38,8 @@ export default defineConfig({
       include: ['client/src/**', 'server/**', 'shared/**'],
       // 'text' for the CI log; 'lcovonly' emits coverage/lcov.info — the path
       // sonar-project.properties points at (only consumed if the repo later
-      // switches from SonarCloud Automatic Analysis to the CI scanner).
+      // switches from SonarCloud Automatic Analysis to the CI scanner). Until
+      // then the thresholds below are the coverage gate (tech debt #65).
       // lcovonly, not lcov: the full reporter also writes an HTML report whose
       // generated JS trips eslint's typed-parser sweep.
       reporter: ['text', 'lcovonly'],

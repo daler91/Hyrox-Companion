@@ -121,6 +121,8 @@ export function mockBaseAutoCoachDeps(
     skippedWorkouts: 0,
     completionRate: 0,
     currentStreak: 0,
+    weightUnit: "kg",
+    distanceUnit: "km",
     recentWorkouts: [],
     upcomingWorkouts,
     exerciseBreakdown: {},

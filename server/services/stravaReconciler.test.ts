@@ -1,4 +1,5 @@
 import type { PlanDay, StravaActivitySummary, WorkoutLog } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../db";
@@ -131,7 +132,7 @@ describe("input shaping", () => {
   it("maps logs and plan days to candidates with their own duration source", () => {
     const log = makeWorkoutLog({
       id: "log-1",
-      duration: 44,
+      duration: minutes(44),
       distanceMeters: 8000,
       timeOfDayMin: 400,
     });
@@ -171,7 +172,7 @@ describe("reconcileStravaActivities", () => {
       date: DATE,
       focus: "Easy Run",
       mainWorkout: "8 km easy",
-      duration: 45,
+      duration: minutes(45),
       rpe: 6,
     });
     vi.mocked(storage.workouts.listDeviceUnlinkedLogsForDates).mockResolvedValue([logged]);
@@ -248,7 +249,7 @@ describe("reconcileStravaActivities", () => {
       date: DATE,
       focus: "Easy Run",
       mainWorkout: "8 km easy",
-      duration: 45,
+      duration: minutes(45),
     });
     vi.mocked(storage.workouts.listDeviceUnlinkedLogsForDates).mockResolvedValue([logged]);
     vi.mocked(attachStravaActivityToLogInTx).mockResolvedValue(undefined);
@@ -323,7 +324,7 @@ describe("reconcileStravaActivities", () => {
   });
 
   it("writes no set for an enriched log — the athlete's own session describes itself", async () => {
-    const logged = makeWorkoutLog({ id: "log-1", date: DATE, focus: "Easy Run", duration: 45 });
+    const logged = makeWorkoutLog({ id: "log-1", date: DATE, focus: "Easy Run", duration: minutes(45) });
     vi.mocked(storage.workouts.listDeviceUnlinkedLogsForDates).mockResolvedValue([logged]);
     vi.mocked(attachStravaActivityToLogInTx).mockResolvedValue({
       ...logged,

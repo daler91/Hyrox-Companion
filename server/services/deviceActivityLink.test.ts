@@ -1,4 +1,5 @@
 import { exerciseSets, type StravaActivitySummary, type WorkoutLog } from "@shared/schema";
+import { minutes } from "@shared/units";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
@@ -88,7 +89,7 @@ const RECORDING_SET = {
   plannedWeight: null,
   distance: 8100 as number | null,
   plannedDistance: null,
-  time: 45,
+  time: minutes(45),
   plannedTime: null,
   distanceUnit: "m",
 };
@@ -112,7 +113,7 @@ function linkCreatedLog(overrides: Partial<WorkoutLog> = {}): WorkoutLog {
     actualSetCount: 1,
     planDayId: "pd-1",
     planId: "plan-1",
-    duration: 45,
+    duration: minutes(45),
     distanceMeters: 8100,
     startedAt: new Date("2026-09-08T11:30:00Z"),
     stravaActivityId: "9001",
@@ -166,7 +167,7 @@ describe("attachStravaActivityToLogInTx", () => {
   it("fills only the NULL metric columns and records which ones", async () => {
     const tx = makeTx();
     // The athlete typed a duration and an RPE; distance and HR were left blank.
-    const existing = makeWorkoutLog({ id: "log-1", duration: 50, rpe: 7 });
+    const existing = makeWorkoutLog({ id: "log-1", duration: minutes(50), rpe: 7 });
     tx.for.mockResolvedValue([existing]);
     tx.returning.mockResolvedValue([{ ...existing, stravaActivityId: "9001" }]);
 
@@ -300,7 +301,7 @@ describe("unlinkDeviceActivity", () => {
     const linked = makeWorkoutLog({
       id: "log-1",
       source: "manual",
-      duration: 50,
+      duration: minutes(50),
       rpe: 7,
       distanceMeters: 8100,
       avgHeartrate: 152,
@@ -466,7 +467,7 @@ describe("unlinkDeviceActivity", () => {
       weight: null,
       plannedWeight: null,
       distance: 8100,
-      time: 45,
+      time: minutes(45),
       distanceUnit: "m",
     };
     const edited = linkCreatedLog({ focus: "Tempo run", plannedSetCount: null, rpe: 8 });
@@ -498,7 +499,7 @@ describe("unlinkDeviceActivity", () => {
     // typed the 5 km they ran. Version 1 like the recording's set, but not the
     // recording's distance or time, so it is theirs.
     const edited = linkCreatedLog({ focus: "Tempo run", plannedSetCount: null, rpe: 8 });
-    const typedRun = { ...RECORDING_SET, distance: 5000, time: 25 };
+    const typedRun = { ...RECORDING_SET, distance: 5000, time: minutes(25) };
     givenLinkCreatedLog(edited, { sets: [typedRun] });
     tx.orderBy.mockResolvedValueOnce([{ ...typedRun, id: "set-typed-run" }]);
     tx.returning
@@ -552,7 +553,7 @@ describe("isUncorrectedRecordingSet", () => {
 
   it.each<[string, Partial<typeof RECORDING_SET>]>([
     ["a run the athlete typed in its place, at another distance", { distance: 5000 }],
-    ["a run the athlete typed in its place, over another time", { time: 40 }],
+    ["a run the athlete typed in its place, over another time", { time: minutes(40) }],
     ["a run with no distance where the recording had one", { distance: null }],
     ["a set of another exercise", { exerciseName: "tempo_run" }],
   ])("is not %s", (_label, change) => {
@@ -577,9 +578,9 @@ describe("isUncorrectedRecordingSet", () => {
         linkedAt: "2026-09-08T12:00:00Z",
       },
     });
-    expect(isUncorrectedRecordingSet(log, { ...RECORDING_SET, time: 30.566668 })).toBe(true);
+    expect(isUncorrectedRecordingSet(log, { ...RECORDING_SET, time: minutes(30.566668) })).toBe(true);
     // No looser than that: 30:35 is another run.
-    expect(isUncorrectedRecordingSet(log, { ...RECORDING_SET, time: 30.583334 })).toBe(false);
+    expect(isUncorrectedRecordingSet(log, { ...RECORDING_SET, time: minutes(30.583334) })).toBe(false);
   });
 
   it("reads a miles athlete's set in the feet it was stamped with", () => {
@@ -607,21 +608,21 @@ describe("isCorrectedRecordingSet", () => {
 
   it.each<[string, SetChange]>([
     ["the recording's set with its distance corrected and its time kept", { distance: 8000, version: 2 }],
-    ["the recording's set with its time corrected and its distance kept", { time: 47, version: 2 }],
+    ["the recording's set with its time corrected and its distance kept", { time: minutes(47), version: 2 }],
   ])("is %s", (_label, change) => {
     expect(isCorrectedRecordingSet(autoLog, { ...RECORDING_SET, ...change })).toBe(true);
   });
 
   it.each<[string, SetChange]>([
     ["the untouched recording set", {}],
-    ["a run typed in place of the recording's set (version 1)", { distance: 600, time: 4 }],
+    ["a run typed in place of the recording's set (version 1)", { distance: 600, time: minutes(4) }],
     ["a run typed with the recording's numbers, never edited", { version: 1 }],
     // D12 (CODEBASE_ANALYSIS_2026-10-03): any set PATCH bumps the version, so
     // a note or the same value retyped leaves the watch's numbers, which must
     // not stand for the prescribed run.
     ["the recording's set saved again unchanged", { version: 3 }],
     ["the recording's set given only a note (the numbers are all this reads)", { version: 2 }],
-    ["the recording's set rewritten in both numbers", { distance: 600, time: 4, version: 2 }],
+    ["the recording's set rewritten in both numbers", { distance: 600, time: minutes(4), version: 2 }],
     ["a run with neither number", { distance: null, time: null, version: 2 }],
     ["a set of another exercise", { exerciseName: "tempo_run", version: 2 }],
     ["a set given reps", { reps: 6, version: 2 }],
@@ -641,7 +642,7 @@ describe("isCorrectedRecordingSet", () => {
     const inFeet = { ...RECORDING_SET, distance: 30000, distanceUnit: "ft", version: 2 };
     expect(isCorrectedRecordingSet(autoLog, inFeet)).toBe(true);
     // Read as metres it keeps neither number: 26575 ft is the recording's distance in feet.
-    expect(isCorrectedRecordingSet(autoLog, { ...inFeet, time: 50, distanceUnit: "m" })).toBe(false);
+    expect(isCorrectedRecordingSet(autoLog, { ...inFeet, time: minutes(50), distanceUnit: "m" })).toBe(false);
   });
 
   it("does not read a missing number as kept for a recording that measured none", () => {
@@ -657,10 +658,10 @@ describe("isCorrectedRecordingSet", () => {
         linkedAt: "2026-09-08T12:00:00Z",
       },
     });
-    expect(isCorrectedRecordingSet(noDistance, { ...RECORDING_SET, distance: null, time: 20, version: 2 })).toBe(false);
+    expect(isCorrectedRecordingSet(noDistance, { ...RECORDING_SET, distance: null, time: minutes(20), version: 2 })).toBe(false);
     // Its own moving time saved again, no distance added: still the watch's.
-    expect(isCorrectedRecordingSet(noDistance, { ...RECORDING_SET, distance: null, time: 45, version: 2 })).toBe(false);
-    expect(isCorrectedRecordingSet(noDistance, { ...RECORDING_SET, distance: 5000, time: 45, version: 2 })).toBe(true);
+    expect(isCorrectedRecordingSet(noDistance, { ...RECORDING_SET, distance: null, time: minutes(45), version: 2 })).toBe(false);
+    expect(isCorrectedRecordingSet(noDistance, { ...RECORDING_SET, distance: 5000, time: minutes(45), version: 2 })).toBe(true);
   });
 });
 
@@ -736,7 +737,7 @@ describe("linkStandaloneDeviceLog", () => {
       source: "strava",
       stravaActivityId: "9001",
       distanceMeters: 8100,
-      duration: 45,
+      duration: minutes(45),
       deviceActivity: {
         provider: "strava",
         raw: RAW,
@@ -825,7 +826,7 @@ describe("releaseStravaActivityInTx", () => {
       focus: "Run",
       notes: "Morning Run | Avg HR: 152 bpm",
       distanceMeters: 8100,
-      duration: 45,
+      duration: minutes(45),
       deviceActivity: null,
     });
 
@@ -934,7 +935,7 @@ describe("legacyRawFromLog", () => {
       focus: "Run",
       notes: "Evening Run | Avg HR: 150 bpm (max 170)",
       stravaActivityId: "42",
-      duration: 30,
+      duration: minutes(30),
       distanceMeters: 5000,
       avgHeartrate: 150,
       maxHeartrate: 170,

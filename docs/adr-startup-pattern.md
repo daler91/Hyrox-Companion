@@ -25,7 +25,10 @@ Adopt **single startup module** as the canonical pattern.
 
 Startup must preserve this order. Reconciled against `server/index.ts` and `server/routes.ts`
 on 2026-11-16; [Server § Middleware Stack](server.md#middleware-stack) carries the same list with
-the per-entry rationale.
+the per-entry rationale. `server/__tests__/middlewareOrder.test.ts` pins it: it boots the real
+`server/index.ts` with its I/O mocked, in development and in production mode, and fails unless
+every step below that `server/index.ts` mounts is in the app's stack in this order (`registerRoutes()`
+stands in for items 13–16 as one step). Change the list and the test together.
 
 1. App settings — `trust proxy`, `x-powered-by` (`configureApp`, `server/bootstrap/appConfig.ts`)
 2. `compression`, with `text/event-stream` exempted so SSE is not held in the gzip buffer
@@ -71,5 +74,6 @@ with code 1 after an uncaught exception or unhandled rejection, once Sentry has 
 - Middleware reordering is a breaking change unless justified in a follow-up ADR.
 - Any migration to a modular bootstrap architecture requires:
   - a superseding ADR,
-  - equivalence tests for middleware ordering,
+  - equivalence tests for middleware ordering (`server/__tests__/middlewareOrder.test.ts` is the
+    one to keep passing),
   - a phased rollout that keeps one canonical runtime entrypoint at each phase.

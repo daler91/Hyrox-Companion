@@ -1,4 +1,5 @@
 import type { ExerciseSet } from "@shared/schema";
+import type { Minutes } from "@shared/units";
 
 import { typedRequest } from "./client";
 
@@ -23,11 +24,11 @@ export type PatchExerciseSetPayload = ComposedUnits & Partial<{
   reps: number | null;
   weight: number | null;
   distance: number | null;
-  time: number | null;
+  time: Minutes | null;
   plannedReps: number | null;
   plannedWeight: number | null;
   plannedDistance: number | null;
-  plannedTime: number | null;
+  plannedTime: Minutes | null;
   blockId: string | null;
   stepNumber: number | null;
   intervalMinute: number | null;

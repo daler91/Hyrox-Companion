@@ -455,11 +455,14 @@ describe("buildTrainingContext", () => {
     expect(ctx.mafHr).toBe(135);
   });
 
-  it("defaults mafHr to null and omits absent unit preferences", async () => {
+  // Tech debt #50: the context used to omit an unset preference, and each
+  // prompt renderer then guessed kg on its own. It now carries the resolved
+  // column defaults, so the renderers are told rather than left to guess.
+  it("defaults mafHr to null and resolves absent unit preferences to kg and km", async () => {
     const ctx = await buildTrainingContext(USER_ID);
     expect(ctx.mafHr).toBeNull();
-    expect(ctx).not.toHaveProperty("weightUnit");
-    expect(ctx).not.toHaveProperty("distanceUnit");
+    expect(ctx.weightUnit).toBe("kg");
+    expect(ctx.distanceUnit).toBe("km");
   });
 
   it("caps recent workouts at ten", async () => {
@@ -656,7 +659,7 @@ describe("buildTrainingContext", () => {
 
     expect(ctx.mafHr).toBeNull();
     expect(ctx.weeklyGoal).toBeUndefined();
-    expect(ctx).not.toHaveProperty("weightUnit");
+    expect(ctx.weightUnit).toBe("kg");
     expect(computeWeeklyVolume).not.toHaveBeenCalled();
     expect(storage.mafTests.listTestResults).not.toHaveBeenCalled();
   });

@@ -2,6 +2,7 @@
  * The Training Overview carries load by body system for the load window.
  */
 
+import { minutes } from "@shared/units";
 import { describe, expect, it } from "vitest";
 
 import type { ExerciseSetWithDate } from "../analyticsService";
@@ -14,7 +15,7 @@ describe("calculateTrainingOverview — load by body system", () => {
       id: "run",
       date: "2026-05-20",
       mainWorkout: "",
-      duration: 30,
+      duration: minutes(30),
       rpe: 5,
     });
     const set = {

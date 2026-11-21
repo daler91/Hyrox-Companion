@@ -1,4 +1,5 @@
 import type { CoachNoteInputs, InsertExerciseSet } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TrainingContext, UpcomingWorkout } from "../gemini";
@@ -73,6 +74,8 @@ function trainingContext(overrides: Partial<TrainingContext> = {}): TrainingCont
     skippedWorkouts: 0,
     completionRate: 0,
     currentStreak: 0,
+    weightUnit: "kg",
+    distanceUnit: "km",
     recentWorkouts: [],
     exerciseBreakdown: {},
     ...overrides,
@@ -90,7 +93,7 @@ describe("mapExerciseSetToPromptDetail", () => {
         reps: 5,
         weight: 200,
         distance: 0,
-        time: 0,
+        time: minutes(0),
         notes: "Top set of the day",
         sortOrder: 2,
         weightUnit: "kg",

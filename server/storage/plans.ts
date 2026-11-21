@@ -16,6 +16,7 @@ import {
   users,
   workoutLogs,
 } from "@shared/schema";
+import type { Minutes } from "@shared/units";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notExists, sql } from "drizzle-orm";
 
 import { db, type DbExecutor, type Tx } from "../db";
@@ -99,8 +100,8 @@ export interface PlanDayRecoverySetUpdate {
   readonly plannedReps?: number;
   readonly distance?: number;
   readonly plannedDistance?: number;
-  readonly time?: number;
-  readonly plannedTime?: number;
+  readonly time?: Minutes;
+  readonly plannedTime?: Minutes;
 }
 
 export interface PlanDayRecoveryWrite {

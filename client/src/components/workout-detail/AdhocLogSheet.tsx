@@ -1,4 +1,5 @@
 import type { AllowedImageMimeType, ExerciseSet, ParsedExercise } from "@shared/schema";
+import { minutesOrAbsent } from "@shared/units";
 import { useMutation } from "@tanstack/react-query";
 import { Dumbbell, ExternalLink, Gauge, ListChecks, Loader2, NotebookPen } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -92,11 +93,11 @@ function makeAdhocRow(seed: RowSeed): ExerciseSet {
     weightUnit: null,
     distance: seed.distance ?? null,
     distanceUnit: null,
-    time: seed.time ?? null,
+    time: minutesOrAbsent(seed.time ?? null),
     plannedReps: seed.plannedReps ?? null,
     plannedWeight: seed.plannedWeight ?? null,
     plannedDistance: seed.plannedDistance ?? null,
-    plannedTime: seed.plannedTime ?? null,
+    plannedTime: minutesOrAbsent(seed.plannedTime ?? null),
     blockId: seed.blockId ?? null,
     stepNumber: seed.stepNumber ?? null,
     intervalMinute: seed.intervalMinute ?? null,

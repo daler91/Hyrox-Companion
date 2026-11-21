@@ -145,6 +145,8 @@ export function createMockTrainingContext(
     completionRate: 75,
     currentStreak: 4,
     weeklyGoal: 5,
+    weightUnit: "kg",
+    distanceUnit: "km",
     recentWorkouts: [],
     upcomingWorkouts: [],
     exerciseBreakdown: {},

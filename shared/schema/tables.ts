@@ -17,6 +17,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
+import type { Minutes } from "../units";
 import type { DeviceActivitySnapshot } from "./deviceActivity";
 import {
   type AthleteFactCategory,
@@ -549,7 +550,7 @@ export const workoutLogs = pgTable(
     // as a run's headline. The dropped stopped time is not lost: read it back
     // with `stoppedSecondsFor` on the link snapshot, which is what the
     // workout-detail header surfaces.
-    duration: integer("duration"),
+    duration: integer("duration").$type<Minutes>(),
     rpe: integer("rpe"),
     // Manual log's local start time as minutes-from-midnight (0–1439), nullable.
     // Device imports use the precise startedAt instant instead; this is the
@@ -895,7 +896,7 @@ export const exerciseSets = pgTable(
     // two mislabelled renders (audit C7, H1, H2, H16, M8, L1).
     weight: real("weight"),
     distance: real("distance"),
-    time: real("time"),
+    time: real("time").$type<Minutes>(),
     // The unit `weight` is stored in: "kg" or "lbs" on rows written since L4,
     // NULL on legacy rows. Also what makes canonicalising possible later — the
     // reason pre-L4 rows cannot be converted is precisely that this is unknown
@@ -909,7 +910,7 @@ export const exerciseSets = pgTable(
     plannedReps: integer("planned_reps"),
     plannedWeight: real("planned_weight"),
     plannedDistance: real("planned_distance"),
-    plannedTime: real("planned_time"),
+    plannedTime: real("planned_time").$type<Minutes>(),
     blockId: varchar("block_id", { length: 255 }),
     stepNumber: integer("step_number"),
     intervalMinute: integer("interval_minute"),

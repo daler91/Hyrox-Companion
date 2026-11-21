@@ -1,4 +1,5 @@
 import type { StravaActivitySummary } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../db", () => ({ db: { select: vi.fn() } }));
@@ -58,7 +59,7 @@ function importedLog(activity: StravaActivitySummary = raw(), overrides = {}) {
     source: "strava",
     stravaActivityId: String(activity.id),
     focus: activity.sport_type,
-    duration: Math.round(activity.moving_time / 60),
+    duration: minutes(Math.round(activity.moving_time / 60)),
     distanceMeters: activity.distance,
     deviceActivity: { provider: "strava", raw: activity, filledColumns: [], linkedAt: "2026-09-01T08:00:00Z" },
     ...overrides,
@@ -131,7 +132,7 @@ describe("deviceActivitySetRow", () => {
         source: "strava",
         stravaActivityId: "1",
         focus: "Ride",
-        duration: 90,
+        duration: minutes(90),
         distanceMeters: 42000,
         deviceActivity: null,
       }),

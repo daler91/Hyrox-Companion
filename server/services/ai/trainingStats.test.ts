@@ -1,3 +1,4 @@
+import { minutes } from "@shared/units";
 import { describe, expect, it } from "vitest";
 
 import { makeExerciseSet as makeSet, makeTimelineEntry as makeEntry } from "./testFixtures";
@@ -285,7 +286,7 @@ describe("collectRecentWorkouts", () => {
             reps: 5,
             weight: 100,
             distance: 10,
-            time: 20,
+            time: minutes(20),
             notes: "deep",
             sortOrder: 3,
             weightUnit: "kg",
@@ -341,8 +342,8 @@ describe("getStructuredExerciseStats", () => {
     const stats = structuredStats([
       makeEntry({
         exerciseSets: [
-          makeSet({ reps: 10, weight: 100, distance: 200, time: 40 }),
-          makeSet({ reps: 20, weight: 120, distance: 200, time: 30 }),
+          makeSet({ reps: 10, weight: 100, distance: 200, time: minutes(40) }),
+          makeSet({ reps: 20, weight: 120, distance: 200, time: minutes(30) }),
         ],
       }),
     ]);
@@ -359,8 +360,8 @@ describe("getStructuredExerciseStats", () => {
     const stats = structuredStats([
       makeEntry({
         exerciseSets: [
-          makeSet({ weight: 0, distance: 0, time: 0, reps: 10 }),
-          makeSet({ weight: 80, distance: 100, time: 25, reps: 10 }),
+          makeSet({ weight: 0, distance: 0, time: minutes(0), reps: 10 }),
+          makeSet({ weight: 80, distance: 100, time: minutes(25), reps: 10 }),
         ],
       }),
     ]);
@@ -377,8 +378,8 @@ describe("getStructuredExerciseStats", () => {
     const stats = structuredStats([
       makeEntry({
         exerciseSets: [
-          makeSet({ reps: 10, weight: 120, distance: 200, time: 30 }),
-          makeSet({ reps: 10, weight: 100, distance: 200, time: 40 }),
+          makeSet({ reps: 10, weight: 120, distance: 200, time: minutes(30) }),
+          makeSet({ reps: 10, weight: 100, distance: 200, time: minutes(40) }),
         ],
       }),
     ]);
@@ -429,7 +430,7 @@ describe("getStructuredExerciseStats", () => {
     const stats = structuredStats([
       makeEntry({
         exerciseSets: [0.5, 1, 0.33].map((time) =>
-          makeSet({ exerciseName: "plank", category: "strength", time }),
+          makeSet({ exerciseName: "plank", category: "strength", time: minutes(time) }),
         ),
       }),
     ]);
@@ -440,7 +441,7 @@ describe("getStructuredExerciseStats", () => {
     const row = (workoutLogId: string, date: string, distance: number, time: number) =>
       makeEntry({
         date,
-        exerciseSets: [makeSet({ workoutLogId, exerciseName: ROWING, category: "functional", distance, time, distanceUnit: "m" })],
+        exerciseSets: [makeSet({ workoutLogId, exerciseName: ROWING, category: "functional", distance, time: minutes(time), distanceUnit: "m" })],
       });
     const stats = structuredStats([
       row("wl-1", "2026-01-01", 1000, 4),

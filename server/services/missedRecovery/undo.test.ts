@@ -1,4 +1,5 @@
 import type { ExerciseSet } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { describe, expect, it } from "vitest";
 
 import { createMockPlanDay } from "../../../test/factories";
@@ -36,7 +37,7 @@ function shortened() {
   const undo = captureMove(missed, {
     sets,
     deleteSetIds: ["s2"],
-    setUpdates: [{ id: "s1", plannedDistance: 6000, plannedTime: 36 }],
+    setUpdates: [{ id: "s1", plannedDistance: 6000, plannedTime: minutes(36) }],
     notes: `${INSTRUCTION}\nKeep it conversational`,
     expectedDurationMin: 36,
   });
@@ -50,7 +51,7 @@ function shortened() {
     expectedDurationMin: 36,
     recoveryUndo: undo,
   };
-  return { undo, day, remaining: [runSet("s1", { plannedDistance: 6000, plannedTime: 36 })] };
+  return { undo, day, remaining: [runSet("s1", { plannedDistance: 6000, plannedTime: minutes(36) })] };
 }
 
 describe("captureMove", () => {
@@ -111,7 +112,7 @@ describe("planUndo", () => {
       notes: `${INSTRUCTION}\nKeep it conversational\nFelt a twinge — go easy`,
     };
     // They set their own distance on the kept run; its time is still the shorten's.
-    const write = planUndo(edited, undo, [runSet("s1", { plannedDistance: 7000, plannedTime: 36 })]);
+    const write = planUndo(edited, undo, [runSet("s1", { plannedDistance: 7000, plannedTime: minutes(36) })]);
 
     expect(write.update).not.toHaveProperty("expectedDurationMin");
     // The shortened session's instruction goes; their lines stay.

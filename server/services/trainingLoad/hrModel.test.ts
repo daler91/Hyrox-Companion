@@ -1,3 +1,4 @@
+import { minutes } from "@shared/units";
 import { describe, expect, it } from "vitest";
 
 import { calculateTrainingLoad } from "../trainingLoadService";
@@ -31,7 +32,7 @@ describe("LTHR and hrTSS without a measured max HR or an age (C10)", () => {
   it("gives the overview no LTHR, no hrTSS and no zones to show", () => {
     const currentDate = "2026-05-22";
     const logs = [
-      makeWorkoutLog({ id: "hr", date: currentDate, duration: 60, avgHeartrate: 151, rpe: 8 }),
+      makeWorkoutLog({ id: "hr", date: currentDate, duration: minutes(60), avgHeartrate: 151, rpe: 8 }),
     ];
 
     const unknown = calculateTrainingLoad(logs, [], [], {

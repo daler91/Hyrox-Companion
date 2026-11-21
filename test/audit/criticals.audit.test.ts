@@ -39,10 +39,10 @@ function log(overrides: Partial<WorkoutLog>): WorkoutLog {
   return makeWorkoutLog({ date: TODAY, ...overrides });
 }
 
-/** An identical `minutes` session at `rpe`, logged every day for `days` days ending TODAY. */
-function identicalDailyTraining(rpe: number, minutes: number, days: number): WorkoutLog[] {
+/** An identical `sessionMinutes` session at `rpe`, logged every day for `days` days ending TODAY. */
+function identicalDailyTraining(rpe: number, sessionMinutes: number, days: number): WorkoutLog[] {
   return Array.from({ length: days + 1 }, (_, i) =>
-    log({ id: `log-${i}`, date: shiftDate(TODAY, -i), duration: minutes, rpe }),
+    log({ id: `log-${i}`, date: shiftDate(TODAY, -i), duration: minutes(sessionMinutes), rpe }),
   );
 }
 
@@ -100,7 +100,7 @@ describe("C1 — Foster monotony for perfectly uniform training (FIXED)", () => 
    * used to be classified as.
    */
   it("reports a week with no training as unknown, not ok", () => {
-    const today = loadToday([log({ date: shiftDate(TODAY, -60), duration: 60, rpe: 7 })]);
+    const today = loadToday([log({ date: shiftDate(TODAY, -60), duration: minutes(60), rpe: 7 })]);
 
     expect(today.utss).toBe(0);
     expect(today.monotony).toBeNull();
@@ -120,8 +120,8 @@ describe("C1 — Foster monotony for perfectly uniform training (FIXED)", () => 
    * never over the line.
    */
   it("scores a varied week correctly (control)", () => {
-    const varied = [10, 6, 12, 0, 9, 11, 7].map((minutes, i) =>
-      log({ id: `log-${i}`, date: shiftDate(TODAY, -i), duration: minutes * 6, rpe: 7 }),
+    const varied = [10, 6, 12, 0, 9, 11, 7].map((tenths, i) =>
+      log({ id: `log-${i}`, date: shiftDate(TODAY, -i), duration: minutes(tenths * 6), rpe: 7 }),
     );
     const today = loadToday(varied);
 
@@ -193,7 +193,7 @@ describe("C3 — Form/TSB and the history gate (FIXED)", () => {
    *     Acute load is what separates a taper from having simply stopped.
    */
   it("no longer calls an athlete with one workout 20 days ago race-ready", () => {
-    const today = loadToday([log({ date: shiftDate(TODAY, -20), duration: 60, rpe: 7 })]);
+    const today = loadToday([log({ date: shiftDate(TODAY, -20), duration: minutes(60), rpe: 7 })]);
 
     // Past the 14-day gate, so ACWR and TSB are both computed, and Form is
     // positive. It read above 15 while both EWMAs were seeded with this one
@@ -213,7 +213,7 @@ describe("C3 — Form/TSB and the history gate (FIXED)", () => {
 
   /** The invariant: the two signals must never contradict each other. */
   it("never reports an undertrained athlete as peaked", () => {
-    const today = loadToday([log({ date: shiftDate(TODAY, -20), duration: 60, rpe: 7 })]);
+    const today = loadToday([log({ date: shiftDate(TODAY, -20), duration: minutes(60), rpe: 7 })]);
 
     expect(today.zone).toBe("undertraining");
     expect(computeRaceReadiness(today.tsb, today.acuteEwma).status).not.toBe("peaked");
@@ -221,7 +221,7 @@ describe("C3 — Form/TSB and the history gate (FIXED)", () => {
 
   /** Form is withheld entirely inside the 14-day window, as ACWR already was. */
   it("withholds Form until the ACWR baseline exists", () => {
-    const today = loadToday([log({ date: shiftDate(TODAY, -3), duration: 60, rpe: 7 })]);
+    const today = loadToday([log({ date: shiftDate(TODAY, -3), duration: minutes(60), rpe: 7 })]);
 
     expect(today.acwr).toBeNull();
     expect(today.zone).toBe("insufficient_data");

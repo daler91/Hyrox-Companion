@@ -1,5 +1,6 @@
 import { countsAsTraining } from "@shared/deviceSportTypes";
 import { type DistanceUnit, formatElevation } from "@shared/unitConversion";
+import { minutes } from "@shared/units";
 
 import {
   formatActivityDistance,
@@ -153,7 +154,8 @@ export function mapGarminActivityToWorkout(
     mainWorkout: buildMainWorkout(movingSec, distance, isDistanceActivity, distanceUnit),
     accessory: buildAccessory(activity, isDistanceActivity, distanceUnit),
     notes: buildNotes(activity),
-    duration: Math.round(movingSec / 60),
+    // workout_logs.duration is whole minutes (docs/adr-units.md).
+    duration: minutes(Math.round(movingSec / 60)),
     rpe: null,
     planDayId: null,
     source: "garmin" as const,

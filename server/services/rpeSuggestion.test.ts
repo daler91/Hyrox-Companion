@@ -1,4 +1,5 @@
 import type { StravaActivitySummary } from "@shared/schema";
+import { minutes } from "@shared/units";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadSuggestedRpe, suggestRpeFromHeartRate } from "./rpeSuggestion";
@@ -107,7 +108,7 @@ describe("suggestRpeFromHeartRate", () => {
     // load the session was given, and this fails.
     for (const tenths of [3, 5, 7, 9]) {
       const avgHeartrate = ATHLETE.restingHr + tenths * 13;
-      const log = makeWorkoutLog({ source: "strava", focus: "Run", duration: 60, avgHeartrate });
+      const log = makeWorkoutLog({ source: "strava", focus: "Run", duration: minutes(60), avgHeartrate });
       const suggested = suggestRpeFromHeartRate(log, ATHLETE);
       expect(suggested, `HR ${avgHeartrate}`).toBe(tenths);
 

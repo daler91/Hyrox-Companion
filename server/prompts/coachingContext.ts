@@ -131,7 +131,7 @@ export function buildStructuredPerformance(trainingContext: TrainingContext): st
 
   // Stored weight and distance follow the athlete's own unit (docs/adr-units.md),
   // so label them as exerciseSetFormatter labels each set (REFACTORING_REVIEW D1).
-  const weightUnit = trainingContext.weightUnit || "kg";
+  const weightUnit = trainingContext.weightUnit;
   const distanceUnit = getStoredDistanceUnit(trainingContext.distanceUnit);
   let section = `\n\nStructured Exercise Performance:`;
   for (const [exercise, stats] of Object.entries(trainingContext.structuredExerciseStats)) {

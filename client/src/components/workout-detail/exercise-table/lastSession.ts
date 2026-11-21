@@ -149,9 +149,6 @@ export function summariseLastSession(
   });
 }
 
-/** The measurable fields "use last" copies forward. */
-const CARRIED_FIELDS = ["reps", "weight", "distance", "time"] as const;
-
 /**
  * Patches that fill the current sets from the last session's, pairwise by
  * position.
@@ -172,11 +169,14 @@ export function buildUseLastPatches(
     const last = lastSets[i];
     if (!current || !last) break;
 
-    const patch: PatchExerciseSetPayload = {};
-    for (const field of CARRIED_FIELDS) {
-      const value = last[field];
-      if (value != null) patch[field] = value;
-    }
+    // The measurable fields "use last" copies forward, each keeping its type
+    // (time stays minutes; docs/adr-units.md).
+    const patch: PatchExerciseSetPayload = {
+      ...(last.reps == null ? {} : { reps: last.reps }),
+      ...(last.weight == null ? {} : { weight: last.weight }),
+      ...(last.distance == null ? {} : { distance: last.distance }),
+      ...(last.time == null ? {} : { time: last.time }),
+    };
     if (Object.keys(patch).length > 0) patches.push({ setId: current.id, patch });
   }
 
