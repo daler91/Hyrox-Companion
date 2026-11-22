@@ -129,23 +129,25 @@ function parseReplyArray(text: string, label: string): unknown[] {
   return raw;
 }
 
-export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
-  const rawArray = parseReplyArray(text, "suggestions");
-  const validated: WorkoutSuggestion[] = [];
+/**
+ * The reply's items that pass `schema`, each mapped by `toResult`; the rest
+ * are logged and dropped. Shared by the suggestion and review-note replies,
+ * whose loops were the same but for the schema and the mapping (C-suggestion,
+ * REFACTORING_REVIEW 2026-09-23).
+ */
+function validateReplyItems<T, R>(
+  text: string,
+  label: string,
+  schema: z.ZodType<T>,
+  toResult: (item: T) => R,
+  dropMessage: string,
+): R[] {
+  const rawArray = parseReplyArray(text, label);
+  const validated: R[] = [];
   for (const item of rawArray) {
-    const result = workoutSuggestionSchema.safeParse(item);
+    const result = schema.safeParse(item);
     if (result.success) {
-      const item = result.data;
-      // Swap `&` for "and" so "A & B" renders as "A and B". We intentionally
-      // do NOT HTML-encode — these strings are rendered as React text (e.g.
-      // CoachTakePanel's `{rationale}`), which already escapes HTML safely.
-      // Pre-encoding here was leaking `&#39;` into the UI as literal chars.
-      validated.push({
-        ...item,
-        recommendation: item.recommendation.replaceAll("&", "and"),
-        rationale: item.rationale.replaceAll("&", "and"),
-        workoutFocus: item.workoutFocus.replaceAll("&", "and"),
-      });
+      validated.push(toResult(result.data));
     } else {
       // Zod's issues and a sanitized 200-character preview of the model's invalid output.
       // bearer:disable javascript_lang_logger_leak
@@ -153,11 +155,30 @@ export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
         // The item is model output shaped by the athlete's own text, so it goes
         // through the log-injection boundary rather than straight into the line.
         { issues: formatZodIssues(result.error.issues), item: previewForLog(item) },
-        "[gemini] Dropping invalid suggestion:",
+        dropMessage,
       );
     }
   }
   return validated;
+}
+
+export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
+  return validateReplyItems(
+    text,
+    "suggestions",
+    workoutSuggestionSchema,
+    // Swap `&` for "and" so "A & B" renders as "A and B". We intentionally
+    // do NOT HTML-encode — these strings are rendered as React text (e.g.
+    // CoachTakePanel's `{rationale}`), which already escapes HTML safely.
+    // Pre-encoding here was leaking `&#39;` into the UI as literal chars.
+    (item) => ({
+      ...item,
+      recommendation: item.recommendation.replaceAll("&", "and"),
+      rationale: item.rationale.replaceAll("&", "and"),
+      workoutFocus: item.workoutFocus.replaceAll("&", "and"),
+    }),
+    "[gemini] Dropping invalid suggestion:",
+  );
 }
 
 /** Mirrors MAX_EXERCISE_FOCUS_ENTRIES in prompts/coachingContext.ts. */
@@ -373,12 +394,24 @@ export function buildPromptDataSections(
   return sections;
 }
 
-export function buildSuggestionsPrompt(
+/** The arguments both coach prompts, and both coach calls, take. */
+type CoachPromptArgs = [
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[],
   planGoal?: string,
   coachingMaterials?: string,
   promptOptions?: SuggestionPromptOptions,
+];
+
+/**
+ * The data sections, then the flow's closing instruction, then the caller's
+ * suffix, with its prefix on top. The suggestion and review-note prompts
+ * differed only in the closing instruction (C-suggestion, REFACTORING_REVIEW
+ * 2026-09-23).
+ */
+function buildCoachPrompt(
+  closingInstruction: string,
+  ...[trainingContext, upcomingWorkouts, planGoal, coachingMaterials, promptOptions]: CoachPromptArgs
 ): string {
   const sections = buildPromptDataSections(
     trainingContext,
@@ -387,32 +420,23 @@ export function buildSuggestionsPrompt(
     coachingMaterials,
   );
   sections.push(
-    `Analyze the coaching analysis and athlete data above. Evaluate each future workout as currently written, including any prior AI review or modification context. Make modifications that actively improve this athlete's training. Return [] when the current plan already fits the athlete, including when a workout was already reduced for the same fatigue episode and no new completed workouts change the evidence.`,
+    closingInstruction,
     ...(promptOptions?.promptSuffix ? [promptOptions.promptSuffix] : []),
   );
   if (promptOptions?.promptPrefix) sections.unshift(promptOptions.promptPrefix);
   return sections.filter(Boolean).join("\n");
 }
 
-function buildReviewNotesPrompt(
-  trainingContext: TrainingContext,
-  upcomingWorkouts: UpcomingWorkout[],
-  planGoal?: string,
-  coachingMaterials?: string,
-  promptOptions?: SuggestionPromptOptions,
-): string {
-  const sections = buildPromptDataSections(
-    trainingContext,
-    upcomingWorkouts,
-    planGoal,
-    coachingMaterials,
-  );
-  sections.push(
-    `Write exactly one review note per upcoming workout ID listed above. Do NOT propose a modification, do NOT return suggestions, and do NOT return an empty array. Return a JSON array of objects with exactly two fields: { "workoutId": string, "note": string }.`,
-    ...(promptOptions?.promptSuffix ? [promptOptions.promptSuffix] : []),
-  );
-  if (promptOptions?.promptPrefix) sections.unshift(promptOptions.promptPrefix);
-  return sections.filter(Boolean).join("\n");
+const SUGGESTIONS_CLOSING_INSTRUCTION = `Analyze the coaching analysis and athlete data above. Evaluate each future workout as currently written, including any prior AI review or modification context. Make modifications that actively improve this athlete's training. Return [] when the current plan already fits the athlete, including when a workout was already reduced for the same fatigue episode and no new completed workouts change the evidence.`;
+
+const REVIEW_NOTES_CLOSING_INSTRUCTION = `Write exactly one review note per upcoming workout ID listed above. Do NOT propose a modification, do NOT return suggestions, and do NOT return an empty array. Return a JSON array of objects with exactly two fields: { "workoutId": string, "note": string }.`;
+
+export function buildSuggestionsPrompt(...args: CoachPromptArgs): string {
+  return buildCoachPrompt(SUGGESTIONS_CLOSING_INSTRUCTION, ...args);
+}
+
+function buildReviewNotesPrompt(...args: CoachPromptArgs): string {
+  return buildCoachPrompt(REVIEW_NOTES_CLOSING_INSTRUCTION, ...args);
 }
 
 // ---------------------------------------------------------------------------
@@ -433,32 +457,71 @@ Your job is to write one note per upcoming workout ID, explaining in 1-2 sentenc
 Return a JSON array of objects: [{ "workoutId": string, "note": string }, ...]. One entry per upcoming workout ID supplied. Keep each note under 280 characters. Do not include any other fields.`;
 
 export function parseAndValidateReviewNotes(text: string): ReviewNote[] {
-  const rawArray = parseReplyArray(text, "review-notes");
-  const validated: ReviewNote[] = [];
-  for (const item of rawArray) {
-    const result = reviewNoteSchema.safeParse(item);
-    if (result.success) {
-      const note = result.data;
-      validated.push({
-        workoutId: note.workoutId,
-        // Plain text — rendered via React, no HTML encoding needed.
-        note: note.note.replaceAll("&", "and").slice(0, 400),
-      });
-    } else {
-      // Zod's issues and a sanitized 200-character preview of the model's invalid output.
-      // bearer:disable javascript_lang_logger_leak
-      logger.warn(
-        // The item is model output shaped by the athlete's own text, so it goes
-        // through the log-injection boundary rather than straight into the line.
-        { issues: formatZodIssues(result.error.issues), item: previewForLog(item) },
-        "[gemini] Dropping invalid review note:",
-      );
-    }
-  }
-  return validated;
+  return validateReplyItems(
+    text,
+    "review-notes",
+    reviewNoteSchema,
+    (note) => ({
+      workoutId: note.workoutId,
+      // Plain text — rendered via React, no HTML encoding needed.
+      note: note.note.replaceAll("&", "and").slice(0, 400),
+    }),
+    "[gemini] Dropping invalid review note:",
+  );
 }
 
-export async function generateReviewNotes(
+interface CoachCall<T> {
+  /** The call's fixed name: its usage label, feature and log prefix. */
+  label: "suggestions" | "review-notes";
+  systemPrompt: string;
+  buildPrompt: (...args: CoachPromptArgs) => string;
+  parse: (text: string) => T[];
+}
+
+/**
+ * One coach call: no upcoming workouts is no call, otherwise the flow's prompt
+ * to the reasoning model and its reply parsed; any failure goes through
+ * coachCallFailure. The suggestion and review-note calls were written out
+ * twice (C-suggestion, REFACTORING_REVIEW 2026-09-23).
+ */
+async function runCoachCall<T>(
+  call: CoachCall<T>,
+  trainingContext: TrainingContext,
+  upcomingWorkouts: UpcomingWorkout[],
+  planGoal: string | undefined,
+  coachingMaterials: string | undefined,
+  userId: string | undefined,
+  promptOptions: SuggestionPromptOptions | undefined,
+): Promise<T[]> {
+  try {
+    if (upcomingWorkouts.length === 0) return [];
+
+    const prompt = call.buildPrompt(
+      trainingContext,
+      upcomingWorkouts,
+      planGoal,
+      coachingMaterials,
+      promptOptions,
+    );
+
+    const response = await generateJsonText({
+      systemInstruction: [call.systemPrompt, promptOptions?.systemInstructionAppendix]
+        .filter(Boolean)
+        .join("\n\n"),
+      messages: [{ role: "user", content: prompt }],
+      modelRole: "reasoning",
+      label: call.label,
+      feature: call.label,
+      userId,
+    });
+
+    return call.parse(response.text);
+  } catch (error) {
+    throw coachCallFailure(error, call.label);
+  }
+}
+
+export function generateReviewNotes(
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[],
   planGoal?: string,
@@ -466,35 +529,23 @@ export async function generateReviewNotes(
   userId?: string,
   promptOptions?: SuggestionPromptOptions,
 ): Promise<ReviewNote[]> {
-  try {
-    if (upcomingWorkouts.length === 0) return [];
-
-    const prompt = buildReviewNotesPrompt(
-      trainingContext,
-      upcomingWorkouts,
-      planGoal,
-      coachingMaterials,
-      promptOptions,
-    );
-
-    const response = await generateJsonText({
-      systemInstruction: [REVIEW_NOTES_SYSTEM_PROMPT, promptOptions?.systemInstructionAppendix]
-        .filter(Boolean)
-        .join("\n\n"),
-      messages: [{ role: "user", content: prompt }],
-      modelRole: "reasoning",
+  return runCoachCall(
+    {
       label: "review-notes",
-      feature: "review-notes",
-      userId,
-    });
-
-    return parseAndValidateReviewNotes(response.text);
-  } catch (error) {
-    throw coachCallFailure(error, "review-notes");
-  }
+      systemPrompt: REVIEW_NOTES_SYSTEM_PROMPT,
+      buildPrompt: buildReviewNotesPrompt,
+      parse: parseAndValidateReviewNotes,
+    },
+    trainingContext,
+    upcomingWorkouts,
+    planGoal,
+    coachingMaterials,
+    userId,
+    promptOptions,
+  );
 }
 
-export async function generateWorkoutSuggestions(
+export function generateWorkoutSuggestions(
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[],
   planGoal?: string,
@@ -502,32 +553,18 @@ export async function generateWorkoutSuggestions(
   userId?: string,
   promptOptions?: SuggestionPromptOptions,
 ): Promise<WorkoutSuggestion[]> {
-  try {
-    if (upcomingWorkouts.length === 0) {
-      return [];
-    }
-
-    const prompt = buildSuggestionsPrompt(
-      trainingContext,
-      upcomingWorkouts,
-      planGoal,
-      coachingMaterials,
-      promptOptions,
-    );
-
-    const response = await generateJsonText({
-      systemInstruction: [SUGGESTIONS_PROMPT, promptOptions?.systemInstructionAppendix]
-        .filter(Boolean)
-        .join("\n\n"),
-      messages: [{ role: "user", content: prompt }],
-      modelRole: "reasoning",
+  return runCoachCall(
+    {
       label: "suggestions",
-      feature: "suggestions",
-      userId,
-    });
-
-    return parseAndValidateSuggestions(response.text);
-  } catch (error) {
-    throw coachCallFailure(error, "suggestions");
-  }
+      systemPrompt: SUGGESTIONS_PROMPT,
+      buildPrompt: buildSuggestionsPrompt,
+      parse: parseAndValidateSuggestions,
+    },
+    trainingContext,
+    upcomingWorkouts,
+    planGoal,
+    coachingMaterials,
+    userId,
+    promptOptions,
+  );
 }
