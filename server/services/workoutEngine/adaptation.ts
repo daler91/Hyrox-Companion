@@ -32,7 +32,7 @@
 import { addDaysToISODate, dayDiff, PLAN_WEEKDAYS, weekdayIndex } from "@shared/dateUtils";
 import type { TrainingPhase } from "@shared/nutritionTargets";
 import { computePlanPhase } from "@shared/planPhase";
-import { epley, unmetPrescription } from "@shared/progression";
+import { epley, epleyLoad, unmetPrescription } from "@shared/progression";
 import type { CoachNoteInputs, PlanEngineState } from "@shared/schema";
 import { knownExerciseLabel } from "@shared/schema/exercises";
 import { storedWeightToDisplay, type WeightUnit } from "@shared/unitConversion";
@@ -421,7 +421,7 @@ function repsOf(day: WorkingDay, exercise: string): number {
 
 /** The load for `reps` that matches `load` for `fromReps` on the same effort. */
 function equivalentLoad(load: number, fromReps: number, reps: number): number {
-  return (load * (1 + (fromReps + ASSUMED_RIR) / 30)) / (1 + (reps + ASSUMED_RIR) / 30);
+  return epleyLoad(epley(load, fromReps + ASSUMED_RIR), reps + ASSUMED_RIR);
 }
 
 function canRise(day: WorkingDay): boolean {

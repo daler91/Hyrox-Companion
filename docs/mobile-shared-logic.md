@@ -461,7 +461,8 @@ Boolean, `referenceMeasured`, in Kotlin; the fixture test maps it back.
 
 - From `progression`: `suggestNextTarget`, `unmetPrescription` and `epley`, with the private
   `weightSteps`, `stepsToTry`, `uniformValue`, `roundWeight`, `deloadFrom`, `progressFrom` and their
-  constants.
+  constants. `EPLEY_MIN_REPS` and `EPLEY_MAX_REPS` (2 and 10) are exported too, for the web's
+  Personal Records note. `epleyLoad` serves only the server's workout engine.
 - From `exerciseEquipment`: `implementFor` and `loadIncrement`, with the data in
   `EXERCISE_EQUIPMENT`, `IMPLEMENT_OVERRIDES`, `INCREMENTS` and `LOADED_IMPLEMENTS`. Only the
   loaded-implement entries matter to `implementFor`.
