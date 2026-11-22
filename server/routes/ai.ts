@@ -59,14 +59,14 @@ async function loadParseUserContext(req: ExpressRequest) {
   };
 }
 
-protectedPost(router, "/api/v1/parse-exercises", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/parse-exercises", { limiter: rateLimiter("parse", 5), aiConsent: true, aiBudget: true, validation: [validateBody(parseExercisesRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
     const { userId, unitPreferences, customExerciseNames } = await loadParseUserContext(req);
     const exercises = await parseExercisesFromText(text.trim(), unitPreferences, customExerciseNames, userId);
     res.json(exercises);
   });
 
-protectedPost(router, "/api/v1/parse-workout-structure", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/parse-workout-structure", { limiter: rateLimiter("parse", 5), aiConsent: true, aiBudget: true, validation: [validateBody(parseExercisesRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
     const { userId, unitPreferences, customExerciseNames } = await loadParseUserContext(req);
     const parsed = await parseWorkoutStructureFromText(text.trim(), unitPreferences, customExerciseNames, userId);
@@ -77,7 +77,7 @@ protectedPost(router, "/api/v1/parse-workout-structure", { limiter: rateLimiter(
 // with the text route so total parse-family spend stays capped per user.
 // Body size is enforced by a route-scoped express.json({ limit: "10mb" })
 // mounted in server/index.ts BEFORE the global 100kb parser.
-protectedPost(router, "/api/v1/parse-exercises-from-image", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/parse-exercises-from-image", { limiter: rateLimiter("parse", 5), aiConsent: true, aiBudget: true, validation: [validateBody(parseExercisesFromImageRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const { imageBase64, mimeType } = req.body;
     const { userId, unitPreferences, customExerciseNames } = await loadParseUserContext(req);
     const exercises = await parseExercisesFromImage({
@@ -90,7 +90,7 @@ protectedPost(router, "/api/v1/parse-exercises-from-image", { limiter: rateLimit
     res.json(exercises);
   });
 
-protectedPost(router, "/api/v1/parse-workout-structure-from-image", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/parse-workout-structure-from-image", { limiter: rateLimiter("parse", 5), aiConsent: true, aiBudget: true, validation: [validateBody(parseExercisesFromImageRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const { imageBase64, mimeType } = req.body;
     const { userId, unitPreferences, customExerciseNames } = await loadParseUserContext(req);
     const parsed = await parseWorkoutStructureFromImage({
@@ -178,7 +178,7 @@ function conversationFor(
   return { turns: fitHistoryWindow(body.history), notes: [] };
 }
 
-protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), aiConsent: true, aiBudget: true, validation: [validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const turn = serverOwnedTurn(req.body);
     const conversation = await conversationFor(userId, turn, req.body);
@@ -804,7 +804,7 @@ function abortOnDisconnect(res: Response): AbortController {
   return controller;
 }
 
-protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ChatStreamRequest, res: Response) => {
+protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), aiConsent: true, aiBudget: true, validation: [validateBody(chatRequestSchema)] }, async (req: ChatStreamRequest, res: Response) => {
     // Before the first await (AI10).
     const controller = abortOnDisconnect(res);
 
@@ -1019,7 +1019,7 @@ router.get("/api/v1/coach-insights", isAuthenticated, rateLimiter("analytics", 6
     });
   }));
 
-protectedPost(router, "/api/v1/coach-insights", { limiter: rateLimiter("suggestions", 3), middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/coach-insights", { limiter: rateLimiter("suggestions", 3), aiConsent: true, aiBudget: true }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const result = await regenerateAndStoreCoachInsights(userId, reqLogger(req));
     // Freshly generated against the current latest workout, so never stale.
@@ -1065,6 +1065,9 @@ router.get("/api/v1/overview-analysis", isAuthenticated, rateLimiter("analytics"
     });
   }));
 
+// The AI guards stay in `middleware` here: the builder's `aiConsent`/`aiBudget`
+// would run them before the query validation, so a bad `range` from a
+// non-consenting athlete would answer 403 instead of 400.
 protectedPost(router, "/api/v1/overview-analysis", { limiter: rateLimiter("suggestions", 3), validation: [validateQuery(overviewAnalysisQuerySchema)], middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const { range } = req.query as OverviewAnalysisQuery;
@@ -1073,7 +1076,7 @@ protectedPost(router, "/api/v1/overview-analysis", { limiter: rateLimiter("sugge
     res.json({ ...result, stale: false });
   });
 
-protectedPost(router, "/api/v1/timeline/ai-suggestions", { limiter: rateLimiter("suggestions", 3), middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/timeline/ai-suggestions", { limiter: rateLimiter("suggestions", 3), aiConsent: true, aiBudget: true }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const log = reqLogger(req);
     const startedAt = Date.now();
@@ -1123,7 +1126,7 @@ router.get("/api/v1/timeline/ai-suggestions/debug/:workoutId", isAuthenticated, 
         : null,
     });
   }));
-protectedPost(router, "/api/v1/timeline/ai-suggestions/apply", { limiter: rateLimiter("suggestionApply", 10), middleware: [aiConsentCheck, validateBody(applyTimelineSuggestionSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof applyTimelineSuggestionSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/timeline/ai-suggestions/apply", { limiter: rateLimiter("suggestionApply", 10), aiConsent: true, validation: [validateBody(applyTimelineSuggestionSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof applyTimelineSuggestionSchema>>, res: Response) => {
     const userId = getUserId(req);
     const result = await applyTimelineAiSuggestion(userId, req.body, reqLogger(req));
     if (!result) {
