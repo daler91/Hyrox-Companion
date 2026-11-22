@@ -385,11 +385,7 @@ export async function generateTimelineAiSuggestions(
     workoutMap.set(w.id, w);
   }
   const coachSignals = buildSignalsFromTrainingContext(aiContext.trainingContext);
-  const prescribedSuggestions = resolvedStyle.strategy.prescribeNext({
-    suggestions: safetyAdjustedSuggestions,
-    trainingContext: aiContext.trainingContext,
-  });
-  const repeatGuardedSuggestions = prescribedSuggestions.filter(
+  const repeatGuardedSuggestions = safetyAdjustedSuggestions.filter(
     (suggestion) =>
       !shouldSuppressRepeatedFatigueReduction(
         suggestion,
@@ -397,7 +393,7 @@ export async function generateTimelineAiSuggestions(
         coachSignals,
       ),
   );
-  const suppressedRepeatCount = prescribedSuggestions.length - repeatGuardedSuggestions.length;
+  const suppressedRepeatCount = safetyAdjustedSuggestions.length - repeatGuardedSuggestions.length;
   const suggestions = repeatGuardedSuggestions.reduce<TimelineSuggestion[]>((acc, s) => {
     const workout = workoutMap.get(s.workoutId);
     const mapped: TimelineSuggestion = {
