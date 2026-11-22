@@ -4,20 +4,12 @@ import { env } from "../env";
 import { reqLogger } from "../logger";
 import { incrementStructuredExerciseCounter } from "../services/structuredExerciseHealth";
 
-const LEGACY_IMPORT_ALLOWLIST = new Set<string>([
-  "/api/v1/plans/import",
-]);
-
 const STRUCTURED_REQUIRED_MSG = "Structured exercise rows are required for non-legacy writes.";
 
 let fallbackErrorCount = 0;
 let fallbackWindowStartedAt = Date.now();
 const FALLBACK_WINDOW_MS = 60_000;
 const FALLBACK_ERROR_THRESHOLD = 10;
-
-export function isLegacyImportRoute(path: string): boolean {
-  return LEGACY_IMPORT_ALLOWLIST.has(path);
-}
 
 function structuredBlocksGateOpen(): boolean {
   return env.STRUCTURED_BLOCKS_ENABLED === "true" && env.STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY !== "true";
@@ -40,15 +32,6 @@ function noteStructuredError(): boolean {
   refreshFallbackWindow();
   fallbackErrorCount += 1;
   return fallbackErrorCount >= FALLBACK_ERROR_THRESHOLD;
-}
-
-function getRoutePath(req: Request): string {
-  const routeCandidate: unknown = req.route;
-  if (routeCandidate && typeof routeCandidate === "object" && "path" in routeCandidate) {
-    const pathValue = (routeCandidate as { path?: unknown }).path;
-    if (typeof pathValue === "string") return pathValue;
-  }
-  return req.path;
 }
 
 export interface TextOnlyWriteContext {
@@ -77,11 +60,6 @@ export function rejectTextOnlyWriteIfNeeded(
 
   if (fallbackErrorCount >= FALLBACK_ERROR_THRESHOLD) {
     noteFallback(req, ownerType, "error_spike");
-    return false;
-  }
-
-  if (isLegacyImportRoute(getRoutePath(req))) {
-    reqLogger(req).info({ context: "structured-write-guard", route: req.path, ownerType }, "Legacy import allowlist route used");
     return false;
   }
 

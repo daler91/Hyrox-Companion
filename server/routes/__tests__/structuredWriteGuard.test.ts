@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as healthService from "../../services/structuredExerciseHealth";
-import { isLegacyImportRoute, rejectTextOnlyWriteIfNeeded } from "../structuredWriteGuard";
+import { rejectTextOnlyWriteIfNeeded } from "../structuredWriteGuard";
 
 // Mock the environment to ensure structured blocks are enabled for testing
 vi.mock("../../env", () => ({
@@ -27,20 +27,6 @@ vi.mock("../../services/structuredExerciseHealth", () => ({
 }));
 
 describe("structuredWriteGuard", () => {
-  describe("isLegacyImportRoute", () => {
-    it("should return true for the legacy import allowlist route", () => {
-      expect(isLegacyImportRoute("/api/v1/plans/import")).toBe(true);
-    });
-
-    it("should return false for other routes", () => {
-      expect(isLegacyImportRoute("/api/v1/workouts")).toBe(false);
-      expect(isLegacyImportRoute("/api/v1/plans")).toBe(false);
-      expect(isLegacyImportRoute("/api/v1/health")).toBe(false);
-      expect(isLegacyImportRoute("/api/v1/plans/export")).toBe(false);
-      expect(isLegacyImportRoute("")).toBe(false);
-    });
-  });
-
   describe("rejectTextOnlyWriteIfNeeded", () => {
     let req: Partial<Request>;
     let res: Partial<Response>;
@@ -61,17 +47,6 @@ describe("structuredWriteGuard", () => {
       res = {
         status: statusMock
       };
-    });
-
-    it("should allow legacy import routes to pass without rejection", () => {
-      req.path = "/api/v1/plans/import";
-      req.route = { path: "/api/v1/plans/import" };
-      req.body = { mainWorkout: "text without rows" };
-
-      const result = rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
-
-      expect(result).toBe(false);
-      expect(statusMock).not.toHaveBeenCalled();
     });
 
     it("should allow writes linked to a plan day the caller owns to pass", () => {
