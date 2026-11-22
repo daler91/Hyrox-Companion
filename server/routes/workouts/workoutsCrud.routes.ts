@@ -44,12 +44,6 @@ const addExerciseSetSchema = addExerciseSetBodySchema;
 const WORKOUT_NOT_FOUND = "Workout not found";
 const EXERCISE_SET_NOT_FOUND = "Exercise set not found";
 
-/** Whether `planDayId` names a plan day that belongs to the athlete. */
-async function ownsPlanDay(planDayId: string | null | undefined, userId: string): Promise<boolean> {
-  if (!planDayId?.trim()) return false;
-  return Boolean(await storage.plans.getPlanDay(planDayId, userId));
-}
-
 export function uniqueIds(ids: readonly string[]): string[] {
   return Array.from(new Set(ids));
 }
@@ -194,7 +188,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     // A planDayId exempts a text-only write only when the day is the caller's
     // (TextOnlyWriteContext): another athlete's or a deleted day is dropped on
     // save, so the write is checked as if it named none.
-    const ownedPlanDayLink = await ownsPlanDay(req.body.planDayId, userId);
+    const ownedPlanDayLink = await storage.plans.ownsPlanDay(req.body.planDayId, userId);
     if (rejectTextOnlyWriteIfNeeded(req, res, "workout_log", { ownedPlanDayLink })) return;
     // Typed by its validator, not cast, so tsc checks the body against createWorkout's payload. CL15 (CODEBASE_ANALYSIS_2026-10-03)
     const result = await createWorkout({ userId, payload: req.body });

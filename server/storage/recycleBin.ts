@@ -26,6 +26,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { db, type DbExecutor } from "../db";
 import { isUniqueViolation } from "../dbErrors";
 import { syncPlanDayStatusesFromWorkouts, syncPlanDayStatusFromWorkouts } from "./planDayStatus";
+import { ownsPlanDay } from "./shared";
 
 /**
  * The recycle bin: list, restore and purge the snapshots that
@@ -95,16 +96,6 @@ async function ownsPlan(tx: DbExecutor, userId: string, planId: string): Promise
     .select({ id: trainingPlans.id })
     .from(trainingPlans)
     .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)))
-    .limit(1);
-  return Boolean(row);
-}
-
-async function ownsPlanDay(tx: DbExecutor, userId: string, dayId: string): Promise<boolean> {
-  const [row] = await tx
-    .select({ id: planDays.id })
-    .from(planDays)
-    .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
-    .where(and(eq(planDays.id, dayId), eq(trainingPlans.userId, userId)))
     .limit(1);
   return Boolean(row);
 }
@@ -193,7 +184,7 @@ async function detachMissingLogReferences(
   row: WorkoutLogInsert,
 ): Promise<string[]> {
   const warnings: string[] = [];
-  if (row.planDayId && !(await ownsPlanDay(tx, userId, row.planDayId))) {
+  if (row.planDayId && !(await ownsPlanDay(row.planDayId, userId, tx))) {
     row.planDayId = null;
     warnings.push(
       "The plan day this workout belonged to no longer exists, so it was restored as an unplanned workout.",
@@ -202,7 +193,7 @@ async function detachMissingLogReferences(
   if (row.planId && !(await ownsPlan(tx, userId, row.planId))) {
     row.planId = null;
   }
-  if (row.suggestedPlanDayId && !(await ownsPlanDay(tx, userId, row.suggestedPlanDayId))) {
+  if (row.suggestedPlanDayId && !(await ownsPlanDay(row.suggestedPlanDayId, userId, tx))) {
     row.suggestedPlanDayId = null;
   }
   if (row.suggestedWorkoutLogId && !(await ownsWorkoutLog(tx, userId, row.suggestedWorkoutLogId))) {

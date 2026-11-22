@@ -27,7 +27,7 @@ import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate } from "./planRetirement";
 import { planSlotForMove } from "./planSlot";
 import { capturePlanDays, captureTrainingPlan } from "./recycleBinCapture";
-import { resolveUserToday } from "./shared";
+import { ownsPlanDay, resolveUserToday } from "./shared";
 
 /** `recovery` with a let-go dropped and a fold or shorten kept, for the missed-day sweep. */
 const STALE_LET_GO_CLEARED = sql<string | null>`CASE WHEN ${planDays.recovery} = 'let_go' THEN NULL ELSE ${planDays.recovery} END`;
@@ -600,6 +600,11 @@ export class PlanStorage {
         .returning();
       return day ? { outcome: "applied", day } : { outcome: "not_found" };
     });
+  }
+
+  /** Whether `planDayId` names a plan day the athlete owns; see `ownsPlanDay` in storage/shared.ts. */
+  ownsPlanDay(planDayId: string | null | undefined, userId: string, tx?: DbExecutor): Promise<boolean> {
+    return ownsPlanDay(planDayId, userId, tx);
   }
 
   async getPlanDay(

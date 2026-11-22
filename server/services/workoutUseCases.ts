@@ -91,12 +91,6 @@ async function parseLegacyWorkoutText(userId: string, textToParse: string): Prom
   return structured;
 }
 
-/** Whether `planDayId` names a plan day that belongs to the athlete. */
-async function ownsPlanDay(planDayId: string | null | undefined, userId: string): Promise<boolean> {
-  if (!planDayId?.trim()) return false;
-  return Boolean(await storage.plans.getPlanDay(planDayId, userId));
-}
-
 export async function createWorkout(input: {
   userId: string;
   payload: CreateWorkoutPayload;
@@ -113,7 +107,7 @@ export async function createWorkout(input: {
   // from: any other planDayId is dropped on save, so it must not skip the
   // parse and leave a text-only log behind.
   const needsLegacyParse = (!structured || structured.length === 0) && !hasStructureBlocks && isTextAiProviderConfigured();
-  if (needsLegacyParse && !(await ownsPlanDay(workoutData.planDayId, input.userId))) {
+  if (needsLegacyParse && !(await storage.plans.ownsPlanDay(workoutData.planDayId, input.userId))) {
     logger.warn({ context: "workout-structure", event: "legacy_only_parse_fallback_create", userId: input.userId }, "Missing structure-editor payload on create; using legacy parse fallback.");
     const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
     if (textToParse) {

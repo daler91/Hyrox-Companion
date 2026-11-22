@@ -373,7 +373,7 @@ protectedDelete(router, "/api/v1/plans/days/:dayId", { limiter: rateLimiter("pla
 // planned entry is open. Mirrors the workout-log set routes in
 // server/routes/workouts/workoutsCrud.routes.ts
 // but writes to exercise_sets owned by a planDay. Ownership is enforced per-row
-// through storage.workouts.ownsPlanDay + getExerciseSetOwned.
+// through ownsPlanDay (storage/shared.ts) + getExerciseSetOwned.
 // -----------------------------------------------------------------------------
 
 const PLAN_DAY_NOT_FOUND = "Plan day not found";

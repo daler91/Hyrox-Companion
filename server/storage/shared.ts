@@ -1,7 +1,9 @@
 import {
   type ExerciseSet,
   type InsertExerciseSet,
+  planDays,
   type StructureBlockInput,
+  trainingPlans,
   users,
   workoutLogs,
 } from "@shared/schema";
@@ -28,6 +30,29 @@ export async function resolveUserToday(userId: string, executor: DbExecutor = db
     columns: { userTimezone: true },
   });
   return getLocalDateStrSafe(new Date(), user?.userTimezone);
+}
+
+/**
+ * Whether `planDayId` names a plan day in a training plan the athlete owns:
+ * the IDOR guard on plan-day reads and writes, so a caller can't reach another
+ * tenant's plan. A missing or blank id owns nothing. Pass `executor` to check
+ * inside a transaction. One copy for the workout and recycle-bin storage and,
+ * through `storage.plans.ownsPlanDay`, the workout create route and use case,
+ * which each had their own (C-ownsPlanDay, REFACTORING_REVIEW 2026-09-23).
+ */
+export async function ownsPlanDay(
+  planDayId: string | null | undefined,
+  userId: string,
+  executor: DbExecutor = db,
+): Promise<boolean> {
+  if (!planDayId?.trim()) return false;
+  const [row] = await executor
+    .select({ id: planDays.id })
+    .from(planDays)
+    .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+    .where(and(eq(planDays.id, planDayId), eq(trainingPlans.userId, userId)))
+    .limit(1);
+  return Boolean(row);
 }
 
 /**
