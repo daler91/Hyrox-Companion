@@ -161,17 +161,26 @@ describe("pruneDanglingFoodEmbeddings", () => {
   });
 });
 
+/**
+ * The starting point of every embedMissingFoods test: no canned results left
+ * over from another test, the app-wide AI budget not reached, and the scan
+ * cursor at the start of the table. Both blocks below share it so neither can
+ * miss a mock the other one sets (a budget rejection used to leak from the
+ * first block into the scan-order block whenever the tests ran in that order).
+ */
+function resetEmbedMissingFoodsMocks(): void {
+  query.mockReset();
+  selectLimit.mockReset();
+  candidateWhere.mockClear();
+  candidateOrderBy.mockClear();
+  vi.mocked(generateEmbeddings).mockReset();
+  vi.mocked(recordAiUsage).mockReset();
+  vi.mocked(isGlobalAiBudgetExhausted).mockReset().mockResolvedValue(false);
+  __resetFoodEmbeddingScanForTests();
+}
+
 describe("embedMissingFoods", () => {
-  beforeEach(() => {
-    query.mockClear();
-    selectLimit.mockReset();
-    candidateWhere.mockClear();
-    candidateOrderBy.mockClear();
-    vi.mocked(generateEmbeddings).mockReset();
-    vi.mocked(recordAiUsage).mockReset();
-    vi.mocked(isGlobalAiBudgetExhausted).mockReset().mockResolvedValue(false);
-    __resetFoodEmbeddingScanForTests();
-  });
+  beforeEach(resetEmbedMissingFoodsMocks);
 
   // Tech debt #41: the backfill's spend was neither recorded nor checked
   // against the app-wide ceiling. It belongs to no athlete, so it is recorded
@@ -343,14 +352,7 @@ describe("embedMissingFoods candidate scan order (PF12)", () => {
     return dialect.sqlToQuery(predicate);
   }
 
-  beforeEach(() => {
-    query.mockReset();
-    selectLimit.mockReset();
-    candidateWhere.mockClear();
-    candidateOrderBy.mockClear();
-    vi.mocked(generateEmbeddings).mockReset();
-    __resetFoodEmbeddingScanForTests();
-  });
+  beforeEach(resetEmbedMissingFoodsMocks);
 
   it("reads foods in id order, and the next run resumes after the last food it picked", async () => {
     const banana = { id: "a", name: "Banana", brand: null };
