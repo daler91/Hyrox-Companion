@@ -208,6 +208,16 @@ function answersAfter(before: Partial<MafAnswers> | undefined, patch: Partial<Re
   return answers;
 }
 
+/** The users columns that record when each email or push was last claimed (see UserStorage.claimLedger). */
+type ClaimLedgerColumn =
+  | "lastWeeklySummaryAt"
+  | "lastMissedReminderAt"
+  | "lastRefuelReminderAt"
+  | "lastLoggingReminderAt"
+  | "lastWeeklyReviewReminderAt"
+  | "lastTodaySessionAt"
+  | "lastAnalysisDigestAt";
+
 export class UserStorage {
   async getUsers(ids: string[]): Promise<User[]> {
     if (ids.length === 0) return [];
@@ -901,9 +911,8 @@ export class UserStorage {
   }
 
   /**
-   * Atomically claim the right to send this athlete their weekly summary.
-   *
-   * Stamps the ledger and reports whether THIS call won, in one statement, so
+   * Atomically claim the right to send this athlete one email or push: stamp
+   * its ledger column and report whether THIS call won, in one statement, so
    * the decision and the record cannot come apart. The previous shape read the
    * timestamp, sent the email, and stamped afterwards — a check-then-act with
    * a multi-second window (analytics queries plus a Resend round trip) in the
@@ -916,109 +925,60 @@ export class UserStorage {
    * summary ended up arriving fortnightly. The caller's day-of-week gate is
    * what enforces "once a week"; this only has to stop a second send within
    * the same local day.
+   *
+   * The seven public claims below used to be seven copies of this statement,
+   * each naming its column three times, so a mixed-up copy would double-send
+   * or suppress that message (R2, REFACTORING_REVIEW 2026-09-23).
    */
+  private async claimLedger(
+    column: ClaimLedgerColumn,
+    userId: string,
+    notBefore: Date,
+    now: Date,
+  ): Promise<boolean> {
+    const stamp = users[column];
+    const values: Partial<Record<ClaimLedgerColumn, Date>> = { [column]: now };
+    const claimed = await db
+      .update(users)
+      .set(values)
+      .where(and(eq(users.id, userId), or(isNull(stamp), lt(stamp, notBefore))))
+      .returning({ id: users.id });
+    return claimed.length > 0;
+  }
+
+  /** Weekly-summary email (and its push); see {@link claimLedger}. */
   async claimWeeklySummary(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
-    const claimed = await db
-      .update(users)
-      .set({ lastWeeklySummaryAt: now })
-      .where(
-        and(
-          eq(users.id, userId),
-          or(isNull(users.lastWeeklySummaryAt), lt(users.lastWeeklySummaryAt, notBefore)),
-        ),
-      )
-      .returning({ id: users.id });
-    return claimed.length > 0;
+    return this.claimLedger("lastWeeklySummaryAt", userId, notBefore, now);
   }
 
-  /** Missed-workout counterpart of {@link claimWeeklySummary}. */
+  /** Missed-workout reminder; see {@link claimLedger}. */
   async claimMissedReminder(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
-    const claimed = await db
-      .update(users)
-      .set({ lastMissedReminderAt: now })
-      .where(
-        and(
-          eq(users.id, userId),
-          or(isNull(users.lastMissedReminderAt), lt(users.lastMissedReminderAt, notBefore)),
-        ),
-      )
-      .returning({ id: users.id });
-    return claimed.length > 0;
+    return this.claimLedger("lastMissedReminderAt", userId, notBefore, now);
   }
 
-  /** Post-workout refuel-push counterpart of {@link claimWeeklySummary}. */
+  /** Post-workout refuel push; see {@link claimLedger}. */
   async claimRefuelReminder(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
-    const claimed = await db
-      .update(users)
-      .set({ lastRefuelReminderAt: now })
-      .where(
-        and(
-          eq(users.id, userId),
-          or(isNull(users.lastRefuelReminderAt), lt(users.lastRefuelReminderAt, notBefore)),
-        ),
-      )
-      .returning({ id: users.id });
-    return claimed.length > 0;
+    return this.claimLedger("lastRefuelReminderAt", userId, notBefore, now);
   }
 
-  /** Evening logging-push counterpart of {@link claimWeeklySummary}. */
+  /** Evening logging push; see {@link claimLedger}. */
   async claimLoggingReminder(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
-    const claimed = await db
-      .update(users)
-      .set({ lastLoggingReminderAt: now })
-      .where(
-        and(
-          eq(users.id, userId),
-          or(isNull(users.lastLoggingReminderAt), lt(users.lastLoggingReminderAt, notBefore)),
-        ),
-      )
-      .returning({ id: users.id });
-    return claimed.length > 0;
+    return this.claimLedger("lastLoggingReminderAt", userId, notBefore, now);
   }
 
-  /** Sunday-evening weekly-review-reminder counterpart of {@link claimWeeklySummary}. */
+  /** Sunday-evening weekly-review reminder; see {@link claimLedger}. */
   async claimWeeklyReviewReminder(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
-    const claimed = await db
-      .update(users)
-      .set({ lastWeeklyReviewReminderAt: now })
-      .where(
-        and(
-          eq(users.id, userId),
-          or(isNull(users.lastWeeklyReviewReminderAt), lt(users.lastWeeklyReviewReminderAt, notBefore)),
-        ),
-      )
-      .returning({ id: users.id });
-    return claimed.length > 0;
+    return this.claimLedger("lastWeeklyReviewReminderAt", userId, notBefore, now);
   }
 
-  /** Session-brief counterpart of {@link claimWeeklySummary}. */
+  /** Session brief; see {@link claimLedger}. */
   async claimTodaySession(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
-    const claimed = await db
-      .update(users)
-      .set({ lastTodaySessionAt: now })
-      .where(
-        and(
-          eq(users.id, userId),
-          or(isNull(users.lastTodaySessionAt), lt(users.lastTodaySessionAt, notBefore)),
-        ),
-      )
-      .returning({ id: users.id });
-    return claimed.length > 0;
+    return this.claimLedger("lastTodaySessionAt", userId, notBefore, now);
   }
 
-  /** Analysis-digest counterpart of {@link claimWeeklySummary}. */
+  /** Analysis digest; see {@link claimLedger}. */
   async claimAnalysisDigest(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
-    const claimed = await db
-      .update(users)
-      .set({ lastAnalysisDigestAt: now })
-      .where(
-        and(
-          eq(users.id, userId),
-          or(isNull(users.lastAnalysisDigestAt), lt(users.lastAnalysisDigestAt, notBefore)),
-        ),
-      )
-      .returning({ id: users.id });
-    return claimed.length > 0;
+    return this.claimLedger("lastAnalysisDigestAt", userId, notBefore, now);
   }
 
   // The three audiences below leave out accounts mid-erasure (P17; see

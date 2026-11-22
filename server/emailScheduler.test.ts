@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -951,14 +954,24 @@ describe('processMafTestReminder', () => {
 });
 
 describe('fire-and-forget push rejection containment', () => {
-  // The three `void sendPushToUser(...)` sites carry a load-bearing .catch:
-  // sendPushToUser awaits a DB read before its own allSettled guard, and the
-  // process-wide unhandledRejection handler exits(1). These tests pin that a
-  // rejected push send is swallowed and logged instead of escaping as an
-  // unhandled rejection (which would crash the API during the cron burst).
+  // Every push here goes through sendPushDetached, whose .catch is
+  // load-bearing: sendPushToUser awaits a DB read before its own allSettled
+  // guard, and the process-wide unhandledRejection handler exits(1). These
+  // tests pin that a rejected push send is swallowed and logged instead of
+  // escaping as an unhandled rejection (which would crash the API during the
+  // cron burst).
   const now = new Date('2026-06-01T12:00:00Z');
 
   beforeEach(() => vi.clearAllMocks());
+
+  // R1 (REFACTORING_REVIEW 2026-09-23): six sites each carried their own copy
+  // of the .catch, so a new email kind copied without it would bring the crash
+  // back. The helper is now the only caller.
+  it('sends every push through sendPushDetached', () => {
+    const source = readFileSync(path.resolve(process.cwd(), 'server/emailScheduler.ts'), 'utf8');
+    expect(source.match(/\bsendPushToUser\(/g)).toHaveLength(1);
+    expect(source).toMatch(/function sendPushDetached\([^)]*\): void \{\n\s+void sendPushToUser\(userId, payload\)\.catch\(/);
+  });
 
   it('processMafTestReminder survives a rejected push send and still reports the email result', async () => {
     const { sendPushToUser } = await import('./pushNotifications');

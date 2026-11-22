@@ -26,6 +26,10 @@ vi.mock("@/lib/api", () => ({
     workouts: ["/api/v1/workouts"],
     personalRecords: ["/api/v1/personal-records"],
     exerciseAnalytics: ["/api/v1/exercise-analytics"],
+    // Read by WORKOUT_ANALYTICS_QUERY_KEYS, which a sync spreads in. D3
+    // (REFACTORING_REVIEW 2026-09-23)
+    trainingOverview: ["/api/v1/training-overview"],
+    sessionGradesPrefix: ["/api/v1/session-grades"],
     // Read by WORKOUT_DERIVED_NUTRITION_QUERY_KEYS, which a sync spreads in.
     // CL19 (CODEBASE_ANALYSIS_2026-10-03)
     nutritionSessionFuellingPrefix: ["/api/v1/nutrition/session-fuelling"],
@@ -178,6 +182,21 @@ describe("useGarminMutations", () => {
       );
     });
 
+    // D3 (REFACTORING_REVIEW 2026-09-23): the training summary card stayed
+    // stale after a sync until its own query refetched.
+    it("refreshes every analytics view built from the workout log", async () => {
+      apiMocks.sync.mockResolvedValue({ imported: 1, skipped: 0, total: 1 });
+      await runMutation((m) => m.syncGarminMutation);
+      expect(invalidatedKeys()).toEqual(
+        expect.arrayContaining([
+          ["/api/v1/personal-records"],
+          ["/api/v1/exercise-analytics"],
+          ["/api/v1/training-overview"],
+          ["/api/v1/session-grades"],
+        ]),
+      );
+    });
+
     it("triggers error toast on sync failure", async () => {
       apiMocks.sync.mockRejectedValue(new Error("Rate limited"));
       await runMutation((m) => m.syncGarminMutation);
@@ -212,6 +231,22 @@ describe("useGarminMutations", () => {
         "Garmin temporarily blocked us due to rate limits. Please try again in about 27 minutes.";
       apiMocks.sync.mockRejectedValue(
         new Error(`503: ${JSON.stringify({ error: message, code: "GARMIN_CIRCUIT_OPEN" })}`),
+      );
+      await runMutation((m) => m.syncGarminMutation);
+
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Garmin Sync Failed", description: message, variant: "destructive" }),
+      );
+      expect(invalidatedKeys()).toContainEqual(["/api/v1/garmin/status"]);
+    });
+
+    // D11 (REFACTORING_REVIEW 2026-09-23): a rate-limited login keeps the
+    // connection and answers 502 with the cooldown the athlete should wait.
+    it("shows the server's message for a Garmin API failure (502 GARMIN_API_ERROR)", async () => {
+      const message =
+        "Garmin temporarily blocked us due to rate limits. Please try again in about 30 minutes.";
+      apiMocks.sync.mockRejectedValue(
+        new Error(`502: ${JSON.stringify({ error: message, code: "GARMIN_API_ERROR" })}`),
       );
       await runMutation((m) => m.syncGarminMutation);
 

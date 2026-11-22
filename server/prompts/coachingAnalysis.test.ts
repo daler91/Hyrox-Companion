@@ -2,6 +2,7 @@ import { bodySystemOverview, legSpikeOverview } from "@shared/bodySystemLoadTest
 import { describe, expect, it } from "vitest";
 
 import type { TrainingContext } from "../gemini/types";
+import { computeRpeTrend } from "../services/ai/coachingInsights";
 import { formatCoachingAnalysis } from "./coachingAnalysis";
 
 type CoachingInsights = NonNullable<TrainingContext["coachingInsights"]>;
@@ -94,6 +95,39 @@ describe("formatCoachingAnalysis", () => {
 
     expect(out).toContain("UNDERTRAINING FLAG ACTIVE");
     expect(out).not.toContain("EASIER than before");
+  });
+
+  // D10 (REFACTORING_REVIEW 2026-09-23): with 3 or 4 rated workouts there is
+  // no trend, but computeRpeTrend still sets the absolute flags and
+  // aiModificationGuard acts on the fatigue one. The prompt said "fewer than 3"
+  // and never showed either flag.
+  it("shows the flags the guard acts on when there is too little data for a trend", () => {
+    const rated = [9, 8.5, 9, 8].map((rpe) => ({ rpe }) as TrainingContext["recentWorkouts"][number]);
+    const out = formatCoachingAnalysis({ ...BASE_INSIGHTS, ...computeRpeTrend(rated) });
+
+    expect(out).toContain(
+      "RPE TREND: Insufficient data for a trend (fewer than 5 workouts with RPE logged; avg 8.8 last 3 workouts)",
+    );
+    expect(out).toContain("FATIGUE FLAG ACTIVE");
+  });
+
+  it("shows the undertraining flag without a trend too, and nothing when neither is set", () => {
+    const easy = formatCoachingAnalysis({
+      ...BASE_INSIGHTS,
+      rpeTrend: "insufficient_data",
+      avgRpeLast3: 3.7,
+      undertrainingFlag: true,
+    });
+    expect(easy).toContain("UNDERTRAINING FLAG ACTIVE");
+
+    const calm = formatCoachingAnalysis({ ...BASE_INSIGHTS, rpeTrend: "insufficient_data", avgRpeLast3: 6 });
+    expect(calm).toContain("fewer than 5 workouts with RPE logged; avg 6 last 3 workouts)");
+    expect(calm).not.toContain("FLAG ACTIVE");
+  });
+
+  it("says fewer than 3 when there is no average at all", () => {
+    const out = formatCoachingAnalysis({ ...BASE_INSIGHTS, rpeTrend: "insufficient_data" });
+    expect(out).toContain("RPE TREND: Insufficient data (fewer than 3 workouts with RPE logged).");
   });
 
   it("renders a benign recent skip normally", () => {

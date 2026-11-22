@@ -8,6 +8,7 @@ import {
   isLocalHourDue,
   isValidTimezone,
   localTimeOnDate,
+  usableTimezone,
 } from "./timezone";
 
 describe("getLocalDayOfWeek", () => {
@@ -91,6 +92,16 @@ describe("isValidTimezone", () => {
     expect(isValidTimezone(undefined)).toBe(false);
     expect(isValidTimezone(null)).toBe(false);
     expect(isValidTimezone(123)).toBe(false);
+  });
+});
+
+describe("usableTimezone", () => {
+  it("keeps a recognised zone and reads an absent or unrecognised one as UTC", () => {
+    expect(usableTimezone("Pacific/Auckland")).toBe("Pacific/Auckland");
+    expect(usableTimezone("Not/A/Real/Zone")).toBe("UTC");
+    expect(usableTimezone("")).toBe("UTC");
+    expect(usableTimezone(null)).toBe("UTC");
+    expect(usableTimezone(undefined)).toBe("UTC");
   });
 });
 

@@ -3,20 +3,29 @@ import { parseApiError } from "@/lib/apiError";
 import { humanizeApiError, queryClient } from "@/lib/queryClient";
 import {
   EXERCISE_HISTORY_QUERY_PREFIX,
+  WORKOUT_ANALYTICS_QUERY_KEYS,
   WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
 } from "@/lib/workoutInvalidation";
 
 import { useApiMutation } from "./useApiMutation";
 
 /**
- * The toast text for a failed Garmin call. A 503 GARMIN_CIRCUIT_OPEN means
- * Garmin rate-limited the server, and its body says roughly how long to wait;
- * humanizeApiError hides every 5xx body behind "Something went wrong on our
- * end", so that one is read directly (tech debt #55). Anything else is
- * described as usual.
+ * Garmin 5xx codes whose body the server writes for the athlete. A 503
+ * GARMIN_CIRCUIT_OPEN means Garmin rate-limited the server, and its body says
+ * roughly how long to wait (tech debt #55). A 502 GARMIN_API_ERROR carries the
+ * same cooldown message after a rate-limited login, or "try again in a few
+ * minutes" after a Garmin hiccup (D11, REFACTORING_REVIEW 2026-09-23).
+ */
+const ATHLETE_FACING_5XX_CODES = new Set(["GARMIN_CIRCUIT_OPEN", "GARMIN_API_ERROR"]);
+
+/**
+ * The toast text for a failed Garmin call. humanizeApiError hides every 5xx
+ * body behind "Something went wrong on our end", so the bodies of the codes
+ * above are read directly. Anything else is described as usual.
  */
 export function describeGarminError(error: unknown): string {
-  if (error instanceof Error && parseApiError(error)?.code === "GARMIN_CIRCUIT_OPEN") {
+  const code = error instanceof Error ? parseApiError(error)?.code : undefined;
+  if (error instanceof Error && code && ATHLETE_FACING_5XX_CODES.has(code)) {
     try {
       const body = JSON.parse(error.message.slice(error.message.indexOf(":") + 1)) as { error?: unknown };
       if (typeof body.error === "string" && body.error.trim()) return body.error;
@@ -63,9 +72,9 @@ export function useGarminMutations() {
       QUERY_KEYS.garminStatus,
       QUERY_KEYS.timeline,
       QUERY_KEYS.workouts,
-      // New Garmin activities can set PRs and shift analytics — invalidate both.
-      QUERY_KEYS.personalRecords,
-      QUERY_KEYS.exerciseAnalytics,
+      // New Garmin activities can set PRs, shift the training overview and
+      // grade a linked plan day. D3 (REFACTORING_REVIEW 2026-09-23)
+      ...WORKOUT_ANALYTICS_QUERY_KEYS,
       // The imported workouts add to their days' training load, calories and
       // meal targets. CL19 (CODEBASE_ANALYSIS_2026-10-03)
       ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,

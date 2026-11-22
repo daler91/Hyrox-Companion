@@ -197,6 +197,16 @@ export function isValidTimezone(tz: unknown): tz is string {
 }
 
 /**
+ * A stored timezone, or "UTC" when it is absent or the platform no longer
+ * recognises it (see `getLocalDateStrSafe` for how that happens). For routes
+ * that pass one zone to several helpers (`getLocalDateStr`, `getLocalHour`,
+ * `localTimeOnDate`), each of which would throw a RangeError on a bad name.
+ */
+export function usableTimezone(tz: string | null | undefined): string {
+  return isValidTimezone(tz) ? tz : "UTC";
+}
+
+/**
  * Like `getLocalDateStr`, but never throws. A stored timezone can become
  * unrecognisable after it was written — a name dropped from the platform's
  * tzdata, or a row that predates route-layer validation — and `Intl` answers

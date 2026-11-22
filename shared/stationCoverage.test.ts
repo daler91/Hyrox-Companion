@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { EXERCISE_DEFINITIONS, EXERCISE_NAME_ALIASES } from "./schema/exercises";
 import {
   buildStationCoverage,
   COVERAGE_STATIONS,
@@ -73,6 +74,47 @@ describe("stationsForFreeText", () => {
   it("returns nothing for unrelated text", () => {
     expect(stationsForFreeText("Upper body push")).toEqual([]);
     expect(stationsForFreeText("")).toEqual([]);
+  });
+
+  // D9 (REFACTORING_REVIEW 2026-09-23): substring matching counted these as
+  // stations, which hid real gaps on the coverage card and in EXERCISE GAPS.
+  it("matches whole words only", () => {
+    for (const text of ["Med ball throws", "Narrow-grip push-ups", "Throwdown", "Grow strong", "Brunch", "Arrow drill"]) {
+      expect(stationsForFreeText(text), text).toEqual([]);
+    }
+  });
+
+  it("allows plurals and reads hyphens, underscores and apostrophes loosely", () => {
+    expect(stationsForFreeText("Sled pushes")).toEqual(["sled_push"]);
+    expect(stationsForFreeText("Burpees")).toEqual(["burpee_broad_jump"]);
+    expect(stationsForFreeText("Sandbag lunges")).toEqual(["sandbag_lunges"]);
+    expect(stationsForFreeText("4 x 500m rows")).toEqual(["rowing"]);
+    expect(stationsForFreeText("Hill runs")).toEqual(["running"]);
+    expect(stationsForFreeText("Ski-erg sprints")).toEqual(["skierg"]);
+    expect(stationsForFreeText("wall_balls")).toEqual(["wall_balls"]);
+    expect(stationsForFreeText("Farmer's carry")).toEqual(["farmers_carry"]);
+  });
+
+  it("does not count strength rows as the rowing station", () => {
+    for (const text of ["Bent-over rows", "Seated cable row", "DB rows", "Single-arm dumbbell row", "T-bar row", "Upright rows"]) {
+      expect(stationsForFreeText(text), text).toEqual([]);
+    }
+  });
+
+  it("still counts the erg when a strength row is named alongside it", () => {
+    expect(stationsForFreeText("Bent-over rows, then 1000m row")).toEqual(["rowing"]);
+    expect(stationsForFreeText("Rowing machine")).toEqual(["rowing"]);
+  });
+
+  it("leaves every non-erg row in the exercise library off the rowing station", () => {
+    const rowNames = [...Object.keys(EXERCISE_DEFINITIONS), ...Object.keys(EXERCISE_NAME_ALIASES)].filter(
+      (name) => /(?:^|_)rows?(?:_|$)/.test(name) && stationForExerciseName(name) !== "rowing",
+    );
+    expect(rowNames.length).toBeGreaterThan(10);
+    for (const name of rowNames) {
+      const prose = name.replaceAll("_", " ");
+      expect(stationsForFreeText(prose), prose).not.toContain("rowing");
+    }
   });
 });
 

@@ -34,6 +34,69 @@ the new shared helpers.
 
 ---
 
+## Status (updated 2026-11-22)
+
+Every open item below was re-checked against `main` at `634f123`. Eight were fixed on the
+branch `claude/loving-lovelace-jixmuw` ("this branch" below); the rest of this document
+still describes the code as it was reviewed on 2026-09-23.
+
+**Needs an owner decision**
+
+| #   | Status | Where it stands |
+| --- | ------ | --------------- |
+| D1  | Fixed  | `613dbf4c` (2026-10-01): the chat and auto-coach prompts label max weight and distance with the athlete's units. |
+| D2  | Open   | `/plans/:planId/days/:dayId` still ignores `:planId` and never queues the auto-coach. Nothing in the client calls it. |
+| D3  | Fixed  | This branch: `WORKOUT_ANALYTICS_QUERY_KEYS` (personal records, exercise analytics, training overview, session grades) is shared by workout writes and the Strava and Garmin syncs. Still hand-copied: the analytics keys in about ten other hooks (`useRecycleBin`, `useCombineWorkouts`, `usePlanProposal` and others). |
+| D4  | Open   | `formatBlockType` still labels steady, interval and for-time blocks "Rounds". |
+| D5  | Fixed  | `b79446bf` (2026-10-08): the hook moved to `MigrationReviewCallout.tsx` and returns null on `!res.ok`. It still uses a raw `fetch`. |
+| D6  | Open   | `AdhocLogSheet` still saves without `runWithOfflineFallback`. |
+| D7  | Fixed  | The AI overview passes an athlete-local `to` (`1bea53e5`, 2026-10-05). This branch: with no `to` ("All time"), the load model's today and the previous window use the athlete's date; `todayUtcYyyyMmDd` is gone and `computePreviousWindow` requires `to`. |
+| D8  | Fixed  | This branch: the nutrition routes' `getUserTimezone`, and the daily summary's own read, turn an unusable stored zone into UTC (`usableTimezone` in `server/timezone.ts`). That also covers their `getLocalHour` and `localTimeOnDate` calls. |
+| D9  | Fixed  | This branch: whole words with plurals; hyphens and underscores read as spaces; apostrophes dropped. Decision on the open question: a strength row ("Bent-over rows", "Seated cable row", "DB row") does not count as `rowing`. A test checks every non-erg row in the exercise library. |
+| D10 | Fixed  | This branch: with 3 or 4 rated workouts the prompt says "fewer than 5 workouts with RPE logged", shows the last-3 average and prints any flag that is set. |
+| D11 | Fixed  | Activity fetch (`d6b06186`, 2026-10-05) and OAuth2 refresh (`8f700f49`, 2026-10-04) earlier. This branch: a 429 on the full SSO login answers `502 GARMIN_API_ERROR` and keeps the stored credentials; the client toast shows the server's message for `GARMIN_API_ERROR`. |
+
+**Worth doing next**
+
+| #   | Status | Where it stands |
+| --- | ------ | --------------- |
+| R1  | Fixed  | This branch: every push in `emailScheduler.ts` goes through `sendPushDetached`, and a test fails if another `sendPushToUser(` call appears there. |
+| R2  | Fixed  | This branch: the seven claims call one private `claimLedger(column, …)`; a test renders each one's SET and WHERE. |
+| R3  | Open   | `getDueSessionCount` still hand-writes the absence `NOT EXISTS`. |
+| R4  | Open   | Lock keys still live in three files; `CRON_LOCK_KEYS` now holds 19. |
+| R5  | Open   | Still four copies of the AI gate. Tests now cover the budget branch of all four. |
+| R6  | Open, grown | 9 retryable-status branches (was 8) and 7 sha256 + `timingSafeEqual` copies (was 5): the Strava stream fetch, `isStateBoundToBrowser` and `verifierMatchesChallenge` were added since. |
+
+**Consolidation, moderate payoff**
+
+- Partly done: training-load inputs (`dailyLoad.ts` fetches once, `1bea53e5`; the athlete
+  options are still built at 6 call sites); `suggestionService.ts` (parsing and failure
+  handling shared, `f280be3f`; the prompt, generate and validate pairs remain; the review-notes
+  side is now tested); `emailTemplates.ts` (the three suffixes call `pluralSuffix`, `e8e34fdc`;
+  the shadowing local and the weekly-summary button remain).
+- Client: the food-log invalidation set is shared (`foodLogQueryKeys`, `7b7272be`); the
+  annotation delete shares its success handling (`3690f495`) but not the mutation;
+  `MoveEntryMenu` is its own file (`3690f495`), though its quick jumps and the logged-workout
+  clamp are untested. `format(new Date(), "yyyy-MM-dd")` is at 9 non-test sites; "about 16"
+  above was an overcount.
+- Grown: cron jobs are now 18, with 11 still inlining `scheduleLockedCronJob`'s shape;
+  `ownsPlanDay` has 4 copies (two more in `workoutUseCases.ts` and `workoutsCrud.routes.ts`);
+  the Clerk `getAuth` try/catch has 5.
+- Everything else in that list is unchanged.
+
+**Small or cosmetic**
+
+- Partly done: Epley (the client uses `epley` from `shared/progression.ts`, `d1e9434b`; the
+  server PR formula and `PersonalRecordsTab`'s "2-10 reps" remain); test-only exports
+  (`planWeekForDisplay` and `isPlanEnded` now have production callers, `6f927785`).
+- Grown: `median` has 5 copies plus a null-returning variant, `clamp` 8, `round1` 10.
+- The unreachable `normalized.exercises ?? rawArray` fallback appears 6 times, not 8.
+- Lint: 0 errors and 18 warnings, 13 of them size or complexity (10 `max-lines`, 2
+  `max-lines-per-function`, 1 `complexity`).
+- Everything else in that list is unchanged.
+
+---
+
 ## Implemented on this branch
 
 ### Bug fixes
