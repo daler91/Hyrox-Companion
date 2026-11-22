@@ -133,6 +133,9 @@ D2, D4 and D6, and the parts marked "left" below, each with its reason.
   Monday helpers, and `WorkoutHeatmap` uses `getStartOfWeek`. Left: the client
   `weekDates.mondayOf`, `getWeekRangeForDate` and the nutrition page's `addDays`, which each
   behave differently on input that can reach them.
+- Lint: 0 errors and 17 warnings, 12 of them size or complexity (9 `max-lines`, 2
+  `max-lines-per-function`, 1 `complexity`) and 5 import order. `planAdjustmentService.ts` is
+  back under 800 lines; `coachService.ts` is at 803.
 
 ---
 
