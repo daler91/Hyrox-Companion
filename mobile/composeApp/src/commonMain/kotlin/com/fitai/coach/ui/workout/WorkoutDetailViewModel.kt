@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitai.coach.core.api.Patch
 import com.fitai.coach.core.api.generated.ExerciseSetRow
+import com.fitai.coach.core.api.generated.GetExercisesByExerciseNameHistoryResponseItem
 import com.fitai.coach.core.api.generated.GetNutritionSessionFuellingByWorkoutIdResponse
 import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetsBySetIdRequest
 import com.fitai.coach.core.api.generated.PostWorkoutsByIdSetsRequest
@@ -144,7 +145,11 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
             loadFailed = workout == null && current.failed,
             planEntry = entries.firstOrNull { it.workoutLogId == workoutId && it.planDayId != null },
             grade = more.grade,
-            histories = more.histories,
+            // Converted here, not when fetched, so a change of units reaches them too.
+            histories = more.histories.mapValues { (name, history) ->
+                val rows = history.rows.map { it.toPreferenceScale(panel.units) }
+                exerciseHistory(rows, workoutId, history.category, name, panel.units.weightUnit ?: "kg")
+            },
             busy = more.busy,
             planDayOptions = workout?.let { planDayOptions(entries, it.date, linked = it.planDayId) }.orEmpty(),
             fuelling = panel.around,
@@ -442,10 +447,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
                 requestedHistory.remove(exerciseName)
                 return@launch
             }
-            val prefs = session.preferences.preferences.first()
-            val inUnits = history.map { it.toPreferenceScale(prefs.units()) }
-            val summary = exerciseHistory(inUnits, workoutId, category, exerciseName, prefs?.weightUnit ?: "kg")
-            extras.update { it.copy(histories = it.histories + (exerciseName to summary)) }
+            extras.update { it.copy(histories = it.histories + (exerciseName to StoredHistory(history, category))) }
         }
     }
 
@@ -491,9 +493,12 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
 
     private data class Status(val loading: Boolean = false, val failed: Boolean = false)
 
+    /** An exercise's history as the server sent it, in each row's stored units. */
+    private data class StoredHistory(val rows: List<GetExercisesByExerciseNameHistoryResponseItem>, val category: String)
+
     private data class Extras(
         val grade: SessionGrade? = null,
-        val histories: Map<String, ExerciseHistory> = emptyMap(),
+        val histories: Map<String, StoredHistory> = emptyMap(),
         val busy: Boolean = false,
         val parsing: Boolean = false,
         val mafSaving: Boolean = false,
