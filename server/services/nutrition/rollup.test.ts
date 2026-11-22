@@ -1,7 +1,8 @@
+import { emptyTotals } from "@shared/nutritionScaling";
 import { describe, expect, it } from "vitest";
 
 import { makeLoggedFood as makeFood, makeLogRow as makeRow } from "./foodTestFixture";
-import { buildDailySummary, emptyTotals, scaleNutrition } from "./rollup";
+import { buildDailySummary, scaleNutrition } from "./rollup";
 
 describe("scaleNutrition", () => {
   it("scales per-100g values by grams / 100", () => {

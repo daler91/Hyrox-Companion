@@ -21,7 +21,8 @@ import type { WorkoutLog } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
 import { computeRaceReadiness } from "../../server/services/racePrediction/racePredictionService";
-import { calculateTrainingLoad, monotonyZone } from "../../server/services/trainingLoadService";
+import { monotonyZone } from "../../server/services/trainingLoad/loadDynamics";
+import { calculateTrainingLoad } from "../../server/services/trainingLoadService";
 import { makeWorkoutLog } from "../../server/services/trainingLoadService.testHelpers";
 import { resolveStructureStepTimeTarget } from "../../server/services/workoutService/structure";
 import { minutes, minutesToSeconds, unitless } from "../../shared/units";

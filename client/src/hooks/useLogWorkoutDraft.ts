@@ -1,7 +1,6 @@
-import type { ExerciseSet, StructureBlockInput, TimelineEntry } from "@shared/schema";
+import type { StructureBlockInput } from "@shared/schema";
 
 import { getTodayString } from "@/lib/dateUtils";
-import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
 import type { StructuredExercise } from "@/lib/structuredExercise";
 
 const DRAFT_STORAGE_KEY = "fitai-log-workout-draft";
@@ -121,41 +120,6 @@ export function saveLogWorkoutDraft(userKey: string, draft: LoadedDraft): void {
   } catch {
     // Quota exceeded or storage disabled — best-effort only, fail silently.
   }
-}
-
-export function saveLogWorkoutDraftFromTimelineEntry(
-  userKey: string,
-  entry: TimelineEntry,
-  exerciseSets: ExerciseSet[] = entry.exerciseSets ?? [],
-): void {
-  const structured = exerciseSetsToStructured(exerciseSets, { snapshotActualsAsPlanned: true });
-  const prescription = [entry.mainWorkout, entry.accessory, entry.notes]
-    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
-    .join("\n\n");
-
-  saveLogWorkoutDraft(userKey, {
-    title: entry.focus || "Workout",
-    date: entry.date ?? getTodayString(),
-    freeText: prescription,
-    notes: "",
-    rpe: null,
-    timeOfDayMin: null,
-    durationMinutes: entry.duration == null ? "" : String(entry.duration),
-    // Distance needs the user's unit to convert meters → display, which this
-    // seeder has no context for (and no production caller yet), so leave it
-    // blank. HR is unit-free, so seed it directly from the entry.
-    distance: "",
-    avgHeartrate: entry.avgHeartrate == null ? "" : String(entry.avgHeartrate),
-    maxHeartrate: entry.maxHeartrate == null ? "" : String(entry.maxHeartrate),
-    planId: entry.planId ?? null,
-    planDayId: entry.planDayId ?? null,
-    useTextMode: structured.names.length === 0,
-    exerciseBlocks: structured.names,
-    exerciseData: structured.data,
-    structureBlocks: [],
-    blockCounter: structured.names.length,
-    step: 2,
-  });
 }
 
 export function clearLogWorkoutDraft(userKey: string): void {
