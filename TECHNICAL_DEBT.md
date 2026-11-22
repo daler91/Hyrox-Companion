@@ -42,7 +42,7 @@
 - ~~**13. Refactor oversized files**~~ — Extracted Timeline.tsx IIFE into `TimelineContent`. Split `server/prompts.ts` (414→285 lines) into `server/prompts/coachingContext.ts` + `server/prompts/materialsBuilder.ts`. Split `client/src/pages/Landing.tsx` (495→50 lines) into `client/src/pages/landing/{useInView,Hero,Features,HowItWorks,ExerciseShowcase,CtaFooter}.tsx`. `sidebar.tsx` is shadcn/ui vendor, left as-is.
 - ~~**15. Reduce GeneratePlanDialog state complexity**~~ — Extracted 10 useState calls into `useGeneratePlanForm()` hook.
 - ~~**17. Migrate email scheduler to pg-boss queue**~~ — Cron now enqueues per-user `send-weekly-summary` and `send-missed-reminder` jobs. Workers registered in `queue.ts`.
-- ~~**18. Propagate request ID / tracing context to service layer**~~ — Added `AsyncLocalStorage`-based `requestContext.ts` with middleware. `getContextLogger()` returns child logger with request context.
+- ~~**18. Propagate request ID / tracing context to service layer**~~ — Added `AsyncLocalStorage`-based `requestContext.ts` with middleware. The logger's `mixin()` (`server/logger.ts`) adds the request id to every log line written inside a request. (`getContextLogger()`, the child-logger helper first built for this, never gained a caller and was removed in the 2026-11-22 refactoring pass.)
 
 ### 14. Centralize magic numbers and constants
 - **Files:** `client/src/components/plans/GeneratePlanDialog.tsx`, `client/src/hooks/useChatSession.ts`, `server/services/workoutService.ts`
@@ -385,15 +385,14 @@ source before acting.
 **[Refactoring review, 2026-09-23](docs/REFACTORING_REVIEW_2026-09-23.md)** (status refreshed
 2026-11-22; the review's "Status" section has the detail)
 
-- *Fixed:* D1, D3, D5, D7, D8, D9, D10, D11, R1 and R2.
-- *Deferred refactors still open* (R3-R6). R3: a hand-copied absence `NOT EXISTS` behind the
-  adherence denominator. R4: advisory-lock keys spread over three files. R5: four copies of the
-  AI consent/budget gate. R6: hand-written retryable status branches (now 9) and copies of the
-  constant-time secret compare (now 7).
+- *Fixed:* D1, D3, D5, D7-D11 and R1-R6, plus most of the consolidations and cosmetic items.
 - *Owner decisions still open* (D2, D4, D6): two plan-day PATCH routes that differ on the
-  auto-coach, block-type labels, and offline saves from the ad-hoc log sheet.
-- The moderate and cosmetic consolidations are mostly unchanged; a few have grown (cron
-  boilerplate, `ownsPlanDay`, `median`/`clamp`).
+  auto-coach, block-type labels, and offline saves from the ad-hoc log sheet. One more surfaced
+  during the cleanup: plan generation's rate-limit toast shows a generic wait where every other
+  AI call shows the server's message.
+- *Left on purpose:* a handful of near-duplicates whose behaviour differs (three cron jobs, the
+  overview-analysis guards, `bearerAuthState`, three date helpers, some analytics formatters).
+  The review's Status section gives each reason.
 
 **[Calculation audit, 2026-08-20](docs/CALCULATION_AUDIT_2026-08-20.md)** (left open on purpose)
 
