@@ -24,6 +24,7 @@ import {
   buildTextResultingWorkout,
   mapExerciseSetToPromptDetail,
   shouldSuppressRepeatedFatigueReduction,
+  toUpcomingWorkout,
   withCoachModificationMetadata,
 } from "./aiModificationGuard";
 import {
@@ -337,22 +338,7 @@ export async function generateTimelineAiSuggestions(
     storage.timeline.getUpcomingPlannedDays(userId, 5),
     storage.users.getUser(userId),
   ]);
-  const upcomingWorkouts: UpcomingWorkout[] = plannedDays.map((d) => ({
-    id: d.planDayId,
-    date: d.date,
-    focus: d.focus,
-    mainWorkout: d.mainWorkout,
-    accessory: d.accessory || undefined,
-    notes: d.notes || undefined,
-    aiSource: d.aiSource,
-    aiRationale: d.aiRationale,
-    aiNoteUpdatedAt: d.aiNoteUpdatedAt,
-    aiInputsUsed: d.aiInputsUsed,
-    priority: d.priority,
-    ...(d.exerciseSets && d.exerciseSets.length > 0
-      ? { exerciseDetails: d.exerciseSets.map(mapExerciseSetToPromptDetail) }
-      : {}),
-  }));
+  const upcomingWorkouts: UpcomingWorkout[] = plannedDays.map(toUpcomingWorkout);
 
   if (upcomingWorkouts.length === 0) {
     const message = await buildNoUpcomingWorkoutsMessage(userId, user?.userTimezone ?? "UTC");
@@ -399,11 +385,7 @@ export async function generateTimelineAiSuggestions(
     workoutMap.set(w.id, w);
   }
   const coachSignals = buildSignalsFromTrainingContext(aiContext.trainingContext);
-  const prescribedSuggestions = resolvedStyle.strategy.prescribeNext({
-    suggestions: safetyAdjustedSuggestions,
-    trainingContext: aiContext.trainingContext,
-  });
-  const repeatGuardedSuggestions = prescribedSuggestions.filter(
+  const repeatGuardedSuggestions = safetyAdjustedSuggestions.filter(
     (suggestion) =>
       !shouldSuppressRepeatedFatigueReduction(
         suggestion,
@@ -411,7 +393,7 @@ export async function generateTimelineAiSuggestions(
         coachSignals,
       ),
   );
-  const suppressedRepeatCount = prescribedSuggestions.length - repeatGuardedSuggestions.length;
+  const suppressedRepeatCount = safetyAdjustedSuggestions.length - repeatGuardedSuggestions.length;
   const suggestions = repeatGuardedSuggestions.reduce<TimelineSuggestion[]>((acc, s) => {
     const workout = workoutMap.get(s.workoutId);
     const mapped: TimelineSuggestion = {

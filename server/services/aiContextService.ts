@@ -3,7 +3,7 @@ import type { Logger } from "pino";
 
 import type { TrainingContext } from "../gemini/index";
 import { logger as rootLogger } from "../logger";
-import { buildCoachingMaterialsSection, buildRetrievedChunksSection, type CoachingMaterialInput } from "../prompts";
+import { type CoachingMaterialInput, selectCoachingMaterials } from "../prompts/materialsBuilder";
 import { buildTrainingContext } from "./ai";
 import type { ConversationTurn } from "./chatConversation";
 import { retrieveCoachingContext } from "./ragRetrieval";
@@ -56,13 +56,7 @@ export async function buildAIContext(
  * Build the coaching materials string for the suggestions prompt from an AIContext.
  */
 export function extractCoachingMaterialsText(ctx: AIContext): string | undefined {
-  if (ctx.retrievedChunks && ctx.retrievedChunks.length > 0) {
-    return buildRetrievedChunksSection(ctx.retrievedChunks);
-  }
-  if (ctx.coachingMaterials) {
-    return buildCoachingMaterialsSection(ctx.coachingMaterials) || undefined;
-  }
-  return undefined;
+  return selectCoachingMaterials(ctx.retrievedChunks, ctx.coachingMaterials).text || undefined;
 }
 
 export interface ChatInput {

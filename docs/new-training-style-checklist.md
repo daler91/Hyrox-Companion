@@ -17,12 +17,15 @@ Use this checklist whenever adding a new training methodology so implementation 
 - Implement the shared `TrainingStyleStrategy` interface
   (`server/services/training_styles/types.ts`):
   - `id`
-  - `computeProfile()`
-  - `analyzeWorkout()`
-  - `prescribeNext()`
-  - `phaseLogic()`
-  - `safetyRules()`
-  - `buildPromptContext()`
+  - `buildPromptContext()` — the prefix, suffix and system-instruction appendix the
+    style adds to the coach prompt. It is the only thing a style changes today: the
+    auto-coach, the timeline suggestions and the coach-note refresh all call it.
+- The interface used to also declare `computeProfile()`, `analyzeWorkout()`,
+  `phaseLogic()`, `safetyRules()` and `prescribeNext()`. Nothing called the first four,
+  and `prescribeNext()` returned the suggestions unchanged for every style, so they were
+  removed. A style that needs its own profile, phase rules or post-processing of the
+  model's suggestions adds that member to the interface and wires it into the coach
+  services, with tests, in the same change.
 - Register the strategy in the one central `strategies` map in
   `server/services/training_styles/registry.ts`, next to `defaultStrategy`
   (`balanced_default`) and `mafMethodStrategy` (`maf_method`). `resolveTrainingStyle()`

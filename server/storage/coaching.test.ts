@@ -6,9 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { query, select } = vi.hoisted(() => ({ query: vi.fn(), select: vi.fn() }));
 
 // Mock the side-effectful imports of coaching.ts so this stays a pure unit test
-// (no real pg Pool, no genai SDK, no env-dependent vector connection).
+// (no real pg Pool, no env-dependent vector connection).
 vi.mock("../db", () => ({ db: { select } }));
-vi.mock("../gemini/client", () => ({ EMBEDDING_DIMENSIONS: 3072 }));
 vi.mock("../vectorDb", () => ({ vectorPool: { query } }));
 
 import { CoachingStorage } from "./coaching";

@@ -9,8 +9,8 @@ import {
 } from "@shared/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { EMBEDDING_DIMENSIONS } from "../constants";
 import { db } from "../db";
-import { EMBEDDING_DIMENSIONS } from "../gemini/client";
 import { vectorPool } from "../vectorDb";
 
 /** A search result: the chunk and its cosine distance to the query. */

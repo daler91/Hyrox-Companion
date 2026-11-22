@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TrainingContext } from "../gemini/index";
 import { logger } from "../logger";
-import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts";
+import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../prompts/materialsBuilder";
 import { buildTrainingContext } from "./ai";
 import { type AIContext, buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
 import { retrieveCoachingContext } from "./ragRetrieval";
@@ -12,16 +12,10 @@ import { getCachedTrainingContext } from "./trainingContextCache";
 vi.mock("./ai", () => ({ buildTrainingContext: vi.fn() }));
 vi.mock("./ragRetrieval", () => ({ retrieveCoachingContext: vi.fn() }));
 vi.mock("./trainingContextCache", () => ({ getCachedTrainingContext: vi.fn() }));
-vi.mock("../prompts", () => ({
-  buildRetrievedChunksSection: vi.fn(),
-  buildCoachingMaterialsSection: vi.fn(),
-}));
 vi.mock("../logger", () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 
 const trainingMock = vi.mocked(buildTrainingContext);
 const retrieveMock = vi.mocked(retrieveCoachingContext);
-const chunksSectionMock = vi.mocked(buildRetrievedChunksSection);
-const materialsSectionMock = vi.mocked(buildCoachingMaterialsSection);
 
 const TRAINING_CONTEXT = { totalWorkouts: 5 } as unknown as TrainingContext;
 const RAG_INFO = { usedRag: true } as unknown as RagInfo;
@@ -38,8 +32,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   trainingMock.mockResolvedValue(TRAINING_CONTEXT);
   retrieveMock.mockResolvedValue({ ragInfo: RAG_INFO });
-  chunksSectionMock.mockReturnValue("CHUNKS");
-  materialsSectionMock.mockReturnValue("MATERIALS");
 });
 
 describe("buildAIContext", () => {
@@ -107,43 +99,33 @@ describe("buildAIContext", () => {
   });
 });
 
+// The selection itself (selectCoachingMaterials) has its own tests beside the
+// builders; these check what this wrapper answers for each case.
 describe("extractCoachingMaterialsText", () => {
+  const materials = [{ title: "Pacing", content: "Even splits", type: "notes" }];
+
   it("returns the retrieved-chunks section when chunks are present", () => {
     const result = extractCoachingMaterialsText(ctx({ retrievedChunks: ["a", "b"] }));
-    expect(result).toBe("CHUNKS");
-    expect(chunksSectionMock).toHaveBeenCalledWith(["a", "b"]);
+    expect(result).toBe(buildRetrievedChunksSection(["a", "b"]));
   });
 
   it("prefers retrieved chunks over coaching materials", () => {
-    extractCoachingMaterialsText(
-      ctx({ retrievedChunks: ["a"], coachingMaterials: [{ source: "doc" }] as never }),
-    );
-    expect(chunksSectionMock).toHaveBeenCalledTimes(1);
-    expect(materialsSectionMock).not.toHaveBeenCalled();
+    const result = extractCoachingMaterialsText(ctx({ retrievedChunks: ["a"], coachingMaterials: materials }));
+    expect(result).toBe(buildRetrievedChunksSection(["a"]));
   });
 
   it("falls back to coaching materials when the chunks array is empty", () => {
-    const materials = [{ source: "doc" }] as never;
-    const result = extractCoachingMaterialsText(
-      ctx({ retrievedChunks: [], coachingMaterials: materials }),
-    );
-    expect(result).toBe("MATERIALS");
-    expect(chunksSectionMock).not.toHaveBeenCalled();
-    expect(materialsSectionMock).toHaveBeenCalledWith(materials);
+    const result = extractCoachingMaterialsText(ctx({ retrievedChunks: [], coachingMaterials: materials }));
+    expect(result).toBe(buildCoachingMaterialsSection(materials));
   });
 
   it("uses coaching materials when chunks are absent", () => {
-    const result = extractCoachingMaterialsText(
-      ctx({ coachingMaterials: [{ source: "doc" }] as never }),
-    );
-    expect(result).toBe("MATERIALS");
+    const result = extractCoachingMaterialsText(ctx({ coachingMaterials: materials }));
+    expect(result).toBe(buildCoachingMaterialsSection(materials));
   });
 
   it("returns undefined when the coaching materials render to an empty string", () => {
-    materialsSectionMock.mockReturnValue("");
-    const result = extractCoachingMaterialsText(
-      ctx({ coachingMaterials: [{ source: "doc" }] as never }),
-    );
+    const result = extractCoachingMaterialsText(ctx({ coachingMaterials: [] }));
     expect(result).toBeUndefined();
   });
 

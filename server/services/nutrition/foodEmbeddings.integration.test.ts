@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 
 // The provider is the boundary under test: record what would be sent to it and
 // return empty vectors, so nothing is written to food_embeddings.
-vi.mock("../../gemini/client", () => ({ EMBEDDING_DIMENSIONS: 3072, generateEmbeddings: vi.fn() }));
+vi.mock("../../gemini/client", () => ({ generateEmbeddings: vi.fn() }));
 
 import { db } from "../../db";
 import { generateEmbeddings } from "../../gemini/client";

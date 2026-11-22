@@ -7,7 +7,6 @@ import { type Request as ExpressRequest, type Response, Router } from "express";
 
 import { isAuthenticated } from "../clerkAuth";
 import { reqLogger } from "../logger";
-import { aiConsentCheck } from "../middleware/aiConsent";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import {
   applyPlanAdjustmentProposal,
@@ -68,7 +67,7 @@ router.get(
   }),
 );
 
-// aiBudgetCheck is deliberately absent here (same rationale as the
+// `aiBudget` is deliberately absent here (same rationale as the
 // suggestions apply route): the budget is checked internally only when a
 // structured re-parse is actually needed.
 protectedPost(
@@ -76,7 +75,8 @@ protectedPost(
   "/api/v1/plan-proposals/:id/apply",
   {
     limiter: rateLimiter("suggestionApply", 10),
-    middleware: [aiConsentCheck, validateBody(applyPlanProposalRequestSchema)],
+    aiConsent: true,
+    validation: [validateBody(applyPlanProposalRequestSchema)],
   },
   async (req: ExpressRequest<{ id: string }, unknown, ApplyPlanProposalRequest>, res: Response) => {
     const userId = getUserId(req);

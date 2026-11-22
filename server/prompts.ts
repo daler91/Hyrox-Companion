@@ -14,11 +14,7 @@ import {
 } from "./prompts/coachingContext";
 import { buildExerciseMenu, formatExerciseSelectionBrief } from "./prompts/exerciseSelection";
 import { formatMafContext } from "./prompts/mafContext";
-import {
-  buildCoachingMaterialsSection,
-  buildRetrievedChunksSection,
-  type CoachingMaterialInput,
-} from "./prompts/materialsBuilder";
+import { type CoachingMaterialInput, selectCoachingMaterials } from "./prompts/materialsBuilder";
 import { buildNutritionSection } from "./prompts/nutritionContext";
 import { formatTrainingTargets } from "./prompts/workoutEngine";
 import type { ChatSafetySignals } from "./services/aiSafety";
@@ -666,17 +662,6 @@ export const FUNCTIONAL_EXERCISES = [
   "step ups",
 ];
 
-/** RAG-retrieved chunks take priority over legacy coaching materials. */
-function buildMaterialsSection(
-  coachingMaterials?: CoachingMaterialInput[],
-  retrievedChunks?: string[],
-): string {
-  if (retrievedChunks && retrievedChunks.length > 0) {
-    return buildRetrievedChunksSection(retrievedChunks);
-  }
-  return buildCoachingMaterialsSection(coachingMaterials ?? []);
-}
-
 /** System prompt for an athlete with no logged workouts yet. */
 function buildNoDataPrompt(
   base: string,
@@ -703,7 +688,7 @@ function buildNoDataPrompt(
   if (noDataMaf) prompt += `\n\n${noDataMaf}`;
   // A first workout can be open in the workout chat before any is logged.
   if (focusedWorkout) prompt += `\n\n${focusedWorkout}`;
-  const materialsSection = buildMaterialsSection(coachingMaterials, retrievedChunks);
+  const materialsSection = selectCoachingMaterials(retrievedChunks, coachingMaterials).text;
   if (materialsSection) prompt += `\n${materialsSection}`;
   return prompt;
 }
@@ -871,7 +856,7 @@ export function buildSystemPrompt(
 
   contextSection += `\n\n--- END TRAINING DATA ---\n\nUse this data to provide personalized coaching. Reference specific workouts and patterns when relevant.`;
 
-  const materialsSection = buildMaterialsSection(coachingMaterials, retrievedChunks);
+  const materialsSection = selectCoachingMaterials(retrievedChunks, coachingMaterials).text;
   if (materialsSection) contextSection += `\n${materialsSection}`;
 
   return base + contextSection + recentPlanChanges + earlierConversation + safetyGuidance;

@@ -67,7 +67,6 @@ vi.mock("../../gemini", () => ({
   streamChatWithCoach: vi.fn(),
   streamChatWithCoachTools: vi.fn(),
   generateWorkoutSuggestions: vi.fn(),
-  EMBEDDING_DIMENSIONS: 3072,
 }));
 
 vi.mock("../../services/ai", () => ({ buildTrainingContext: vi.fn() }));

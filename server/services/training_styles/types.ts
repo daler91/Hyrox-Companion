@@ -1,4 +1,4 @@
-import type { TrainingContext, UpcomingWorkout, WorkoutSuggestion } from "../../gemini";
+import type { TrainingContext, UpcomingWorkout } from "../../gemini";
 
 export interface TrainingStylePromptContext {
   promptPrefix?: string;
@@ -6,13 +6,15 @@ export interface TrainingStylePromptContext {
   systemInstructionAppendix?: string;
 }
 
+/**
+ * What a training style changes: the coach prompt, nothing else. The interface
+ * also declared computeProfile, analyzeWorkout, phaseLogic, safetyRules and
+ * prescribeNext; nothing called the first four, and prescribeNext returned the
+ * suggestions unchanged for every style, so they were dropped
+ * (S-trainingStyles, REFACTORING_REVIEW 2026-09-23).
+ */
 export interface TrainingStyleStrategy {
   id: string;
-  computeProfile(trainingContext: TrainingContext): Record<string, unknown>;
-  analyzeWorkout(trainingContext: TrainingContext, upcomingWorkouts: UpcomingWorkout[]): string;
-  prescribeNext(input: { suggestions: WorkoutSuggestion[]; trainingContext: TrainingContext }): WorkoutSuggestion[];
-  phaseLogic(trainingContext: TrainingContext): string;
-  safetyRules(trainingContext: TrainingContext): string[];
   buildPromptContext(trainingContext: TrainingContext, upcomingWorkouts: UpcomingWorkout[]): TrainingStylePromptContext;
 }
 

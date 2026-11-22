@@ -637,6 +637,7 @@ Instructions for generating multi-week training plans with day-by-day structure.
 - `buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks, options)` -- Assembles the full system prompt with training stats and coaching materials. When `retrievedChunks` is provided it takes priority over `coachingMaterials`. `options` (`SystemPromptOptions`) carries the per-message parts: the FOCUSED WORKOUT block, RECENT PLAN CHANGES, the earlier-conversation notes, the chat safety signals and whether the coach has tools (`server/prompts.ts`).
 - `buildCoachingMaterialsSection(materials)` -- Formats legacy coaching materials (`server/prompts/materialsBuilder.ts`).
 - `buildRetrievedChunksSection(chunks)` -- Formats RAG-retrieved chunks (`server/prompts/materialsBuilder.ts`).
+- `selectCoachingMaterials(retrievedChunks, coachingMaterials)` -- The one "chunks first, else legacy materials" rule: the rendered section and its source (`rag`, `legacy` or none). The chat prompt, the suggestions prompt (`extractCoachingMaterialsText`) and the auto-coach (`retrieveCoachingText`) all go through it (`server/prompts/materialsBuilder.ts`).
 - `buildOverallStats` / `buildExerciseFocus` / `buildStructuredPerformance` / `buildRecentWorkouts` / `buildUpcomingWorkouts` -- Format the training-data sections of the system prompt (`server/prompts/coachingContext.ts`).
 
 ---
@@ -881,6 +882,9 @@ calls it inline: the auto-coach job, the `…IfAllowed` generators the midnight
 recompute uses (coach insights, overview analysis, nutrition insights), race
 prediction, the planned-session estimate, semantic food search, the structured
 apply of a timeline suggestion and the legacy text parse on workout creation.
+The three `…IfAllowed` generators and race prediction share one gate,
+`resolveAiBlocker()` (`server/services/aiGate.ts`): the kill switch, then
+consent, then the budget, stopping at the first that blocks.
 The food-embedding cron (`embedMissingFoods()`), which embeds cached foods,
 belongs to no athlete: it skips a batch once the application-wide ceiling is
 reached (`isGlobalAiBudgetExhausted()`, which throws, so the batch is skipped,

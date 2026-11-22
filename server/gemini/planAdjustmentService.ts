@@ -11,7 +11,7 @@ import { generateJsonText, streamText, stripJsonCodeFence, type TextAiRequest } 
 import { logger } from "../logger";
 import { PLAN_ADJUSTMENT_PROMPT } from "../prompts";
 import { createJsonStringFieldReader } from "../utils/jsonStringFieldReader";
-import { createStreamingOutputValidator, formatZodIssues, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
+import { ampersandsToAnd, createStreamingOutputValidator, formatZodIssues, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import { buildPromptDataSections, type UpcomingWorkout } from "./suggestionService";
 import type { TrainingContext } from "./types";
 
@@ -93,27 +93,21 @@ const looseEnvelopeSchema = z.object({
   changes: z.array(z.unknown()).max(50),
 });
 
-function stripAmpersands(value: string): string {
-  // "&" renders literally in React text nodes; "and" reads better and matches
-  // the convention used across other AI output paths (see suggestionService).
-  return value.replaceAll("&", "and");
-}
-
 function normalizeChangeText(change: PlanAdjustmentChange): PlanAdjustmentChange {
   const { updatedFields } = change;
   return {
     ...change,
-    rationale: stripAmpersands(change.rationale),
+    rationale: ampersandsToAnd(change.rationale),
     updatedFields: {
       ...updatedFields,
-      ...(updatedFields.focus != null ? { focus: stripAmpersands(updatedFields.focus) } : {}),
+      ...(updatedFields.focus != null ? { focus: ampersandsToAnd(updatedFields.focus) } : {}),
       ...(updatedFields.mainWorkout != null
-        ? { mainWorkout: stripAmpersands(updatedFields.mainWorkout) }
+        ? { mainWorkout: ampersandsToAnd(updatedFields.mainWorkout) }
         : {}),
       ...(updatedFields.accessory != null
-        ? { accessory: stripAmpersands(updatedFields.accessory) }
+        ? { accessory: ampersandsToAnd(updatedFields.accessory) }
         : {}),
-      ...(updatedFields.notes != null ? { notes: stripAmpersands(updatedFields.notes) } : {}),
+      ...(updatedFields.notes != null ? { notes: ampersandsToAnd(updatedFields.notes) } : {}),
     },
   };
 }
@@ -172,7 +166,7 @@ export function parseAndValidatePlanAdjustment(text: string): PlanAdjustmentLlmO
   }
 
   return {
-    summaryMessage: validateAiOutput(stripAmpersands(envelope.data.summaryMessage)),
+    summaryMessage: validateAiOutput(ampersandsToAnd(envelope.data.summaryMessage)),
     changes: changes.slice(0, PLAN_ADJUSTMENT_MAX_CHANGES),
   };
 }
@@ -200,7 +194,7 @@ async function streamPlanAdjustment(
   try {
     for await (const chunk of streamText({ ...request, json: true })) {
       text += chunk;
-      const summary = stripAmpersands(readSummary(chunk));
+      const summary = ampersandsToAnd(readSummary(chunk));
       if (!summary) continue;
       summaryBegan = true;
       validateSummary(summary);

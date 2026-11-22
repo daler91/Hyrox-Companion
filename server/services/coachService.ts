@@ -1061,20 +1061,21 @@ export async function regenerateCoachNoteForPlanDay(
   );
 
   const safetySignals = analyzeSafetySignals(trainingContext, [workoutInput]);
-  const forcedSafetyNote = buildSafetyReviewNote(safetySignals);
 
-  // A configuration error comes out of the call unclassified, and leaves as
-  // the 503 a request reports (AI8, CODEBASE_ANALYSIS_2026-10-03).
-  const notes = forcedSafetyNote
-    ? [{ workoutId: day.id, note: forcedSafetyNote }]
-    : await generateReviewNotes(
-        trainingContext,
-        [workoutInput],
-        activePlanGoal,
-        coachingContext.text,
-        userId,
-        stylePromptContext,
-      ).catch(rethrowCoachCallFailure);
+  // The auto-coach's own rule: the safety note when one applies, else the
+  // model's (C-coachService, REFACTORING_REVIEW 2026-09-23). A configuration
+  // error comes out of the call unclassified, and leaves as the 503 a request
+  // reports (AI8, CODEBASE_ANALYSIS_2026-10-03).
+  const notes = await buildReviewNotes({
+    trainingContext,
+    unchangedWorkouts: [workoutInput],
+    activePlanGoal,
+    coachingText: coachingContext.text,
+    userId,
+    stylePromptContext,
+    forcedSafetyNote: buildSafetyReviewNote(safetySignals),
+    suggestionsFailed: false,
+  }).catch(rethrowCoachCallFailure);
   const note = notes.find((n) => n.workoutId === day.id);
   if (!note?.note) {
     throw new AppError(

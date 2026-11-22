@@ -1,5 +1,7 @@
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
+import { logger } from "../logger";
+import { trackUsageFromResponse } from "./client";
 import { parseExercisesFromImage } from "./exerciseParser";
 
 // Each test configures this spy to return a response. The mock wraps
@@ -68,6 +70,34 @@ describe("parseExercisesFromImage", () => {
       mimeType: "image/jpeg",
     });
     expect(result).toEqual([]);
+  });
+
+  // The parse goes through the shared callGeminiVisionJson (C-vision), which
+  // keeps the exercise path's own two rules: usage is recorded only against an
+  // athlete, and an empty reply is logged before it fails.
+  it("records usage under parse for an athlete, and none without one", async () => {
+    generateContentSpy.mockResolvedValue({ text: JSON.stringify([]) });
+
+    await parseExercisesFromImage({ imageBase64: "ZmFrZQ==", mimeType: "image/jpeg", userId: "user-1" });
+    expect(trackUsageFromResponse).toHaveBeenCalledWith("user-1", "gemini-2.5-flash", "parse", expect.anything());
+
+    vi.mocked(trackUsageFromResponse).mockClear();
+    await parseExercisesFromImage({ imageBase64: "ZmFrZQ==", mimeType: "image/jpeg" });
+    expect(trackUsageFromResponse).not.toHaveBeenCalled();
+  });
+
+  it("logs and fails on an empty reply", async () => {
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => undefined);
+    generateContentSpy.mockResolvedValueOnce({ text: "" });
+
+    await expect(
+      parseExercisesFromImage({ imageBase64: "ZmFrZQ==", mimeType: "image/jpeg", userId: "user-1" }),
+    ).rejects.toThrow("AI returned empty response for exercise parsing");
+    expect(errorSpy).toHaveBeenCalledWith(
+      { response: { text: "" } },
+      "[gemini] exercise-parse-image returned empty response",
+    );
+    errorSpy.mockRestore();
   });
 
   it("throws a specific error when the model returns invalid JSON", async () => {

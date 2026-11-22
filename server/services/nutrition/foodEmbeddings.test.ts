@@ -29,7 +29,7 @@ vi.mock("../../db", () => ({
   },
 }));
 vi.mock("../../vectorDb", () => ({ vectorPool: { query } }));
-vi.mock("../../gemini/client", () => ({ EMBEDDING_DIMENSIONS: 3072, generateEmbeddings: vi.fn() }));
+vi.mock("../../gemini/client", () => ({ generateEmbeddings: vi.fn() }));
 vi.mock("../../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock("../aiUsageService", () => ({ isGlobalAiBudgetExhausted: vi.fn(), recordAiUsage: vi.fn() }));
 
