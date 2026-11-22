@@ -354,12 +354,18 @@ public class TimelineRepository(
     }
 }
 
-/** The entry with a plan-day edit applied: what was sent changes, what wasn't stays. */
+/**
+ * The entry with a plan-day edit applied: what was sent changes, what wasn't
+ * stays. `coachNotes` is the server's split of `notes`, so a sent note drops
+ * it: the card then shows the note as written (coachNotesOf) until the next
+ * refresh brings the new split, instead of the old note's text and cues.
+ */
 internal fun TimelineEntry.edited(edit: PatchPlansDaysByDayIdRequest): TimelineEntry = copy(
     focus = edit.focus ?: focus,
     mainWorkout = edit.mainWorkout ?: mainWorkout,
     accessory = edit.accessory.applyTo(accessory),
     notes = edit.notes.applyTo(notes),
+    coachNotes = if (edit.notes is Patch.Absent) coachNotes else null,
     expectedDurationMin = edit.expectedDurationMin.applyTo(expectedDurationMin),
     expectedRpe = edit.expectedRpe.applyTo(expectedRpe),
     plannedTimeOfDayMin = edit.plannedTimeOfDayMin.applyTo(plannedTimeOfDayMin),

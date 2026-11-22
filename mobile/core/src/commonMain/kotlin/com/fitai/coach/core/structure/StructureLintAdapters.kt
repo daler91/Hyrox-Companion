@@ -1,5 +1,6 @@
 package com.fitai.coach.core.structure
 
+import com.fitai.coach.core.api.ApiJson
 import com.fitai.coach.core.api.Patch
 import com.fitai.coach.core.api.generated.CreateWorkoutRequest
 import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdStructureRequest
@@ -44,6 +45,34 @@ public fun UpdateWorkoutRequest.ExercisesItem.toStructureLintExercise(): Structu
         )
     },
 )
+
+/**
+ * A workout-create structure block (POST /api/v1/workouts `structureBlocks`)
+ * as [lintWorkoutStructure] reads it: the block's JSON, the body the app
+ * sends, decoded straight into the lint's input (StructureLintInput.kt).
+ */
+public fun CreateWorkoutRequest.StructureBlocksItem.toStructureLintBlock(): StructureLintBlock = ApiJson.decodeFromJsonElement(
+    StructureLintBlock.serializer(),
+    ApiJson.encodeToJsonElement(CreateWorkoutRequest.StructureBlocksItem.serializer(), this),
+)
+
+/**
+ * [lintWorkoutStructure] over the body a workout create sends: its structure
+ * blocks and exercise rows, as POST /api/v1/workouts lints them.
+ */
+public fun CreateWorkoutRequest.lintStructure(): StructureLintResult = lintWorkoutStructure(
+    structureBlocks = structureBlocks?.map { it.toStructureLintBlock() },
+    exercises = exercises?.map { it.toStructureLintExercise() },
+)
+
+/**
+ * Throws [StructureLintException] when the server would refuse this create
+ * for its structure ([lintStructure] has schema errors).
+ */
+public fun CreateWorkoutRequest.requireValidStructure() {
+    val errors = lintStructure().schemaErrors
+    if (errors.isNotEmpty()) throw StructureLintException(errors)
+}
 
 /**
  * A request-side structure block as [lintWorkoutStructure] reads it. This

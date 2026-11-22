@@ -57,6 +57,14 @@ public data class StructureLintIssue(
     val fixGuidance: String,
 )
 
+/**
+ * A workout the server would refuse with a 400: its structure lint has
+ * [errors] (the result's `schemaErrors`, never empty). The message is the
+ * first error's, the sentence the web shows for the same save.
+ */
+public class StructureLintException(public val errors: List<StructureLintIssue>) :
+    IllegalArgumentException(errors.first().message)
+
 /** `StructureLintResult` in structureLint.ts. */
 @Serializable
 public data class StructureLintResult(

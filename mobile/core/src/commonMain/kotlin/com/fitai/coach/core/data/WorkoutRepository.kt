@@ -17,6 +17,7 @@ import com.fitai.coach.core.api.generated.UpdateWorkoutRequest
 import com.fitai.coach.core.api.generated.WorkoutLatest
 import com.fitai.coach.core.api.generated.WorkoutLogDetail
 import com.fitai.coach.core.api.generated.WorkoutLogWithSets
+import com.fitai.coach.core.structure.requireValidStructure
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -95,11 +96,15 @@ public class WorkoutRepository(
     /**
      * Changes a set: at once on the device, then on the server. The patch's
      * `expectedVersion` is ignored; the outbox fills it in when it sends.
+     * Numbers in the units the patch names re-stamp the device's copy as the
+     * server will ([restampedSetBody]).
      */
     public suspend fun updateSet(workoutId: String, setId: String, patch: PatchWorkoutsByIdSetsBySetIdRequest) {
         val body = encode(PatchWorkoutsByIdSetsBySetIdRequest.serializer(), patch.copy(expectedVersion = null))
         db.writeTransaction {
-            dao.set(setId)?.let { row -> dao.upsertSets(listOf(row.copy(json = mergePatch(row.json, body)))) }
+            dao.set(setId)?.let { row ->
+                dao.upsertSets(listOf(row.copy(json = mergePatch(row.json, restampedSetBody(row.json, patch, body)))))
+            }
             sync.enqueue(
                 ApiEndpoints.PatchWorkoutsByIdSetsBySetId,
                 path = ApiEndpoints.PatchWorkoutsByIdSetsBySetId.path(setId = setId, id = workoutId),
@@ -306,9 +311,15 @@ public class WorkoutRepository(
      * timeout) is it queued, under the same idempotency key, so a request that
      * did reach the server isn't applied twice.
      *
+     * Its structure is linted first, as the web's save does and the server
+     * will: a workout the server would refuse is neither sent nor queued, so
+     * an offline save never waits in the outbox only to fail on replay.
+     *
+     * @throws com.fitai.coach.core.structure.StructureLintException when the structure has schema errors.
      * @throws com.fitai.coach.core.api.ApiException when the server refuses it.
      */
     public suspend fun logWorkout(request: CreateWorkoutRequest): LogResult {
+        request.requireValidStructure()
         val key = newKey()
         return try {
             val body = encode(CreateWorkoutRequest.serializer(), request)

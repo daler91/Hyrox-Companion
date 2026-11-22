@@ -19,6 +19,7 @@ import com.fitai.coach.core.data.UserSession
 import com.fitai.coach.core.exercises.NextTarget
 import com.fitai.coach.core.exercises.generated.EXERCISE_DEFINITIONS
 import com.fitai.coach.core.structure.BlockScore
+import com.fitai.coach.core.units.UnitPreferences
 import com.fitai.coach.ui.format.userMessage
 import com.fitai.coach.ui.planday.parseResult
 import kotlinx.coroutines.CancellationException
@@ -119,7 +120,13 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
         session.preferences.preferences,
         session.mafTests.tests,
     ) { around, aroundLoading, prefs, tests ->
-        Panels(around, aroundLoading, mafTag(prefs, tests, workoutId), plannedDiffs = prefs?.showAdherenceInsights == true)
+        Panels(
+            around,
+            aroundLoading,
+            mafTag(prefs, tests, workoutId),
+            plannedDiffs = prefs?.showAdherenceInsights == true,
+            units = prefs.units(),
+        )
     }
 
     val state: StateFlow<WorkoutDetailState> = combine(
@@ -128,7 +135,9 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
         status,
         extras,
         panels,
-    ) { workout, entries, current, more, panel ->
+    ) { stored, entries, current, more, panel ->
+        // Its sets in the athlete's current units, which every edit is in (SetUnits.kt).
+        val workout = stored?.let { it.copy(exerciseSets = it.exerciseSets.map { set -> set.toPreferenceScale(panel.units) }) }
         WorkoutDetailState(
             workout = workout,
             loading = workout == null && current.loading,
@@ -228,7 +237,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
             time = edit.time.toDoublePatch(),
             notes = edit.notes.toNotePatch(),
         )
-        launchSafely("Couldn't save that set") { session.workouts.updateSet(workoutId, setId, patch) }
+        launchSafely("Couldn't save that set") { sendSet(setId, patch) }
     }
 
     /** Saves the RPE the heart rate suggests, when the athlete takes it. */
@@ -240,7 +249,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
     fun changeExercise(group: ExerciseGroup, exerciseName: String, customLabel: String?) {
         val patch = changeExercisePatch(exerciseName, customLabel)
         group.sets.forEach { set ->
-            launchSafely("Couldn't change that exercise") { session.workouts.updateSet(workoutId, set.id, patch) }
+            launchSafely("Couldn't change that exercise") { sendSet(set.id, patch) }
         }
     }
 
@@ -252,7 +261,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
     /** Fills the sets from last time's (Use last). */
     fun useLast(sets: List<ExerciseSetRow>, history: ExerciseHistory) {
         useLastPatches(sets, history.lastSets).forEach { (setId, patch) ->
-            launchSafely("Couldn't fill in last time") { session.workouts.updateSet(workoutId, setId, patch) }
+            launchSafely("Couldn't fill in last time") { sendSet(setId, patch) }
         }
     }
 
@@ -293,7 +302,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
                     weight = last.weight?.let { Patch.of(it) } ?: Patch.Absent,
                     distance = last.distance?.let { Patch.of(it) } ?: Patch.Absent,
                     time = last.time?.let { Patch.of(it) } ?: Patch.Absent,
-                ),
+                ).composedIn(units()),
             )
         }
     }
@@ -317,7 +326,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
                     customLabel = customLabel?.let { Patch.of(it) } ?: Patch.Absent,
                     category = definition?.category ?: CUSTOM_EXERCISE_CATEGORY,
                     setNumber = 1,
-                ),
+                ).composedIn(units()),
             )
         }
     }
@@ -326,11 +335,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
     fun useNext(sets: List<ExerciseSetRow>, target: NextTarget) {
         sets.forEach { set ->
             launchSafely("Couldn't apply the target") {
-                session.workouts.updateSet(
-                    workoutId,
-                    set.id,
-                    PatchWorkoutsByIdSetsBySetIdRequest(reps = Patch.of(target.reps), weight = Patch.of(target.weight)),
-                )
+                sendSet(set.id, PatchWorkoutsByIdSetsBySetIdRequest(reps = Patch.of(target.reps), weight = Patch.of(target.weight)))
             }
         }
     }
@@ -437,11 +442,19 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
                 requestedHistory.remove(exerciseName)
                 return@launch
             }
-            val defaultUnit = session.preferences.preferences.first()?.weightUnit ?: "kg"
-            val summary = exerciseHistory(history, workoutId, category, exerciseName, defaultUnit)
+            val prefs = session.preferences.preferences.first()
+            val inUnits = history.map { it.toPreferenceScale(prefs.units()) }
+            val summary = exerciseHistory(inUnits, workoutId, category, exerciseName, prefs?.weightUnit ?: "kg")
             extras.update { it.copy(histories = it.histories + (exerciseName to summary)) }
         }
     }
+
+    /** The athlete's units now: what the screen shows a set in, so what an edit's numbers are in. */
+    private suspend fun units(): UnitPreferences = session.preferences.preferences.first().units()
+
+    /** Sends a set edit, naming the units its numbers are in. */
+    private suspend fun sendSet(setId: String, patch: PatchWorkoutsByIdSetsBySetIdRequest) =
+        session.workouts.updateSet(workoutId, setId, patch.composedIn(units()))
 
     /** Runs a write that must reach the server (it answers with ids); one at a time. */
     private fun online(failure: String, block: suspend () -> Unit) =
@@ -492,6 +505,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
         val aroundLoading: Boolean,
         val maf: MafTag?,
         val plannedDiffs: Boolean,
+        val units: UnitPreferences,
     )
 
     private companion object {

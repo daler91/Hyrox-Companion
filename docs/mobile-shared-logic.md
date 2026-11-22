@@ -121,15 +121,18 @@ The exercise tables are generated Kotlin (`exercises/generated/ExerciseCatalogue
 `pnpm mobile:catalogue`), checked for drift in the unit suite like the API models.
 `structureLint` reads its own input types (`structure/StructureLintInput.kt`).
 `structure/StructureLintAdapters.kt` fills them from the generated request models: the exercise
-rows of `CreateWorkoutRequest` and `UpdateWorkoutRequest`, and the blocks of
-`PatchPlansDaysByDayIdStructureRequest`. Nothing in the app calls `lintWorkoutStructure` yet; only
-`StructureLintFixtureTest` does. The log screen sends `structureBlocks` on
-`POST /api/v1/workouts` unlinted (`ui/log/LogWorkoutViewModel.kt`), and there is no adapter for
-that request's blocks.
+rows of `CreateWorkoutRequest` and `UpdateWorkoutRequest`, and the blocks of `CreateWorkoutRequest`
+and `PatchPlansDaysByDayIdStructureRequest`. `WorkoutRepository.logWorkout` lints the create
+request (`CreateWorkoutRequest.lintStructure()`) before it sends or queues it, as the web's save
+does: a structure with schema errors throws `StructureLintException`, whose message is the first
+error's, and is neither sent nor queued.
 
-Three more ported functions have no caller in the app yet: `restampSetPatch`,
-`stampForPreferences` and `displayDistanceToStored`. The set editor edits a row in the row's own
-stamped unit (`ui/workout/ExerciseGroups.kt`).
+The set editor and the workout and plan-day screens show sets in the athlete's current units:
+`ui/workout/SetUnits.kt` converts each row where it enters a screen (`toPreferenceScale`, the
+web's `lib/setDisplay.ts`), and every set write names the units its numbers are in
+(`composedIn`, the web's `composedUnitsFor`). `WorkoutRepository.updateSet` re-stamps the
+device's copy of a set with `restampSetPatch` until the server's answer replaces it
+(`core/data/SetRestamp.kt`). `displayDistanceToStored` still has no caller.
 
 **TypeScript bugs found while porting, ported faithfully and pinned by fixtures** (fixing them
 means changing the TypeScript, regenerating the fixtures and simplifying the ports):
@@ -203,8 +206,8 @@ where the plan's `80-90kg` → `80-198 lbs` bug lived, so the app does not need 
   `storedDistanceToDisplay`, `restampSetPatch`, with the private `parsedDistanceToMeters` and
   `metersToStoredDistance`. The web wraps them in `lib/setDisplay.ts` (`toPreferenceScale`) and in
   the optimistic patch in `hooks/useExerciseSetsForOwner.ts:187`. The app needs both for Room rows
-  and outbox replays. Today it calls the two display functions (`ui/timeline/TimelineExtras.kt`)
-  and neither `stampForPreferences` nor `restampSetPatch` (see [Ports done](#ports-done)).
+  and outbox replays, and has both: `ui/workout/SetUnits.kt` and `core/data/SetRestamp.kt` (see
+  [Ports done](#ports-done)).
 - Set-editor distance: `getWorkoutDistanceDisplay` and `displayDistanceToStored`, with the private
   `cleanWholeKilometerTarget` and `formatCompactNumber`.
 - Constants: `KG_TO_LBS = 2.20462`, `M_TO_FT = 3.28084`, `FEET_PER_MILE = 5280`,
@@ -622,8 +625,8 @@ model: it has its own input types, filled by adapters (see [Ports done](#ports-d
 - The server rejects any result with `schemaErrors` with a 400
   (`server/services/workoutUseCases.ts:134`, `:195`).
 - The web lints before save (`hooks/workout-form/saveWorkoutPayload.ts:357`), so an offline save is
-  never queued only to fail on replay. The app outbox needs the same check, and does not run it
-  yet (see [Ports done](#ports-done)).
+  never queued only to fail on replay. The app runs the same check in
+  `WorkoutRepository.logWorkout` (see [Ports done](#ports-done)).
 
 **Fixture inputs:**
 
@@ -688,7 +691,8 @@ fixture, so the app's %RDI matches the server's `GET /api/v1/nutrition/micros`.
    **Answered:** all five are ported. Four have a caller in the app: the fuelling panel and chip
    (`ui/fuelling/`), the meal-target editor (`ui/nutrition/TargetsModel.kt`), the "Next" chip
    (`ui/workout/WorkoutDetailModel.kt`) and the notification settings
-   (`ui/settings/NotificationSettingsModel.kt`). `lintWorkoutStructure` has none yet.
+   (`ui/settings/NotificationSettingsModel.kt`). `lintWorkoutStructure` runs before a logged
+   workout is sent or queued (`core/data/WorkoutRepository.kt`).
 2. **How should the exercise catalogue reach the app?** No catalogue endpoint exists: there is only
    `/api/v1/exercises/{exerciseName}/history` and `/api/v1/custom-exercises`. The two options:
    - Generate Kotlin from the TS source at build time. The catalogue works offline and is versioned
@@ -734,10 +738,10 @@ fixture, so the app's %RDI matches the server's `GET /api/v1/nutrition/micros`.
    raw text until then, or port `parseCoachNotes`? A port would need JS-compatible `\s` (JVM `\s` is
    ASCII-only by default).
    **Answered:** nothing is ported. An entry with notes and no `coachNotes` shows them as the
-   athlete's text (`coachNotesOf`, `ui/timeline/CoachNotes.kt`). An optimistic edit changes `notes`
-   and keeps the entry's old `coachNotes` (`TimelineEntry.edited`,
-   `core/data/TimelineRepository.kt`), so an entry that already had `coachNotes` shows the earlier
-   split until the next refresh.
+   athlete's text (`coachNotesOf`, `ui/timeline/CoachNotes.kt`). An optimistic edit that changes
+   `notes` drops the entry's old `coachNotes` (`TimelineEntry.edited`,
+   `core/data/TimelineRepository.kt`), so the edited note shows as written, coach cue lines
+   included, until the next refresh brings the server's split.
 9. **The summary text is generated on the client** (field 11). Move it to the server, or accept that
    web and app may write different `mainWorkout` text for the same workout?
    **Answered:** moved. The server writes it when the text is left out (field 11), from the same

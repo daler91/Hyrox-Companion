@@ -40,6 +40,11 @@ class TimelineChangesTest {
         """{"id":"$id","date":"$date","type":"planned","status":"$status","focus":"Tempo","mainWorkout":"6 x 800 m",""" +
             """"planDayId":"d-$id"""" + (dayName?.let { ""","dayName":"$it"""" } ?: "") + "}"
 
+    private fun plannedWithCoachNotes(id: String, date: String) =
+        """{"id":"$id","date":"$date","type":"planned","status":"planned","focus":"Tempo","mainWorkout":"6 x 800 m",""" +
+            """"planDayId":"d-$id","notes":"Easy\n[AI Coach] Pacing: hold 5:30/km",""" +
+            """"coachNotes":{"athleteText":"Easy","cues":[{"label":"Pacing","text":"hold 5:30/km"}]}}"""
+
     @Test
     fun olderPagesLoadOnDemandAndARefreshKeepsThem() = runTest {
         server.on("GET", TIMELINE) { sent ->
@@ -191,6 +196,33 @@ class TimelineChangesTest {
         sync.sync()
         val body = ApiJson.parseToJsonElement(server.sentTo("PATCH", "/api/v1/plans/days/d-p1").single().body!!).jsonObject
         assertEquals(setOf("focus", "notes", "priority"), body.keys)
+    }
+
+    // Tech debt #62: coachNotes is the server's split of notes, and the card
+    // prefers it, so after a notes edit it kept showing the old note.
+    @Test
+    fun aNotesEditDropsTheOldNotesCoachSplit() = runTest {
+        server.on("GET", TIMELINE) { page(plannedWithCoachNotes("p1", "2026-11-10")) }
+        timeline.refresh()
+        server.on("PATCH", "/api/v1/plans/days/d-p1", 200, "{}")
+        assertEquals("Easy", entry("p1").coachNotes?.athleteText)
+
+        timeline.editPlanDay(entry("p1"), PatchPlansDaysByDayIdRequest(notes = Patch.of("Strides at the end")))
+
+        assertEquals("Strides at the end", entry("p1").notes)
+        assertNull(entry("p1").coachNotes)
+    }
+
+    @Test
+    fun anEditThatLeavesTheNotesAloneKeepsTheirCoachSplit() = runTest {
+        server.on("GET", TIMELINE) { page(plannedWithCoachNotes("p1", "2026-11-10")) }
+        timeline.refresh()
+        server.on("PATCH", "/api/v1/plans/days/d-p1", 200, "{}")
+
+        timeline.editPlanDay(entry("p1"), PatchPlansDaysByDayIdRequest(focus = "Hill reps"))
+
+        assertEquals("Easy", entry("p1").coachNotes?.athleteText)
+        assertEquals(listOf("Pacing"), entry("p1").coachNotes?.cues?.map { it.label })
     }
 
     @Test

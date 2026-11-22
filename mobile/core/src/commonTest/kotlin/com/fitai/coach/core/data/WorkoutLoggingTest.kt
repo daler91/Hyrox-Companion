@@ -5,6 +5,8 @@ import com.fitai.coach.core.api.ApiJson
 import com.fitai.coach.core.api.Patch
 import com.fitai.coach.core.api.generated.CreateWorkoutRequest
 import com.fitai.coach.core.api.generated.ParsedExercise
+import com.fitai.coach.core.structure.StructureLintCode
+import com.fitai.coach.core.structure.StructureLintException
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonArray
@@ -62,6 +64,45 @@ class WorkoutLoggingTest {
 
         assertEquals("Workout date cannot be in the future", error.message)
         assertTrue(db.outbox().all().isEmpty())
+    }
+
+    // Tech debt #61: the app queued a structure the server refuses, so an
+    // offline save sat in the outbox only to fail on replay.
+    @Test
+    fun aLogWhoseStructureTheServerWouldRefuseIsNeitherSentNorQueued() = runTest {
+        server.on("POST", "/api/v1/workouts") { Reply.NoAnswer }
+        val amrapWithNoTimeCap = CreateWorkoutRequest.StructureBlocksItem(
+            id = "b1",
+            sectionType = CreateWorkoutRequest.StructureBlocksItem.SectionType.Main,
+            formatType = CreateWorkoutRequest.StructureBlocksItem.FormatType.Amrap,
+            steps = listOf(CreateWorkoutRequest.StructureBlocksItem.StepsItem(stepNumber = 1)),
+        )
+
+        val error = assertFailsWith<StructureLintException> {
+            workouts.logWorkout(request.copy(structureBlocks = listOf(amrapWithNoTimeCap)))
+        }
+
+        assertEquals("AMRAP blocks require a time cap or duration.", error.message)
+        assertEquals(listOf(StructureLintCode.MissingRequiredTargetByFormat), error.errors.map { it.code })
+        assertTrue(server.requests.isEmpty())
+        assertTrue(db.outbox().all().isEmpty())
+    }
+
+    @Test
+    fun aStructureWithNoSchemaErrorsIsStillLogged() = runTest {
+        server.on("POST", "/api/v1/workouts", 201, saved)
+        val cappedForTime = CreateWorkoutRequest.StructureBlocksItem(
+            id = "b1",
+            sectionType = CreateWorkoutRequest.StructureBlocksItem.SectionType.Main,
+            formatType = CreateWorkoutRequest.StructureBlocksItem.FormatType.ForTime,
+            durationSeconds = Patch.of(600),
+            steps = listOf(CreateWorkoutRequest.StructureBlocksItem.StepsItem(stepNumber = 1)),
+        )
+
+        val result = workouts.logWorkout(request.copy(structureBlocks = listOf(cappedForTime)))
+
+        assertIs<LogResult.Saved>(result)
+        assertEquals(1, server.requests.size)
     }
 
     @Test
