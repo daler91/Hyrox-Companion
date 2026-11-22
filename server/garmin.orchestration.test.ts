@@ -537,6 +537,18 @@ describe("getGarminClient token strategy", () => {
     expect(FakeGarminConnect.instances[0].login).toHaveBeenCalled();
   });
 
+  it("records the error when Garmin rejects the sync login's credentials", async () => {
+    connectionMocks.getGarminConnection.mockResolvedValue(conn(NO_CACHED_TOKENS));
+    FakeGarminConnect.loginImpl = () => Promise.reject(new Error("Request failed: 401 Unauthorized"));
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe("GARMIN_AUTH_FAILED");
+    expect(storage.users.setGarminError).toHaveBeenCalledWith("user-1", expect.stringMatching(/rejected the credentials/i));
+    expect(__testing.garminCircuitBreaker.isOpen()).toBe(false);
+  });
+
   it("fails fast on a stored lastError before any SDK call (direct client layer)", async () => {
     vi.mocked(storage.users.getGarminConnection).mockResolvedValue(
       conn({ lastError: "Garmin rejected the credentials." }),
@@ -570,7 +582,10 @@ describe("getGarminClient token strategy", () => {
 });
 
 describe("circuit breaker integration", () => {
-  it("trips on a 429 login, records a friendly error, and short-circuits the next sync with 503", async () => {
+  // D11 (REFACTORING_REVIEW 2026-09-23): a rate limit says nothing about the
+  // credentials. Recording it used to wipe them while the message promised a
+  // retry in 30 minutes, so the retry then demanded a full reconnect.
+  it("trips on a 429 login, keeps the connection, and short-circuits the next sync with 503", async () => {
     vi.mocked(storage.users.getGarminConnection).mockResolvedValue(
       conn(NO_CACHED_TOKENS), // forces the login path
     );
@@ -579,13 +594,10 @@ describe("circuit breaker integration", () => {
 
     const first = await request(app).post("/api/v1/garmin/sync");
 
-    expect(first.status).toBe(401);
-    expect(first.body.code).toBe("GARMIN_AUTH_FAILED");
+    expect(first.status).toBe(502);
+    expect(first.body.code).toBe("GARMIN_API_ERROR");
     expect(first.body.error).toMatch(/rate limit/i);
-    expect(storage.users.setGarminError).toHaveBeenCalledWith(
-      "user-1",
-      expect.stringMatching(/rate limit/i),
-    );
+    expect(storage.users.setGarminError).not.toHaveBeenCalled();
     expect(__testing.garminCircuitBreaker.isOpen()).toBe(true);
 
     const callsAfterFirst = vi.mocked(storage.users.getGarminConnection).mock.calls.length;

@@ -52,6 +52,24 @@ const WEEKLY_REVIEW_CLAIM_WINDOW_MS = 6 * 24 * 60 * 60 * 1000;
 const TODAY_SESSION_CLAIM_WINDOW_MS = 20 * 60 * 60 * 1000;
 const ANALYSIS_DIGEST_CLAIM_WINDOW_MS = 6 * 24 * 60 * 60 * 1000;
 
+/**
+ * Send a push without waiting for it. Every push in this file goes through
+ * here, because the .catch is load-bearing: sendPushToUser awaits a DB read
+ * before its own allSettled guard, and an unguarded rejection would hit the
+ * process-wide unhandledRejection handler, which exits(1). One transient DB
+ * blip during the cron burst would take down the whole API (C1). Six call
+ * sites each carried their own copy of the .catch, so a new email kind copied
+ * without it would bring the crash back (R1, REFACTORING_REVIEW 2026-09-23).
+ * emailScheduler.test.ts checks that no other call remains.
+ */
+function sendPushDetached(userId: string, payload: PushPayload, label: string): void {
+  void sendPushToUser(userId, payload).catch((err: unknown) => {
+    // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
+    // bearer:disable javascript_lang_logger_leak
+    logger.error({ err, userId }, `${label} push send failed`);
+  });
+}
+
 export type EmailJobName =
   | "send-weekly-summary"
   | "send-missed-reminder"
@@ -160,25 +178,21 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   // unclear failure from delivering it twice (tech debt #39).
   const sent = await sendWeeklySummary(user, summaryData, getLocalDateStrSafe(now, tz));
 
-  // Also send push notification (fire-and-forget). The .catch is load-bearing:
-  // sendPushToUser awaits a DB read before its own allSettled guard, and an
-  // unguarded rejection here would hit the process-wide unhandledRejection
-  // handler, which exits(1) — one transient DB blip during the cron burst
-  // would take down the whole API.
-  void sendPushToUser(user.id, {
-    title: "Weekly Training Summary",
-    body:
-      summaryData.completionRate == null
-        ? `You completed ${summaryData.completedCount} workouts this week.`
-        : `You completed ${summaryData.completedCount} workouts this week (${summaryData.completionRate}% completion rate).`,
-    // The review of THIS week, not /analytics — which shows a different set of
-    // numbers over a different window than the notification just quoted.
-    url: `/review?week=${encodeURIComponent(weekStartStr)}`,
-  }).catch((err: unknown) => {
-    // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
-    // bearer:disable javascript_lang_logger_leak
-    logger.error({ err, userId: user.id }, "weekly summary push send failed");
-  });
+  // Also send push notification (fire-and-forget; see sendPushDetached).
+  sendPushDetached(
+    user.id,
+    {
+      title: "Weekly Training Summary",
+      body:
+        summaryData.completionRate == null
+          ? `You completed ${summaryData.completedCount} workouts this week.`
+          : `You completed ${summaryData.completedCount} workouts this week (${summaryData.completionRate}% completion rate).`,
+      // The review of THIS week, not /analytics — which shows a different set of
+      // numbers over a different window than the notification just quoted.
+      url: `/review?week=${encodeURIComponent(weekStartStr)}`,
+    },
+    "weekly summary",
+  );
 
   return sent;
 }
@@ -216,13 +230,8 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   }));
   const sent = await sendMissedWorkoutReminder(user, missedData, todayStr);
 
-  // Also send push notification (fire-and-forget; .catch is load-bearing —
-  // see processWeeklySummary).
-  void sendPushToUser(user.id, buildMissedWorkoutPush(missedData)).catch((err: unknown) => {
-    // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
-    // bearer:disable javascript_lang_logger_leak
-    logger.error({ err, userId: user.id }, "missed workout push send failed");
-  });
+  // Also send push notification (fire-and-forget; see sendPushDetached).
+  sendPushDetached(user.id, buildMissedWorkoutPush(missedData), "missed workout");
 
   return sent;
 }
@@ -280,17 +289,16 @@ export async function processMafTestReminder(storage: IStorage, user: User, now:
     ? await sendMafTestReminder(user, getLocalDateStrSafe(now, user.userTimezone))
     : false;
 
-  // Push is fire-and-forget and no-ops when the user has no subscription
-  // (.catch is load-bearing — see processWeeklySummary).
-  void sendPushToUser(user.id, {
-    title: "Time for your MAF test",
-    body: "Run a fixed distance or time at your MAF heart-rate ceiling, then log the run to track your aerobic progress.",
-    url: "/log",
-  }).catch((err: unknown) => {
-    // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
-    // bearer:disable javascript_lang_logger_leak
-    logger.error({ err, userId: user.id }, "MAF test push send failed");
-  });
+  // Push is fire-and-forget and no-ops when the user has no subscription.
+  sendPushDetached(
+    user.id,
+    {
+      title: "Time for your MAF test",
+      body: "Run a fixed distance or time at your MAF heart-rate ceiling, then log the run to track your aerobic progress.",
+      url: "/log",
+    },
+    "MAF test",
+  );
 
   return emailSent;
 }
@@ -423,16 +431,16 @@ export async function processWeeklyReviewReminder(storage: IStorage, user: User,
   };
   const sent = await sendWeeklyReviewReminder(user, data, getLocalDateStrSafe(now, tz));
 
-  // Push rides along fire-and-forget (.catch is load-bearing — see processWeeklySummary).
-  void sendPushToUser(user.id, {
-    title: "Your week is wrapping up",
-    body: `${data.sessionsLogged} session${data.sessionsLogged === 1 ? "" : "s"} so far — take two minutes to review it.`,
-    url: `/review?week=${encodeURIComponent(review.weekStart)}`,
-  }).catch((err: unknown) => {
-    // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
-    // bearer:disable javascript_lang_logger_leak
-    logger.error({ err, userId: user.id }, "weekly review reminder push send failed");
-  });
+  // Push rides along fire-and-forget.
+  sendPushDetached(
+    user.id,
+    {
+      title: "Your week is wrapping up",
+      body: `${data.sessionsLogged} session${data.sessionsLogged === 1 ? "" : "s"} so far — take two minutes to review it.`,
+      url: `/review?week=${encodeURIComponent(review.weekStart)}`,
+    },
+    "weekly review reminder",
+  );
 
   return sent;
 }
@@ -477,11 +485,7 @@ export async function processTodaySessionBrief(storage: IStorage, user: User, no
   const data: TodaySessionData = { date: targetDate, isTomorrow, sessions };
   const sent = await sendTodaySessionBrief(user, data, getLocalDateStrSafe(now, user.userTimezone));
 
-  void sendPushToUser(user.id, buildTodaySessionPush(data)).catch((err: unknown) => {
-    // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
-    // bearer:disable javascript_lang_logger_leak
-    logger.error({ err, userId: user.id }, "session brief push send failed");
-  });
+  sendPushDetached(user.id, buildTodaySessionPush(data), "session brief");
 
   return sent;
 }
@@ -589,15 +593,7 @@ export async function processAnalysisDigest(storage: IStorage, user: User, now: 
     ? `Predicted finish ${formatSecondsToClock(racePrediction.totalFinishSeconds)}${insightsSuffix}`
     : "New coach insights are waiting for you.";
 
-  void sendPushToUser(user.id, {
-    title: "Your training analysis is ready",
-    body: pushBody,
-    url: "/analytics",
-  }).catch((err: unknown) => {
-    // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
-    // bearer:disable javascript_lang_logger_leak
-    logger.error({ err, userId: user.id }, "analysis digest push send failed");
-  });
+  sendPushDetached(user.id, { title: "Your training analysis is ready", body: pushBody, url: "/analytics" }, "analysis digest");
 
   return sent;
 }

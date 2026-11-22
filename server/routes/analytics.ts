@@ -62,7 +62,7 @@ type DateReq = ExpressRequest<Record<string, never>, unknown, unknown, DateQuery
 // with the Overview AI analysis path so both compute the same windows).
 // Re-exported here so the existing analytics route tests keep importing them
 // from this module.
-export { addCalendarDays, todayUtcYyyyMmDd } from "../services/trainingOverviewLoader";
+export { addCalendarDays } from "../services/trainingOverviewLoader";
 
 async function parseDateParams(
   req: DateReq,

@@ -710,7 +710,7 @@ The coaching insights module computes the signals below from the athlete's timel
 
 ### RPE Trend
 
-Compares the average RPE (Rate of Perceived Exertion) of the last 3 completed workouts that carry an RPE against the up to 3 rated workouts before them (`computeRpeTrend()`). Both averages are rounded to one decimal. The trend needs at least 5 rated workouts. With 3 or 4, `rpeTrend` is `insufficient_data`, but `avgRpeLast3` is still reported and the absolute flag thresholds below still apply. With fewer than 3, both flags are false.
+Compares the average RPE (Rate of Perceived Exertion) of the last 3 completed workouts that carry an RPE against the up to 3 rated workouts before them (`computeRpeTrend()`). Both averages are rounded to one decimal. The trend needs at least 5 rated workouts. With 3 or 4, `rpeTrend` is `insufficient_data`, but `avgRpeLast3` is still reported and the absolute flag thresholds below still apply; the COACHING ANALYSIS line then reads "Insufficient data for a trend (fewer than 5 workouts with RPE logged; avg N last 3 workouts)" and shows any flag that is set, since `aiModificationGuard` acts on the fatigue flag. With fewer than 3, both flags are false.
 
 - **Rising:** difference > 0.8 -- perceived effort is climbing.
 - **Stable:** difference between -0.8 and 0.8.
@@ -726,7 +726,7 @@ Tracks the last trained date for each of the 8 Hyrox functional stations plus ru
 
 Detection uses two strategies:
 1. **Exercise sets:** Maps each logged set's `exerciseName` (canonical name or registered alias) to a station. The interval variants `ski_erg_intervals` and `rowing_intervals` count for `skierg` and `rowing`, and every exercise defined with category `running` counts for `running`.
-2. **Focus text:** Scans the workout focus string for the keywords in `STATION_KEYWORDS`, as a case-insensitive substring match. For example, "ski erg" and "ski-erg" both map to `skierg`, "row" to `rowing` and "run" to `running`.
+2. **Focus text:** Scans the workout focus string (and custom exercise labels) for the keywords in `STATION_KEYWORDS`, as case-insensitive whole words with a plural allowed. Hyphens and underscores read as spaces and apostrophes are dropped, so "ski erg" and "ski-erg" both map to `skierg`, "rows" to `rowing`, "farmer's carry" to `farmers_carry` and "runs" to `running`. A substring match used to count "Med ball throws" as rowing and "Brunch" as running. A "row" directly after a strength qualifier ("Bent-over rows", "Seated cable row", "DB row") does not count as `rowing`: those train with weights, not on the erg.
 
 Stations the athlete's training constraints rule out are dropped. `stationsRuledOutByConstraints()` matches whole words in the constraint text (the older `trainingConstraints` note and every active fact on the [athlete card](#the-athlete-card), joined by `standingConstraintsText()`), so "no sled at my gym" drops both sled stations and "can't do burpees" drops `burpee_broad_jump`. The drop is coach-side only: the analytics coverage still shows every station.
 

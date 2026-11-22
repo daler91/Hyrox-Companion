@@ -51,14 +51,17 @@ const STATION_BY_EXERCISE: Readonly<Record<string, HyroxStation>> = {
  * canonical names and registered aliases, not prose: "ski erg" normalises to
  * `ski_erg`, which is neither.
  *
- * Longest-first at match time, so "sled pull" can't be swallowed by a shorter
- * key. Ported from the coach's EXERCISE_FOCUS_MAP, which was the only place
- * this ever worked.
+ * Matched as whole words, with a plural allowed (D9, REFACTORING_REVIEW
+ * 2026-09-23). A substring match counted "Med ball throws", "Narrow-grip
+ * push-ups" and "Throwdown" as rowing and "Brunch" as running, which hid real
+ * gaps on the coverage card and in the coach's EXERCISE GAPS. Hyphens and
+ * underscores read as spaces, so "ski-erg" and "wall-balls" match too, and
+ * apostrophes are dropped, so "farmer's carry" does. Ported
+ * from the coach's EXERCISE_FOCUS_MAP, which was the only place this ever worked.
  */
 const STATION_KEYWORDS: Readonly<Record<string, CoverageStation>> = {
   skierg: "skierg",
   "ski erg": "skierg",
-  "ski-erg": "skierg",
   "sled push": "sled_push",
   "sled pull": "sled_pull",
   "burpee broad jump": "burpee_broad_jump",
@@ -67,21 +70,44 @@ const STATION_KEYWORDS: Readonly<Record<string, CoverageStation>> = {
   row: "rowing",
   "farmers carry": "farmers_carry",
   "farmer carry": "farmers_carry",
-  "sandbag lunges": "sandbag_lunges",
   "sandbag lunge": "sandbag_lunges",
-  "wall balls": "wall_balls",
   "wall ball": "wall_balls",
   running: "running",
   run: "running",
 };
 
-// Longest keyword first so "sandbag lunges" wins over "sandbag lunge" and
-// "farmers carry" over "carry"-style prefixes.
-const KEYWORDS_BY_LENGTH: readonly (readonly [string, CoverageStation])[] = Object.entries(
+/**
+ * Words that, directly before "row", name a strength exercise rather than the
+ * rowing station: "Bent-over rows", "Seated cable row", "DB row". Covers every
+ * row in the exercise library (stationCoverage.test.ts checks this) plus the
+ * common gym spellings. Only the bare "row" keyword is checked: "rowing" is
+ * the erg.
+ */
+const STRENGTH_ROW_QUALIFIER =
+  /\b(?:bent over|upright|t ?bar|cable|seated|machine|inverted|pendlay|landmine|chest supported|dumbbell|db|barbell|bb|kettlebell|kb|renegade|trx|ring|band(?:ed)?|gorilla|meadows|yates|high|low|(?:single|one) arm)\s+$/;
+
+/** Lowercase, hyphens and underscores read as spaces, apostrophes dropped ("farmer's carry"). */
+function normalizeFreeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/['\u2019]/g, "")
+    .replace(/[-_]+/g, " ");
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** A whole-word pattern for a keyword, allowing a plural ("pushes", "rows"). */
+function keywordPattern(keyword: string): RegExp {
+  const words = keyword.split(" ").map(escapeRegExp).join("\\s+");
+  const plural = keyword.endsWith("sh") ? "(?:es)?" : "s?";
+  return new RegExp(`\\b${words}${plural}\\b`, "g");
+}
+
+const KEYWORD_PATTERNS: readonly (readonly [string, RegExp, CoverageStation])[] = Object.entries(
   STATION_KEYWORDS,
-)
-  .sort(([a], [b]) => b.length - a.length)
-  .map(([keyword, station]) => [keyword, station] as const);
+).map(([keyword, station]) => [keyword, keywordPattern(keyword), station] as const);
 
 /** The station an exercise trains, or null when it trains none of them. */
 export function stationForExerciseName(exerciseName: string): CoverageStation | null {
@@ -92,12 +118,21 @@ export function stationForExerciseName(exerciseName: string): CoverageStation | 
   return isRunningExerciseName(normalized) ? "running" : null;
 }
 
-/** Stations named anywhere in a free-text string. Case-insensitive. */
+/** Whether any match of the keyword in the text names the station. */
+function keywordNamesStation(keyword: string, pattern: RegExp, haystack: string): boolean {
+  for (const match of haystack.matchAll(pattern)) {
+    if (keyword !== "row") return true;
+    if (!STRENGTH_ROW_QUALIFIER.test(haystack.slice(0, match.index))) return true;
+  }
+  return false;
+}
+
+/** Stations named anywhere in a free-text string, as whole words. Case-insensitive. */
 export function stationsForFreeText(text: string): CoverageStation[] {
-  const haystack = text.toLowerCase();
+  const haystack = normalizeFreeText(text);
   const found = new Set<CoverageStation>();
-  for (const [keyword, station] of KEYWORDS_BY_LENGTH) {
-    if (haystack.includes(keyword)) found.add(station);
+  for (const [keyword, pattern, station] of KEYWORD_PATTERNS) {
+    if (!found.has(station) && keywordNamesStation(keyword, pattern, haystack)) found.add(station);
   }
   return [...found];
 }

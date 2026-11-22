@@ -26,19 +26,32 @@ type CoachingInsights = NonNullable<TrainingContext["coachingInsights"]>;
  * bounded for calm athletes.
  */
 
+const FATIGUE_FLAG_TEXT = `. FATIGUE FLAG ACTIVE - analyze the upcoming workout fit before reducing volume.`;
+const UNDERTRAINING_FLAG_TEXT = `. UNDERTRAINING FLAG ACTIVE — athlete needs more intensity.`;
+
 function formatRpeTrend(insights: CoachingInsights): string {
   if (insights.rpeTrend === "insufficient_data") {
-    return `RPE TREND: Insufficient data (fewer than 3 workouts with RPE logged).`;
+    if (insights.avgRpeLast3 == null) {
+      return `RPE TREND: Insufficient data (fewer than 3 workouts with RPE logged).`;
+    }
+    // A trend compares the last 3 rated workouts with at least 2 before them,
+    // so it needs 5. With 3 or 4, computeRpeTrend still averages the last 3
+    // and sets the absolute flags (RPE 8+ or 4-), and aiModificationGuard acts
+    // on the fatigue flag, so the model has to see them too. This line used to
+    // say "fewer than 3" and stop before either flag (D10, REFACTORING_REVIEW
+    // 2026-09-23).
+    let line = `RPE TREND: Insufficient data for a trend (fewer than 5 workouts with RPE logged; avg ${insights.avgRpeLast3} last 3 workouts)`;
+    if (insights.fatigueFlag) line += FATIGUE_FLAG_TEXT;
+    if (insights.undertrainingFlag) line += UNDERTRAINING_FLAG_TEXT;
+    return line;
   }
 
   let rpeLine = `RPE TREND: ${insights.rpeTrend.toUpperCase()}`;
   if (insights.avgRpeLast3 != null) rpeLine += ` (avg ${insights.avgRpeLast3} last 3 workouts`;
   if (insights.avgRpePrior3 != null) rpeLine += ` vs ${insights.avgRpePrior3} prior 3`;
   if (insights.avgRpeLast3 != null) rpeLine += `)`;
-  if (insights.fatigueFlag)
-    rpeLine += `. FATIGUE FLAG ACTIVE - analyze the upcoming workout fit before reducing volume.`;
-  if (insights.undertrainingFlag)
-    rpeLine += `. UNDERTRAINING FLAG ACTIVE — athlete needs more intensity.`;
+  if (insights.fatigueFlag) rpeLine += FATIGUE_FLAG_TEXT;
+  if (insights.undertrainingFlag) rpeLine += UNDERTRAINING_FLAG_TEXT;
   // A bare trend with neither flag set used to be handed over uninterpreted,
   // and the model filled the gap the wrong way round — reading a FALLING RPE
   // back to the athlete as a sign of "accumulating fatigue". The direction is

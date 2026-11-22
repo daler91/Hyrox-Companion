@@ -15,6 +15,7 @@ import {
   flushWorkoutWriteInvalidation,
   invalidateWorkoutWriteQueries,
   scheduleWorkoutWriteInvalidation,
+  WORKOUT_ANALYTICS_QUERY_KEYS,
   WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
   WORKOUT_WRITE_INVALIDATION_DELAY_MS,
 } from "./workoutInvalidation";
@@ -53,6 +54,15 @@ describe("workoutInvalidation", () => {
     for (const queryKey of WORKOUT_DERIVED_NUTRITION_QUERY_KEYS) {
       expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey });
     }
+    for (const queryKey of WORKOUT_ANALYTICS_QUERY_KEYS) {
+      expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey });
+    }
+    expect(WORKOUT_ANALYTICS_QUERY_KEYS).toEqual([
+      QUERY_KEYS.personalRecords,
+      QUERY_KEYS.exerciseAnalytics,
+      QUERY_KEYS.trainingOverview,
+      QUERY_KEYS.sessionGradesPrefix,
+    ]);
     expect(WORKOUT_DERIVED_NUTRITION_QUERY_KEYS).toEqual([
       QUERY_KEYS.nutritionSessionFuellingPrefix,
       QUERY_KEYS.nutritionDayPrefix,

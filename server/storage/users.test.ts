@@ -1,6 +1,7 @@
 import { calculateMafHr } from '@shared/maf';
 import { type InsertStravaConnection, stravaConnections, type UpdateUserPreferences, type User,users } from '@shared/schema';
-import { DrizzleQueryError, eq } from 'drizzle-orm';
+import { and, DrizzleQueryError, eq, type SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach,describe, expect, it, vi } from 'vitest';
 
 import * as crypto from '../crypto';
@@ -634,5 +635,53 @@ describe('UserStorage', () => {
 
       expect(result).toEqual([]);
     });
+  });
+});
+
+// R2 (REFACTORING_REVIEW 2026-09-23): the seven claims were copies that
+// named their column three times each, and tests covered two. A mixed-up
+// column double-sends or suppresses that message, so each claim's SET and
+// rendered WHERE are pinned to its own ledger column.
+describe('UserStorage claim ledgers', () => {
+  let userStorage: UserStorage;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    userStorage = new UserStorage();
+  });
+
+  const ledgers = [
+    ['claimWeeklySummary', 'lastWeeklySummaryAt'],
+    ['claimMissedReminder', 'lastMissedReminderAt'],
+    ['claimRefuelReminder', 'lastRefuelReminderAt'],
+    ['claimLoggingReminder', 'lastLoggingReminderAt'],
+    ['claimWeeklyReviewReminder', 'lastWeeklyReviewReminderAt'],
+    ['claimTodaySession', 'lastTodaySessionAt'],
+    ['claimAnalysisDigest', 'lastAnalysisDigestAt'],
+  ] as const;
+
+  it.each(ledgers)('%s stamps and checks %s only', async (method, column) => {
+    const now = new Date('2026-08-06T12:00:00Z');
+    const notBefore = new Date('2026-08-06T00:00:00Z');
+    const returningMock = vi.fn().mockResolvedValue([{ id: 'user-1' }]);
+    const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+    const setMock = vi.fn().mockReturnValue({ where: whereMock });
+    vi.mocked(db.update).mockReturnValue({ set: setMock } as never);
+
+    const result = await userStorage[method]('user-1', notBefore, now);
+
+    expect(result).toBe(true);
+    expect(setMock).toHaveBeenCalledWith({ [column]: now });
+    // `and` is mocked in this file; its second argument is the stamp check.
+    const stampCheck = vi.mocked(and).mock.calls[0][1] as SQL;
+    const { sql: rendered, params } = new PgDialect().sqlToQuery(stampCheck);
+    const name = users[column].name;
+    expect(rendered).toBe(`("users"."${name}" is null or "users"."${name}" < $1)`);
+    expect(params).toEqual([notBefore.toISOString()]);
+  });
+
+  it('covers every last*At ledger column on users', () => {
+    const ledgerColumns = Object.keys(users).filter((key) => /^last\w+(Summary|Reminder|Session|Digest)At$/.test(key));
+    expect([...ledgerColumns].sort()).toEqual(ledgers.map(([, column]) => column).sort());
   });
 });

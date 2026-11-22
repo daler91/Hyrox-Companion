@@ -115,3 +115,38 @@ describe("POST /api/v1/nutrition/logs/repeat stamps the athlete's local noon", (
     expect(loggedAt.toISOString()).toBe("2020-01-01T22:00:00.000Z");
   });
 });
+
+// D8 (REFACTORING_REVIEW 2026-09-23): a stored timezone the runtime rejects (a
+// legacy row, or a name dropped from tzdata) made these routes throw a
+// RangeError and answer 500. It now reads as UTC.
+describe("an unrecognisable stored timezone reads as UTC", () => {
+  let app: ReturnType<typeof createTestApp>;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearRateLimitBuckets();
+    const router = Router();
+    registerNutritionRoutes(router);
+    app = createTestApp(router);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "Mars/Olympus_Mons" } as never);
+    vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([]);
+    vi.mocked(storage.nutrition.listEntriesWithFoodForDateRange).mockResolvedValue([]);
+    vi.mocked(storage.nutrition.repeatDay).mockResolvedValue(1);
+  });
+
+  it("serves today's summary on the UTC date", async () => {
+    const res = await request(app).get("/api/v1/nutrition/summary");
+    expect(res.status).toBe(200);
+    expect(res.body.logDate).toBe(new Date().toISOString().slice(0, 10));
+  });
+
+  it("stamps a repeated day at noon UTC", async () => {
+    const res = await request(app)
+      .post("/api/v1/nutrition/logs/repeat")
+      .send({ sourceDate: "2020-01-01", targetDate: "2020-01-02" });
+
+    expect(res.status).toBe(201);
+    const { loggedAt } = vi.mocked(storage.nutrition.repeatDay).mock.calls[0][1];
+    expect(loggedAt.toISOString()).toBe("2020-01-02T12:00:00.000Z");
+  });
+});

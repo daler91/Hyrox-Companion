@@ -15,14 +15,6 @@ import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
 import { calculateTrainingOverview, type DistanceSet, type ExerciseSetWithDate } from "./analyticsService";
 
-/** Today's date (UTC) as YYYY-MM-DD. */
-export function todayUtcYyyyMmDd(): string {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-    .toISOString()
-    .split("T")[0];
-}
-
 /** Add (or subtract) whole calendar days to a YYYY-MM-DD string, in UTC. */
 export const addCalendarDays = addDaysToISODate;
 
@@ -37,21 +29,16 @@ export interface PreviousWindow {
  * [from, to], with the same length. Returns null when we can't derive a
  * meaningful previous window (e.g. the user picked "all time" so there's no
  * lower bound to anchor the comparison).
+ *
+ * `to` is required: a request without one ends on the athlete's own today,
+ * which the caller resolves. This used to fall back to the UTC date, so near
+ * midnight the window was a day off for athletes far from UTC (D7,
+ * REFACTORING_REVIEW 2026-09-23).
  */
-export function computePreviousWindow(from?: string, to?: string): PreviousWindow | null {
+export function computePreviousWindow(from: string | undefined, to: string): PreviousWindow | null {
   if (!from) return null;
   const fromDate = new Date(`${from}T00:00:00Z`);
-  // When `to` is absent (the common ?from=... flow), anchor the current window's
-  // upper bound at midnight UTC of today. Using `new Date()` with a wall-clock
-  // time component would make (to - from) include fractional days, skewing the
-  // previous window by a day for most of the calendar day.
-  let toDate: Date;
-  if (to) {
-    toDate = new Date(`${to}T00:00:00Z`);
-  } else {
-    const now = new Date();
-    toDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  }
+  const toDate = new Date(`${to}T00:00:00Z`);
   if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) return null;
   if (toDate < fromDate) return null;
 
@@ -195,8 +182,14 @@ export async function assembleTrainingOverview(
   to?: string,
   fetchers: TrainingOverviewFetchers = defaultFetchers,
 ): Promise<TrainingOverview> {
-  const previousWindow = computePreviousWindow(from, to);
-  const loadCurrentDate = to ?? todayUtcYyyyMmDd();
+  // Without `to` (the "All time" range) the window ends on the athlete's own
+  // today, which needs their timezone first. It used to be the UTC date, so
+  // near midnight the load model's today and the previous window were a day
+  // off (D7, REFACTORING_REVIEW 2026-09-23). A request with `to` waits on
+  // nothing extra: the user is read alongside the rest below.
+  const userPromise = storage.users.getUser(userId);
+  const loadCurrentDate = to ?? getLocalDateStrSafe(new Date(), (await userPromise)?.userTimezone);
+  const previousWindow = computePreviousWindow(from, loadCurrentDate);
   const loadHistoryStart = addCalendarDays(loadCurrentDate, -70);
 
   // The selected [from, to] window and the trailing-70-day training-load window
@@ -221,7 +214,7 @@ export async function assembleTrainingOverview(
         ? fetchers.workoutLogs(userId, previousWindow.from, previousWindow.to)
         : Promise.resolve(undefined),
       fetchPreviousSetsIfUncovered(userId, previousWindow, wideFrom, fetchers),
-      storage.users.getUser(userId),
+      userPromise,
       storage.analytics.getExerciseLoadTags(),
     ]);
 

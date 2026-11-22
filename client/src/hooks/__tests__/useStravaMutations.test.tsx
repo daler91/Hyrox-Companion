@@ -30,6 +30,10 @@ vi.mock("@/lib/api", () => ({
     workouts: ["/api/v1/workouts"],
     personalRecords: ["/api/v1/personal-records"],
     exerciseAnalytics: ["/api/v1/exercise-analytics"],
+    // Read by WORKOUT_ANALYTICS_QUERY_KEYS, which a sync spreads in. D3
+    // (REFACTORING_REVIEW 2026-09-23)
+    trainingOverview: ["/api/v1/training-overview"],
+    sessionGradesPrefix: ["/api/v1/session-grades"],
     // Read by WORKOUT_DERIVED_NUTRITION_QUERY_KEYS, which a sync spreads in.
     // CL19 (CODEBASE_ANALYSIS_2026-10-03)
     nutritionSessionFuellingPrefix: ["/api/v1/nutrition/session-fuelling"],
@@ -112,6 +116,21 @@ describe("useStravaMutations", () => {
           title: "Sync Complete",
           description: "Imported 3 new activities. 2 already existed. More activities are available — run Sync again.",
         }),
+      );
+    });
+
+    // D3 (REFACTORING_REVIEW 2026-09-23): the training summary card stayed
+    // stale after a sync until its own query refetched.
+    it("refreshes every analytics view built from the workout log", async () => {
+      apiMocks.sync.mockResolvedValue({ imported: 3, skipped: 0, hasMore: false });
+      await runSync();
+      expect(invalidatedKeys()).toEqual(
+        expect.arrayContaining([
+          ["/api/v1/personal-records"],
+          ["/api/v1/exercise-analytics"],
+          ["/api/v1/training-overview"],
+          ["/api/v1/session-grades"],
+        ]),
       );
     });
 

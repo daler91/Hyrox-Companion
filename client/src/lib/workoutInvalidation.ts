@@ -29,6 +29,20 @@ export const WORKOUT_DERIVED_NUTRITION_QUERY_KEYS = [
  */
 export const EXERCISE_HISTORY_QUERY_PREFIX = ["/api/v1/exercises"] as const;
 
+/**
+ * The analytics reads built from the workout log: personal records, exercise
+ * analytics, the training overview (and the queries under it) and session
+ * grades. Every path that adds or changes workouts moves all four. The device
+ * syncs listed only the first two, so the training summary card stayed stale
+ * after a sync until its query refetched (D3, REFACTORING_REVIEW 2026-09-23).
+ */
+export const WORKOUT_ANALYTICS_QUERY_KEYS = [
+  QUERY_KEYS.personalRecords,
+  QUERY_KEYS.exerciseAnalytics,
+  QUERY_KEYS.trainingOverview,
+  QUERY_KEYS.sessionGradesPrefix,
+] as const;
+
 export function invalidateWorkoutWriteQueries(): void {
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(ignoreResult);
   // Marked stale without a refetch: a burst of set edits lands here, and the
@@ -43,10 +57,9 @@ export function invalidateWorkoutWriteQueries(): void {
   }
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(ignoreResult);
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(ignoreResult);
-  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(ignoreResult);
-  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(ignoreResult);
-  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(ignoreResult);
-  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sessionGradesPrefix }).catch(ignoreResult);
+  for (const queryKey of WORKOUT_ANALYTICS_QUERY_KEYS) {
+    queryClient.invalidateQueries({ queryKey }).catch(ignoreResult);
+  }
 }
 
 /**

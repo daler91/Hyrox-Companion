@@ -366,7 +366,7 @@ A structured HTTP status on the error wins; the message is consulted only when t
 
 The mappings are checked in that order, so a 429 is never reported as a credentials problem. The response code depends on where the call failed, not on the message:
 
-- A failed login answers `401 GARMIN_AUTH_FAILED`. On `/connect` nothing is stored; on `/sync` the translated message is recorded as `lastError`, which also clears the stored credentials and tokens (`setGarminError()`).
+- A failed login answers `401 GARMIN_AUTH_FAILED`. On `/connect` nothing is stored; on `/sync` the translated message is recorded as `lastError`, which also clears the stored credentials and tokens (`setGarminError()`). The exception is a rate-limited `/sync` login: it answers `502 GARMIN_API_ERROR` with the cooldown message and records nothing, so the next sync after the cooldown can log in again.
 - A failed activity fetch answers `502 GARMIN_API_ERROR`. Only a 401 or 403 from Garmin (and not a 429) records `lastError`; a timeout, a 5xx, a 429 or a malformed response leaves the connection usable for the next sync.
 - A database error while importing the fetched activities propagates as a `500` and leaves the Garmin connection untouched.
 

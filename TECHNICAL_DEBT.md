@@ -379,23 +379,21 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
 Later reviews verified these and left them open. They live in their source documents,
 which hold the evidence, file references and current status; this index exists so that
 planning from this file does not miss them. Listed as of 2026-10-08 (A15,
-CODEBASE_ANALYSIS_2026-10-03); check the source before acting.
+CODEBASE_ANALYSIS_2026-10-03), with the refactoring review refreshed 2026-11-22; check the
+source before acting.
 
-**[Refactoring review, 2026-09-23](docs/REFACTORING_REVIEW_2026-09-23.md)**
+**[Refactoring review, 2026-09-23](docs/REFACTORING_REVIEW_2026-09-23.md)** (status refreshed
+2026-11-22; the review's "Status" section has the detail)
 
-- *Deferred refactors worth doing next* (R1-R6). R1 is a live trap: `server/emailScheduler.ts`
-  repeats `void sendPushToUser(…).catch(…)` six times, so a new email kind that copies the
-  call without `.catch` brings back the C1 process crash. R2: seven claim-ledger methods
-  that differ only by column. R3: a hand-copied absence `NOT EXISTS` behind the adherence
-  denominator. R4: advisory-lock keys spread over three files. R5: four copies of the AI
-  consent/budget gate (only the race-prediction one is tested). R6: hand-written retryable
-  status branches and five copies of the constant-time secret compare.
-- *Needs an owner decision* (D1-D11): unit-less max weight/distance in the chat prompt,
-  two plan-day PATCH routes that differ on auto-coach, stale `trainingOverview` after a
-  device sync, block-type labels, a raw `fetch` in `useMigrationReview`, offline saves from
-  the ad-hoc log sheet, a UTC "today" in `trainingOverviewLoader`, throwing timezone calls in
-  the nutrition routes, substring station matching, RPE-trend flags the prompt never shows,
-  and whether a Garmin 429 should end the connection.
+- *Fixed:* D1, D3, D5, D7, D8, D9, D10, D11, R1 and R2.
+- *Deferred refactors still open* (R3-R6). R3: a hand-copied absence `NOT EXISTS` behind the
+  adherence denominator. R4: advisory-lock keys spread over three files. R5: four copies of the
+  AI consent/budget gate. R6: hand-written retryable status branches (now 9) and copies of the
+  constant-time secret compare (now 7).
+- *Owner decisions still open* (D2, D4, D6): two plan-day PATCH routes that differ on the
+  auto-coach, block-type labels, and offline saves from the ad-hoc log sheet.
+- The moderate and cosmetic consolidations are mostly unchanged; a few have grown (cron
+  boilerplate, `ownsPlanDay`, `median`/`clamp`).
 
 **[Calculation audit, 2026-08-20](docs/CALCULATION_AUDIT_2026-08-20.md)** (left open on purpose)
 

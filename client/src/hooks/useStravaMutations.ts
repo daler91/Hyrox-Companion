@@ -3,6 +3,7 @@ import type { StravaSyncResponse } from "@/lib/api/user";
 import { humanizeApiError, queryClient } from "@/lib/queryClient";
 import {
   EXERCISE_HISTORY_QUERY_PREFIX,
+  WORKOUT_ANALYTICS_QUERY_KEYS,
   WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
 } from "@/lib/workoutInvalidation";
 
@@ -63,9 +64,9 @@ export function useStravaMutations() {
       QUERY_KEYS.stravaStatus,
       QUERY_KEYS.timeline,
       QUERY_KEYS.workouts,
-      // New Strava activities can set PRs and shift analytics — invalidate both.
-      QUERY_KEYS.personalRecords,
-      QUERY_KEYS.exerciseAnalytics,
+      // New Strava activities can set PRs, shift the training overview and
+      // grade a linked plan day. D3 (REFACTORING_REVIEW 2026-09-23)
+      ...WORKOUT_ANALYTICS_QUERY_KEYS,
       // A sync imports workouts and adds a recording's start time, duration
       // and calories to ones already logged: the fuelling reads built from
       // them move too. CL19 (CODEBASE_ANALYSIS_2026-10-03)

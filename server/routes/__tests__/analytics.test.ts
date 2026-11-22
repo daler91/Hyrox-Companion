@@ -7,7 +7,7 @@ import { env } from "../../env";
 import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview } from "../../services/analyticsService";
 import { assembleTrainingSummary } from "../../services/trainingSummaryService";
 import { storage } from "../../storage";
-import analyticsRouter, { _cacheForTesting, _prCacheForTesting, _workoutLogCacheForTesting, addCalendarDays,todayUtcYyyyMmDd, validDate } from "../analytics";
+import analyticsRouter, { _cacheForTesting, _prCacheForTesting, _workoutLogCacheForTesting, addCalendarDays, validDate } from "../analytics";
 import { createTestApp, resetRouteTestState } from "./testUtils";
 
 vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
@@ -101,31 +101,6 @@ describe("Analytics Routes", () => {
       expect(response.body).toEqual(summary);
       expect(assembleTrainingSummary).toHaveBeenCalledWith("test_user_id");
       expect(calculateTrainingOverview).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("todayUtcYyyyMmDd", () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    it("should return today's date in YYYY-MM-DD format (UTC)", () => {
-      // Set to exactly midnight UTC
-      vi.setSystemTime(new Date("2024-05-15T00:00:00Z"));
-      expect(todayUtcYyyyMmDd()).toBe("2024-05-15");
-
-      // Set to late evening UTC
-      vi.setSystemTime(new Date("2024-05-15T23:59:59Z"));
-      expect(todayUtcYyyyMmDd()).toBe("2024-05-15");
-    });
-
-    it("should handle leap years correctly", () => {
-      vi.setSystemTime(new Date("2024-02-29T12:00:00Z"));
-      expect(todayUtcYyyyMmDd()).toBe("2024-02-29");
     });
   });
 
@@ -763,5 +738,24 @@ describe("Analytics date clamp uses the athlete's today, not the UTC date (C4)",
       "test_user_id", "2026-07-06", "2026-10-03", { onlyTraining: true },
     );
     expect(vi.mocked(calculateTrainingOverview).mock.calls[0][3]?.trainingLoadInput?.currentDate).toBe("2026-10-03");
+  });
+
+  // D7 (REFACTORING_REVIEW 2026-09-23): "All time" sends no dates, and the load
+  // model's today fell back to the UTC date, a day behind in Sydney here.
+  it("anchors an 'All time' overview's load model on the athlete's today", async () => {
+    const response = await request(app).get("/api/v1/training-overview");
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(calculateTrainingOverview).mock.calls[0][3]?.trainingLoadInput?.currentDate).toBe("2026-10-03");
+  });
+
+  it("measures the previous window back from the athlete's today when only 'from' is sent", async () => {
+    const response = await request(app).get("/api/v1/training-overview?from=2026-09-04");
+
+    expect(response.status).toBe(200);
+    // 2026-09-04..2026-10-03 is 30 days, so the previous window is the 30 before it.
+    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith(
+      "test_user_id", "2026-08-05", "2026-09-03", { onlyTraining: true },
+    );
   });
 });

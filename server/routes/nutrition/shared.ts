@@ -1,6 +1,7 @@
 import type { Food, ParsedFoodItem } from "@shared/schema";
 
 import { storage } from "../../storage";
+import { usableTimezone } from "../../timezone";
 
 // Pieces used by more than one nutrition sub-route module. Anything used by
 // a single module stays private to that module.
@@ -9,10 +10,15 @@ export const FOOD_NOT_FOUND = "Food not found";
 export const LOG_ENTRY_NOT_FOUND = "Log entry not found";
 export const RECIPE_NOT_FOUND = "Recipe not found";
 
-/** Resolve the user's IANA timezone, defaulting to UTC pre-detection. */
+/**
+ * Resolve the user's IANA timezone, defaulting to UTC pre-detection. A stored
+ * zone the platform no longer recognises (a legacy row, or a name dropped from
+ * tzdata) also reads as UTC: every route here passes it to helpers that throw
+ * on a bad name, so it used to answer 500 (D8, REFACTORING_REVIEW 2026-09-23).
+ */
 export async function getUserTimezone(userId: string): Promise<string> {
   const user = await storage.users.getUser(userId);
-  return user?.userTimezone ?? "UTC";
+  return usableTimezone(user?.userTimezone);
 }
 
 /**

@@ -437,12 +437,6 @@ function tokensStillFresh(tokenExpiresAt: Date | null): boolean {
 // =============================================================================
 
 /**
- * Thrown when Garmin could not re-mint the OAuth2 token for a reason that says
- * nothing about the athlete's credentials (a timeout, a 5xx, a 429). The sync
- * answers 502 and records no lastError: setGarminError would also wipe the
- * stored credentials and force a reconnect over a Garmin-side hiccup.
- */
-/**
  * An error whose message was written for the athlete and is safe to return in
  * a response. Anything else thrown while building the client (a DB or
  * decryption failure, an SDK bug) may carry internal detail, so the sync
@@ -455,10 +449,17 @@ class GarminClientError extends Error {
   }
 }
 
-class GarminTokenRefreshError extends Error {
+/**
+ * Thrown while building the client for a reason that says nothing about the
+ * athlete's credentials: the OAuth2 refresh failed (a timeout, a 5xx, a 429),
+ * or the full SSO login was rate limited. The sync answers 502 and records no
+ * lastError: setGarminError would also wipe the stored credentials and force a
+ * reconnect over a Garmin-side hiccup.
+ */
+class GarminTransientError extends Error {
   constructor(message: string, options: { cause: unknown }) {
     super(message, options);
-    this.name = "GarminTokenRefreshError";
+    this.name = "GarminTransientError";
   }
 }
 
@@ -532,7 +533,7 @@ async function refreshOauth2FromOauth1(
     const message = looksLike429(err)
       ? translateGarminError(err)
       : "Garmin did not respond. Please try again in a few minutes.";
-    throw new GarminTokenRefreshError(message, { cause: err });
+    throw new GarminTransientError(message, { cause: err });
   }
   await persistGarminTokens(client, userId, reqLog);
   return true;
@@ -569,8 +570,9 @@ function loadCachedTokens(
  * costs one token exchange and no SSO. D6 (CODEBASE_ANALYSIS_2026-10-03): this
  * used to go straight to a full email/password SSO login whenever the
  * short-lived OAuth2 had lapsed — most syncs — from the shared server IP,
- * where a captcha, MFA prompt or 429 wipes the stored credentials and forces a
- * reconnect. A full login now happens only with no usable cached tokens or
+ * where a captcha or MFA prompt wipes the stored credentials and forces a
+ * reconnect (a 429 keeps them; see the login catch below). A full login now
+ * happens only with no usable cached tokens or
  * when Garmin rejects the OAuth1 one. Notably we do NOT auto-relogin if a
  * "fresh-looking" token unexpectedly fails — that goes through the lastError
  * path so the user has to disconnect+reconnect manually. This caps the
@@ -622,6 +624,15 @@ async function getGarminClient(userId: string, reqLog: typeof logger): Promise<G
     // An open breaker never reached Garmin; leave the connection intact.
     if (err instanceof GarminCircuitOpenError) throw err;
     const friendly = translateGarminError(err);
+    // A rate limit says nothing about the credentials (D11, REFACTORING_REVIEW
+    // 2026-09-23). Recording it would wipe them while the message promises a
+    // retry in 30 minutes, and the retry would then demand a full reconnect.
+    // withCircuitBreaker has already tripped the breaker, so the next sync is
+    // held off until the cooldown ends.
+    if (looksLike429(err)) {
+      reqLog.warn({ userId, context: LOG_CTX }, "Garmin login rate limited; connection kept");
+      throw new GarminTransientError(friendly, { cause: err });
+    }
     await storage.users.setGarminError(userId, friendly);
     reqLog.error({ err, userId, context: LOG_CTX }, "Garmin login failed");
     throw new GarminClientError(friendly, { cause: err });
@@ -1052,7 +1063,7 @@ async function handleGarminSync(req: Request, res: Response) {
           sendCircuitOpen(res, err.message);
           return;
         }
-        if (err instanceof GarminTokenRefreshError) {
+        if (err instanceof GarminTransientError) {
           res.status(502).json({ error: err.message, code: "GARMIN_API_ERROR" });
           return;
         }

@@ -48,7 +48,7 @@ import {
 } from "../../services/nutrition/sessionFuelling";
 import { getPlannedSessionEstimate } from "../../services/sessionEstimate/plannedSessionEstimate";
 import { storage } from "../../storage";
-import { getLocalDateStr, getLocalHour } from "../../timezone";
+import { getLocalDateStr, getLocalHour, usableTimezone } from "../../timezone";
 import { getUserId } from "../../types";
 import { getUserTimezone } from "./shared";
 
@@ -238,7 +238,7 @@ async function handleDailySummary(req: Request, res: Response): Promise<void> {
     ]);
   } else {
     user = await storage.users.getUser(userId);
-    logDate = getLocalDateStr(new Date(), user?.userTimezone ?? "UTC");
+    logDate = getLocalDateStr(new Date(), usableTimezone(user?.userTimezone));
     rows = await storage.nutrition.listEntriesWithFoodForDate(userId, logDate);
   }
 
@@ -250,7 +250,7 @@ async function handleDailySummary(req: Request, res: Response): Promise<void> {
   // Per-meal fuel targets ride on the day's effective target; gated on one
   // existing so flat-target / no-target users pay nothing extra.
   const mealTargets = effectiveTarget
-    ? await resolveMealFuelTargets(userId, logDate, effectiveTarget, user?.bodyweightKg ?? null, user?.userTimezone ?? "UTC", normalizeMealSchedule(user?.mealSchedule))
+    ? await resolveMealFuelTargets(userId, logDate, effectiveTarget, user?.bodyweightKg ?? null, usableTimezone(user?.userTimezone), normalizeMealSchedule(user?.mealSchedule))
     : null;
   const summary: DailySummaryResponse = { ...base, effectiveTarget, mealTargets, energy };
   res.json(summary);
