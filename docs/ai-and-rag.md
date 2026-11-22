@@ -637,6 +637,7 @@ Instructions for generating multi-week training plans with day-by-day structure.
 - `buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks, options)` -- Assembles the full system prompt with training stats and coaching materials. When `retrievedChunks` is provided it takes priority over `coachingMaterials`. `options` (`SystemPromptOptions`) carries the per-message parts: the FOCUSED WORKOUT block, RECENT PLAN CHANGES, the earlier-conversation notes, the chat safety signals and whether the coach has tools (`server/prompts.ts`).
 - `buildCoachingMaterialsSection(materials)` -- Formats legacy coaching materials (`server/prompts/materialsBuilder.ts`).
 - `buildRetrievedChunksSection(chunks)` -- Formats RAG-retrieved chunks (`server/prompts/materialsBuilder.ts`).
+- `selectCoachingMaterials(retrievedChunks, coachingMaterials)` -- The one "chunks first, else legacy materials" rule: the rendered section and its source (`rag`, `legacy` or none). The chat prompt, the suggestions prompt (`extractCoachingMaterialsText`) and the auto-coach (`retrieveCoachingText`) all go through it (`server/prompts/materialsBuilder.ts`).
 - `buildOverallStats` / `buildExerciseFocus` / `buildStructuredPerformance` / `buildRecentWorkouts` / `buildUpcomingWorkouts` -- Format the training-data sections of the system prompt (`server/prompts/coachingContext.ts`).
 
 ---

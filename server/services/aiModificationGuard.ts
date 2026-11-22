@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { CoachNoteInputs, ExerciseSet, InsertExerciseSet } from "@shared/schema";
 
 import type { TrainingContext, UpcomingWorkout } from "../gemini";
+import type { UpcomingPlannedDay } from "../storage/timeline";
 
 type CoachModificationKind = NonNullable<CoachNoteInputs["lastModification"]>["kind"];
 type RpeTrend = NonNullable<CoachNoteInputs["rpeTrend"]>;
@@ -131,6 +132,33 @@ export function mapExerciseSetToPromptDetail(row: ExerciseSet | InsertExerciseSe
     // fields, so prescription fingerprints are unchanged by it.
     weightUnit: row.weightUnit ?? null,
     distanceUnit: row.distanceUnit ?? null,
+  };
+}
+
+/**
+ * An upcoming planned day as the coach prompt's UpcomingWorkout, with its
+ * prescribed sets when it has any. The timeline suggestions and the
+ * plan-adjustment proposal each mapped it this way (C-coachService,
+ * REFACTORING_REVIEW 2026-09-23).
+ */
+export function toUpcomingWorkout(day: UpcomingPlannedDay): UpcomingWorkout {
+  return {
+    id: day.planDayId,
+    date: day.date,
+    focus: day.focus,
+    mainWorkout: day.mainWorkout,
+    accessory: day.accessory || undefined,
+    notes: day.notes || undefined,
+    aiSource: day.aiSource,
+    aiRationale: day.aiRationale,
+    aiNoteUpdatedAt: day.aiNoteUpdatedAt,
+    aiInputsUsed: day.aiInputsUsed,
+    priority: day.priority,
+    // Storage always fills exerciseSets; the guard is the suggestions copy's,
+    // kept so a day without the array still maps.
+    ...(day.exerciseSets && day.exerciseSets.length > 0
+      ? { exerciseDetails: day.exerciseSets.map(mapExerciseSetToPromptDetail) }
+      : {}),
   };
 }
 

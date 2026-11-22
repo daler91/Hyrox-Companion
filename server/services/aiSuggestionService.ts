@@ -24,6 +24,7 @@ import {
   buildTextResultingWorkout,
   mapExerciseSetToPromptDetail,
   shouldSuppressRepeatedFatigueReduction,
+  toUpcomingWorkout,
   withCoachModificationMetadata,
 } from "./aiModificationGuard";
 import {
@@ -337,22 +338,7 @@ export async function generateTimelineAiSuggestions(
     storage.timeline.getUpcomingPlannedDays(userId, 5),
     storage.users.getUser(userId),
   ]);
-  const upcomingWorkouts: UpcomingWorkout[] = plannedDays.map((d) => ({
-    id: d.planDayId,
-    date: d.date,
-    focus: d.focus,
-    mainWorkout: d.mainWorkout,
-    accessory: d.accessory || undefined,
-    notes: d.notes || undefined,
-    aiSource: d.aiSource,
-    aiRationale: d.aiRationale,
-    aiNoteUpdatedAt: d.aiNoteUpdatedAt,
-    aiInputsUsed: d.aiInputsUsed,
-    priority: d.priority,
-    ...(d.exerciseSets && d.exerciseSets.length > 0
-      ? { exerciseDetails: d.exerciseSets.map(mapExerciseSetToPromptDetail) }
-      : {}),
-  }));
+  const upcomingWorkouts: UpcomingWorkout[] = plannedDays.map(toUpcomingWorkout);
 
   if (upcomingWorkouts.length === 0) {
     const message = await buildNoUpcomingWorkoutsMessage(userId, user?.userTimezone ?? "UTC");

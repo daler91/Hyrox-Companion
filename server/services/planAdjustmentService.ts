@@ -21,10 +21,8 @@ import type { Logger } from "pino";
 
 import { db, type Tx } from "../db";
 import { generatePlanAdjustment, type PlanAdjustmentSummarySink } from "../gemini/planAdjustmentService";
-import type { UpcomingWorkout } from "../gemini/suggestionService";
 import { logger as defaultLogger } from "../logger";
 import { storage } from "../storage";
-import type { UpcomingPlannedDay } from "../storage/timeline";
 import { getLocalDateStrSafe } from "../timezone";
 import type { AIContext } from "./aiContextService";
 import { extractCoachingMaterialsText } from "./aiContextService";
@@ -32,6 +30,7 @@ import {
   buildSignalsFromCoachInputs,
   buildWorkoutPrescriptionFingerprint,
   mapExerciseSetToPromptDetail,
+  toUpcomingWorkout,
   withCoachModificationMetadata,
 } from "./aiModificationGuard";
 import { analyzeSafetySignals, buildSafetyReviewNote } from "./aiSafety";
@@ -98,25 +97,6 @@ export type UndoPlanProposalResult =
 
 const NO_PLAN_FALLBACK_TEXT =
   "You have no upcoming planned workouts for me to adjust. Start or schedule a plan and I can rearrange days for you.";
-
-function toUpcomingWorkout(day: UpcomingPlannedDay): UpcomingWorkout {
-  return {
-    id: day.planDayId,
-    date: day.date,
-    focus: day.focus,
-    mainWorkout: day.mainWorkout,
-    accessory: day.accessory || undefined,
-    notes: day.notes || undefined,
-    aiSource: day.aiSource,
-    aiRationale: day.aiRationale,
-    aiNoteUpdatedAt: day.aiNoteUpdatedAt,
-    aiInputsUsed: day.aiInputsUsed,
-    priority: day.priority,
-    ...(day.exerciseSets.length > 0
-      ? { exerciseDetails: day.exerciseSets.map(mapExerciseSetToPromptDetail) }
-      : {}),
-  };
-}
 
 /** Fields structure-block (EMOM/AMRAP) days must never receive from this flow. */
 const STRUCTURE_BLOCK_FORBIDDEN_FIELDS = ["focus", "mainWorkout", "accessory"] as const;
