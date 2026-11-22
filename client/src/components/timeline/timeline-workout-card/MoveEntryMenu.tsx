@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { getLatestLoggableDateString } from "@/lib/dateUtils";
+import { getLatestLoggableDateString, getTodayString } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
 
 import type { TimelineWorkoutCardProps } from "./types";
@@ -79,7 +79,7 @@ export function MoveEntryMenu({
   dragListeners,
   dragAttributes,
 }: Readonly<MoveEntryMenuProps>) {
-  const todayIso = format(new Date(), "yyyy-MM-dd");
+  const todayIso = getTodayString();
   const tomorrowIso = format(addDays(new Date(), 1), "yyyy-MM-dd");
   const nextWeekIso = format(addDays(new Date(), 7), "yyyy-MM-dd");
 

@@ -2,6 +2,7 @@ import { format, subDays } from "date-fns";
 import { useMemo } from "react";
 
 import { useBlockView } from "@/hooks/useNutrition";
+import { getTodayString } from "@/lib/dateUtils";
 
 // "All time" would zero-fill years of days into the chart; cap the block window
 // so the intake-vs-load series stays legible (and matches the longest preset).
@@ -18,7 +19,7 @@ export function useFuellingAnalytics(dateParams: string) {
     const fromParam = new URLSearchParams(search).get("from");
     return {
       from: fromParam ?? format(subDays(new Date(), MAX_BLOCK_DAYS), "yyyy-MM-dd"),
-      to: format(new Date(), "yyyy-MM-dd"),
+      to: getTodayString(),
     };
   }, [dateParams]);
 
