@@ -303,18 +303,30 @@ behaviour itself looks wrong or unfinished. Line numbers are as of that date.
 
 ### Android app
 
-- **61. Structure lint never runs in the app** — Confirmed. `LogWorkoutViewModel.kt:322` sends
-  `structureBlocks` on `POST /api/v1/workouts` unlinted, and the ported lint has no caller
-  under `mobile/composeApp`, so a structure the server will refuse can be queued.
-- **62. Coach cues go stale after an optimistic notes edit** — Reported. `TimelineEntry.edited`
-  (`core/data/TimelineRepository.kt:357-362`) changes `notes` but keeps the old `coachNotes`,
-  which the entry prefers until the next refresh.
-- **63. The unit-stamp ports are unused** — Reported. The set editor edits in the row's
-  stored unit (`ui/workout/ExerciseGroups.kt:215,220`) instead of the preference unit with
-  `restampSetPatch`, as the web does.
+- ~~**61. Structure lint never runs in the app**~~ — Resolved 2026-11-22.
+  `WorkoutRepository.logWorkout` lints the create request (`CreateWorkoutRequest.lintStructure()`,
+  with a new adapter for its blocks) before it sends or queues it, as the web's save does. A
+  structure with schema errors throws `StructureLintException`, which the log screen shows as the
+  server's own sentence, and is neither sent nor queued. Guarded by `WorkoutLoggingTest`.
+- ~~**62. Coach cues go stale after an optimistic notes edit**~~ — Resolved 2026-11-22. Confirmed,
+  then fixed: `TimelineEntry.edited` drops `coachNotes` when the edit sends `notes`, so the card
+  shows the edited note as written until the next refresh brings the server's split. Guarded by
+  `TimelineChangesTest`.
+- ~~**63. The unit-stamp ports are unused**~~ — Resolved 2026-11-22. Worse than reported: the
+  server reads a set write's numbers in the athlete's current units and re-stamps the row, so
+  after a kg/lbs switch, saving an older set (even only its reps) or adding a set copied from it
+  relabelled 225 lbs as 225 kg. As on the web, the workout and plan-day screens convert each set
+  to the current units where it enters them (`ui/workout/SetUnits.kt`, `toPreferenceScale`), so
+  the editor shows and edits those units. The exercise history behind "last time", "Use last"
+  and the next target is converted the same way, and every set write names the units its numbers
+  are in (`composedIn`). `WorkoutRepository.updateSet` re-stamps the device's copy with
+  `restampSetPatch` until the server answers (`core/data/SetRestamp.kt`). Guarded by
+  `SetUnitsTest` and `WorkoutEditSyncTest`.
 - **64. No Baseline Profile is committed** — Confirmed. Release builds read the profile
   from `androidApp/src/release/generated/baselineProfiles` (`mobile/androidApp/build.gradle.kts`);
-  that directory does not exist, so they ship without one.
+  that directory does not exist, so they ship without one. The workflow that generates it
+  (Actions → Mobile Performance) has never run, and it needs an emulator. Next step: run it, then
+  commit the files in its `baseline-profile` artifact under that directory.
 
 ### CI and tooling
 
@@ -403,5 +415,5 @@ not in them.
 | P1 — High | 6/6 | 0 | All resolved |
 | P2 — Medium | 6/6 | 0 | All resolved |
 | P3 — Low | 10/11 | 1 | #22 CSRF resolved via `csrf-csrf` double-submit; #29 dual-TS installs open (blocked on TS 7.1 API + typescript-eslint) |
-| Docs verification, 2026-11-17 | 37/42 | 5 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43, #51, #52, #53, #57, #60, #66, #68 and #71 resolved 2026-11-18; #34, #35, #39, #48 and #49 resolved 2026-11-19; #44, #45, #46, #47, #54, #55, #56, #58 and #59 resolved 2026-11-20, as were parts (a) and (c) of #38 (its part (b) is open); #50, #65, #67, #69 and #70 resolved 2026-11-21 |
-| **Total** | **65/71** | **6** | #29 is intentional interim state; #38 (b) waits on an API-contract decision; the other 4 of #30–#71 (#61–#64, the Android app) are untriaged |
+| Docs verification, 2026-11-17 | 40/42 | 2 | #30–#71, found while checking the docs against the code; #30, #31, #32, #36 and #40 resolved 2026-11-17; #33, #37, #41, #42, #43, #51, #52, #53, #57, #60, #66, #68 and #71 resolved 2026-11-18; #34, #35, #39, #48 and #49 resolved 2026-11-19; #44, #45, #46, #47, #54, #55, #56, #58 and #59 resolved 2026-11-20, as were parts (a) and (c) of #38 (its part (b) is open); #50, #65, #67, #69 and #70 resolved 2026-11-21; #61, #62 and #63 resolved 2026-11-22 |
+| **Total** | **68/71** | **3** | #29 is intentional interim state; #38 (b) waits on an API-contract decision; #64 waits on a run of the Mobile Performance workflow |
