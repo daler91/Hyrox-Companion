@@ -85,7 +85,7 @@ if (env.NODE_ENV === "production") {
   }
 }
 
-const clientEmomFlagRaw = process.env.VITE_EMOM_BUILDER_ENABLED;
+const clientEmomFlagRaw = env.VITE_EMOM_BUILDER_ENABLED;
 const clientEmomFlag = clientEmomFlagRaw === "true";
 const serverEmomFlag = env.EMOM_BUILDER_ENABLED === "true";
 // NODE_ENV and the EMOM builder's on/off flags only.

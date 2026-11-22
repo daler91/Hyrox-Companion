@@ -462,7 +462,7 @@ describe("configureObservability", () => {
 
   it("uses custom release when SENTRY_RELEASE is set", () => {
     env.SENTRY_DSN = "https://test@sentry.io/123";
-    process.env.SENTRY_RELEASE = "test-release";
+    env.SENTRY_RELEASE = "test-release";
 
     const initMock = vi.fn();
     const getClientMock = vi.fn();
@@ -473,12 +473,12 @@ describe("configureObservability", () => {
       release: "test-release",
     }));
 
-    delete process.env.SENTRY_RELEASE;
+    delete env.SENTRY_RELEASE;
   });
 
   it("falls back to npm_package_version when SENTRY_RELEASE is not set", () => {
     env.SENTRY_DSN = "https://test@sentry.io/123";
-    process.env.npm_package_version = "1.0.0";
+    env.npm_package_version = "1.0.0";
 
     const initMock = vi.fn();
     const getClientMock = vi.fn();
@@ -489,7 +489,7 @@ describe("configureObservability", () => {
       release: "fitai-coach@1.0.0",
     }));
 
-    delete process.env.npm_package_version;
+    delete env.npm_package_version;
   });
 });
 

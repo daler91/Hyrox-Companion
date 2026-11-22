@@ -8,8 +8,8 @@ function resolveSentryRelease(): string | undefined {
   // build time when SENTRY_AUTH_TOKEN is configured. If absent (local dev,
   // contributor builds), fall back to the package version so events still
   // group sensibly by deployment.
-  if (process.env.SENTRY_RELEASE) return process.env.SENTRY_RELEASE;
-  const version = process.env.npm_package_version;
+  if (env.SENTRY_RELEASE) return env.SENTRY_RELEASE;
+  const version = env.npm_package_version;
   return version ? `fitai-coach@${version}` : undefined;
 }
 

@@ -47,6 +47,14 @@ const envSchema = z
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
     PORT: z.string().default("5000"),
     SENTRY_DSN: z.string().optional(),
+    // The server's Sentry release tag (server/bootstrap/observability.ts).
+    // Unset or empty falls back to fitai-coach@<npm_package_version>, which
+    // npm/pnpm set when the server starts through a package script. Both used
+    // to be read from process.env directly, the only reads outside this file
+    // with VITE_EMOM_BUILDER_ENABLED below (S-processEnv, REFACTORING_REVIEW
+    // 2026-09-23).
+    SENTRY_RELEASE: z.string().optional(),
+    npm_package_version: z.string().optional(),
     RESEND_API_KEY: z.string().optional(),
     RESEND_FROM_EMAIL: z.string().optional(),
     AI_TEXT_PROVIDER: z.enum(["gemini", "anthropic", "openai-compatible"]).default("gemini"),
@@ -203,6 +211,10 @@ const envSchema = z
     STRUCTURED_BLOCKS_ENABLED: z.enum(["true", "false"]).default("true"),
     STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY: z.enum(["true", "false"]).default("false"),
     EMOM_BUILDER_ENABLED: z.enum(["true", "false"]).default("false"),
+    // The client build's flag, read here only so the startup log can compare it
+    // with EMOM_BUILDER_ENABLED (server/index.ts). Any string: the client also
+    // accepts 1/yes, and a value the server does not use must never fail boot.
+    VITE_EMOM_BUILDER_ENABLED: z.string().optional(),
     // Nutrition tracking module (Phases 1–5). On by default now the module is
     // complete; set NUTRITION_ENABLED=false to disable it in an environment. The
     // matching client flag is VITE_NUTRITION_ENABLED (client/src/lib/featureFlags.ts).

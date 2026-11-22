@@ -898,7 +898,7 @@ symbolicated stack trace is lost. The build prints how many files it removed.
 
 Both Sentry inits also pass an explicit `release` field:
 
-- Server (`server/bootstrap/observability.ts`): reads `process.env.SENTRY_RELEASE` first (the value injected by the esbuild plugin at build time), then falls back to `fitai-coach@${npm_package_version}`.
+- Server (`server/bootstrap/observability.ts`): reads `SENTRY_RELEASE` (through `server/env.ts`) first (the value injected by the esbuild plugin at build time), then falls back to `fitai-coach@${npm_package_version}`.
 - Client (`client/src/lib/errorReporting.ts`): reads `import.meta.env.VITE_SENTRY_RELEASE` first (a manual override), then `import.meta.env.SENTRY_RELEASE` (the value injected by the Vite plugin at build time). Resolves to `undefined` in dev/contributor builds; Sentry buckets such events as releaseless, which is acceptable.
 
 **Railway:** the production build runs on Railway (`pnpm install --frozen-lockfile --ignore-scripts && pnpm run build` via `.railway/railway.ts`; dependency install scripts never run there, as in CI). To enable sourcemap upload, set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT_CLIENT`, and `SENTRY_PROJECT_SERVER` as build-time environment variables in the Railway service settings. They are not required at runtime.
