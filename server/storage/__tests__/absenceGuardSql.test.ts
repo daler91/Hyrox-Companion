@@ -1,5 +1,5 @@
 import { planDays, trainingPlans, users } from "@shared/schema";
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, not, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -150,6 +150,25 @@ describe("declared-absence guards", () => {
     expect(rendered).toContain(
       `"timeline_annotations"."end_date" >= "plan_days"."scheduled_date"`,
     );
+  });
+
+  it("negates to a correlated NOT EXISTS for the adherence denominator", () => {
+    // getDueSessionCount's absence exclusion (analytics.ts) is
+    // not(absenceDeclaredForPlanDay(...)); it used to hand-write this NOT EXISTS
+    // (R3, REFACTORING_REVIEW 2026-09-23).
+    const userId = "user-1";
+
+    const query = db
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(and(eq(trainingPlans.userId, userId), not(absenceDeclaredForPlanDay(db, userId))));
+
+    const rendered = render(query as never);
+    expect(rendered).toContain(
+      `not exists (select 1 from "timeline_annotations" where ("timeline_annotations"."user_id" = $2 and "timeline_annotations"."start_date" <= "plan_days"."scheduled_date" and "timeline_annotations"."end_date" >= "plan_days"."scheduled_date"))`,
+    );
+    expect(dialect.sqlToQuery(query.getSQL()).params).toEqual([userId, userId]);
   });
 });
 

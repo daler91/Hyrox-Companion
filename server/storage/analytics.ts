@@ -2,13 +2,12 @@ import {
   type ExerciseLoadTag,
   exerciseLoadTags,
   planDays,
-  timelineAnnotations,
   trainingPlans,
   type WorkoutLog,
   workoutLogs,
 } from "@shared/schema";
 import { resolveSessionPriority } from "@shared/sessionPriority";
-import { and, asc, desc, eq, gte, inArray, lte, not, notExists,or,type SQL,sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, not, or,type SQL,sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { logger } from "../logger";
@@ -384,18 +383,7 @@ export class AnalyticsStorage {
             and(eq(planDays.status, "planned"), sql`${planDays.scheduledDate} <= ${dueThrough}`),
           ),
           not(planDayLetGo()),
-          notExists(
-            db
-              .select({ one: sql`1` })
-              .from(timelineAnnotations)
-              .where(
-                and(
-                  eq(timelineAnnotations.userId, userId),
-                  lte(timelineAnnotations.startDate, planDays.scheduledDate),
-                  gte(timelineAnnotations.endDate, planDays.scheduledDate),
-                ),
-              ),
-          ),
+          not(absenceDeclaredForPlanDay(db, userId)),
         ),
       );
     return row?.count ?? 0;
