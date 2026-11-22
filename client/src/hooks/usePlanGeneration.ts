@@ -2,10 +2,10 @@ import type { GeneratePlanInput, TrainingPlanWithDays } from "@shared/schema";
 import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
 import { QUERY_KEYS } from "@/lib/api/index";
+import { ignoreResult } from "@/lib/ignoreResult";
 import { AiBudgetExceededError, humanizeApiError, RateLimitError } from "@/lib/queryClient";
 
 export function getGeneratePlanErrorToast(error: Error) {

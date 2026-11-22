@@ -3,10 +3,10 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef } from "react";
 
 import { api, QUERY_KEYS } from "@/lib/api";
+import { ignoreResult } from "@/lib/ignoreResult";
 import { queryLoadState } from "@/lib/queryLoadState";
 import { flattenTimelineCache, type TimelineCache, type TimelinePage } from "@/lib/timelineCache";
 
-import { ignoreResult } from "./chat/chatSessionModel";
 import { usePendingWorkoutEntries } from "./usePendingWorkoutEntries";
 
 export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded = true) {

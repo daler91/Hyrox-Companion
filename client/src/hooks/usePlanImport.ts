@@ -2,9 +2,9 @@ import { useMutation } from "@tanstack/react-query";
 import { type RefObject, useCallback, useRef, useState } from "react";
 
 import type { CsvPreviewData } from "@/components/timeline";
-import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
+import { ignoreResult } from "@/lib/ignoreResult";
 import { defaultPlanStartDate } from "@/lib/planStart";
 import { humanizeApiError, queryClient } from "@/lib/queryClient";
 

@@ -20,7 +20,6 @@ import {
   DEFAULT_ONBOARDING_GOAL_ID,
   describeOnboardingGoal,
 } from "@/components/onboarding/onboardingGoals";
-import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import {
   bodyweightInput,
   changedFields,
@@ -36,6 +35,7 @@ import { NUTRITION_TARGET_QUERY_KEYS, useNutritionTargets } from "@/hooks/useNut
 import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
 import { getTodayString } from "@/lib/dateUtils";
 import { featureFlags } from "@/lib/featureFlags";
+import { ignoreResult } from "@/lib/ignoreResult";
 import { defaultPlanStartDate } from "@/lib/planStart";
 import { humanizeApiError, queryClient } from "@/lib/queryClient";
 import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
