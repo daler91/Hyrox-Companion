@@ -489,7 +489,11 @@ function TimelineCardLeadingAction({
         aria-label={`${isBulkSelected ? "Deselect" : "Select"} ${entry.focus || "workout"}`}
         data-testid={`button-bulk-select-${entry.id}`}
       >
-        {isBulkSelected ? <CheckCircle2 className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+        {isBulkSelected ? (
+          <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+        ) : (
+          <Square className="h-5 w-5" aria-hidden="true" />
+        )}
       </button>
     );
   }

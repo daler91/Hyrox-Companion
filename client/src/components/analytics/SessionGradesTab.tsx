@@ -1,13 +1,20 @@
 import type { SessionGrade, SessionGradeRollupCounts, TrainingPlan } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, CheckCircle2, Loader2, Target, TrendingUp } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Target, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
 
 import { GradeVerdictBadge } from "@/components/session-grades/GradeVerdictBadge";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useSessionGrades } from "@/hooks/useSessionGrades";
 import { QUERY_KEYS } from "@/lib/api";
 import { queryLoadState } from "@/lib/queryLoadState";
@@ -37,7 +44,9 @@ function StatTile({
         <p className="text-2xl font-bold tabular-nums" data-testid={testId}>
           {value}
         </p>
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {label}
+        </p>
         {detail ? <p className="text-xs text-muted-foreground">{detail}</p> : null}
       </div>
     </div>
@@ -60,7 +69,9 @@ function HeadlineTiles({ totals }: Readonly<{ totals: SessionGradeRollupCounts }
         icon={Target}
         value={formatShare(threshold.onTarget, threshold.graded)}
         label="Threshold runs held"
-        detail={threshold.graded > 0 ? `${threshold.onTarget} of ${threshold.graded}` : "None graded yet"}
+        detail={
+          threshold.graded > 0 ? `${threshold.onTarget} of ${threshold.graded}` : "None graded yet"
+        }
         testId="text-session-grades-threshold-rate"
       />
       <StatTile
@@ -102,18 +113,29 @@ function SessionRow({ grade }: Readonly<{ grade: SessionGrade }>) {
         <Badge variant="outline" className="font-normal">
           {getPurposeLabel(grade.purpose)}
         </Badge>
-        <GradeVerdictBadge intent={grade.intent} verdict={grade.verdict} headline={grade.headline} />
+        <GradeVerdictBadge
+          intent={grade.intent}
+          verdict={grade.verdict}
+          headline={grade.headline}
+        />
       </div>
     </li>
   );
 }
 
-function PlanPicker({ value, onChange }: Readonly<{ value: string; onChange: (value: string) => void }>) {
+function PlanPicker({
+  value,
+  onChange,
+}: Readonly<{ value: string; onChange: (value: string) => void }>) {
   const { data: plans = [] } = useQuery<TrainingPlan[]>({ queryKey: QUERY_KEYS.plans });
   if (plans.length < 2) return null;
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-full sm:w-64" aria-label="Plan to grade" data-testid="select-session-grades-plan">
+      <SelectTrigger
+        className="w-full sm:w-64"
+        aria-label="Plan to grade"
+        data-testid="select-session-grades-plan"
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -130,7 +152,10 @@ function PlanPicker({ value, onChange }: Readonly<{ value: string; onChange: (va
 
 function EmptyState({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <div className={cn(CHART_CARD_CLASS, "py-8 text-center text-sm text-muted-foreground")} data-testid="session-grades-empty">
+    <div
+      className={cn(CHART_CARD_CLASS, "py-8 text-center text-sm text-muted-foreground")}
+      data-testid="session-grades-empty"
+    >
       {children}
     </div>
   );
@@ -153,18 +178,23 @@ export function SessionGradesTab() {
   if (queryLoadState(query).loading) {
     body = (
       <div className="flex justify-center py-12" data-testid="session-grades-loading">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading session grades" />
+        <LoadingSpinner label="Loading session grades" iconClassName="h-6 w-6" />
       </div>
     );
   } else if (!data) {
     body = <EmptyState>Couldn&apos;t load session grades. Try again in a moment.</EmptyState>;
   } else if (!data.plan) {
-    body = <EmptyState>Start a training plan and each easy and threshold run will be graded against what it was for.</EmptyState>;
+    body = (
+      <EmptyState>
+        Start a training plan and each easy and threshold run will be graded against what it was
+        for.
+      </EmptyState>
+    );
   } else if (data.sessions.length === 0) {
     body = (
       <EmptyState>
-        No graded runs in {data.plan.name} yet. Easy, recovery, long and threshold runs are graded once they&apos;re
-        logged — connect Strava for heart-rate and pace detail.
+        No graded runs in {data.plan.name} yet. Easy, recovery, long and threshold runs are graded
+        once they&apos;re logged — connect Strava for heart-rate and pace detail.
       </EmptyState>
     );
   } else {
