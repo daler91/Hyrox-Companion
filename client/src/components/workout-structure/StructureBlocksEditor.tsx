@@ -6,9 +6,9 @@ import { type Ref, useCallback, useImperativeHandle, useMemo, useState } from "r
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { type GroupedExercise, groupExerciseSets } from "@/lib/exerciseUtils";
+import { ignoreResult } from "@/lib/ignoreResult";
 import { assignmentPatchForStep, isUnassignedGroup } from "@/lib/workoutStructureAssignments";
 
 import { UNASSIGNED_WORK_STEP_LABEL, type WorkoutStructureConfig } from "./types";

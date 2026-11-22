@@ -1,8 +1,8 @@
 import type { TimelineAnnotationType } from "@shared/schema";
 
-import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import type { toast as toastFn } from "@/hooks/use-toast";
 import { QUERY_KEYS } from "@/lib/api";
+import { ignoreResult } from "@/lib/ignoreResult";
 import { queryClient } from "@/lib/queryClient";
 
 import { TYPE_LABELS } from "../annotation-style";

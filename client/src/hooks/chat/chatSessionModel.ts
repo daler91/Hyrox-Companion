@@ -17,11 +17,9 @@ import { formatTime } from "@/lib/dateUtils";
 
 export type SetMessages = Dispatch<SetStateAction<Message[]>>;
 
-/**
- * For a promise whose failure is already handled, or deliberately dropped:
- * it settles to nothing, and the promise doesn't float unhandled.
- */
-export const ignoreResult = (): undefined => undefined;
+// Re-exported for the chat hooks; non-chat code imports `@/lib/ignoreResult`
+// directly so it doesn't pull this module into the entry chunk.
+export { ignoreResult } from "@/lib/ignoreResult";
 
 export function isChatSafetyNotice(value: unknown): value is ChatSafetyNotice {
   if (typeof value !== "object" || value === null) return false;

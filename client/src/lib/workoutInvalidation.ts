@@ -1,5 +1,5 @@
-import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import { QUERY_KEYS } from "@/lib/api";
+import { ignoreResult } from "@/lib/ignoreResult";
 import { queryClient } from "@/lib/queryClient";
 
 /**

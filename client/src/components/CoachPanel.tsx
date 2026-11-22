@@ -9,7 +9,6 @@ import { CoachPanelStats } from "@/components/coach/CoachPanelStats";
 import { useSuggestions } from "@/components/coach/SuggestionsTab";
 import type { QuickAction } from "@/components/QuickActions";
 import { chatProgressLabel } from "@/hooks/chat/chatProgress";
-import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import { useAuth } from "@/hooks/useAuth";
 import { useSaveMessageMutation } from "@/hooks/useChatMutations";
 import { type Message, useChatSession } from "@/hooks/useChatSession";
@@ -17,6 +16,7 @@ import { usePlanProposal } from "@/hooks/usePlanProposal";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { createLocalMessage } from "@/lib/chatMessage";
 import { getCurrentTimeString } from "@/lib/dateUtils";
+import { ignoreResult } from "@/lib/ignoreResult";
 import { calculateStats } from "@/lib/statsUtils";
 
 const WELCOME_TEXT =

@@ -6,10 +6,10 @@ import {
   type StyleAuditEntry,
 } from "@/components/settings/TrainingStyleSection";
 import { ToastAction } from "@/components/ui/toast";
-import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
 import { parseApiError } from "@/lib/apiError";
+import { ignoreResult } from "@/lib/ignoreResult";
 import { queryClient } from "@/lib/queryClient";
 import { safeLocalStorage } from "@/lib/safeStorage";
 import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";

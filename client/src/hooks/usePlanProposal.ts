@@ -5,9 +5,8 @@ import type { Message } from "@/hooks/useChatSession";
 import { api, type PlanProposalView, QUERY_KEYS, type UndoPlanProposalResponse } from "@/lib/api";
 import { parseApiError } from "@/lib/apiError";
 import { createLocalMessage } from "@/lib/chatMessage";
+import { ignoreResult } from "@/lib/ignoreResult";
 import { AiBudgetExceededError, queryClient, RateLimitError } from "@/lib/queryClient";
-
-import { ignoreResult } from "./chat/chatSessionModel";
 
 interface UsePlanProposalOptions {
   /** Push a local assistant message into the chat log (optional — the

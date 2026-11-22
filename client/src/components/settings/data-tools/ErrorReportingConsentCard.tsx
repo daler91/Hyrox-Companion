@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import { recordServerConsent } from "@/lib/api/consent";
 import { startErrorReporting, stopErrorReporting } from "@/lib/errorReporting";
 import {
@@ -12,6 +11,7 @@ import {
   enableErrorReporting,
   isErrorReportingEnabled,
 } from "@/lib/errorReportingConsent";
+import { ignoreResult } from "@/lib/ignoreResult";
 
 // S11 — per-processor consent toggle for error reporting (Sentry). Stored
 // browser-local, plus a best-effort server consent record (W4); the change is
