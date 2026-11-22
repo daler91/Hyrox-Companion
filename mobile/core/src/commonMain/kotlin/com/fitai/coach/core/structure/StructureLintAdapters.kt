@@ -1,5 +1,6 @@
 package com.fitai.coach.core.structure
 
+import com.fitai.coach.core.api.ApiJson
 import com.fitai.coach.core.api.Patch
 import com.fitai.coach.core.api.generated.CreateWorkoutRequest
 import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdStructureRequest
@@ -47,37 +48,12 @@ public fun UpdateWorkoutRequest.ExercisesItem.toStructureLintExercise(): Structu
 
 /**
  * A workout-create structure block (POST /api/v1/workouts `structureBlocks`)
- * as [lintWorkoutStructure] reads it.
+ * as [lintWorkoutStructure] reads it: the block's JSON, the body the app
+ * sends, decoded straight into the lint's input (StructureLintInput.kt).
  */
-public fun CreateWorkoutRequest.StructureBlocksItem.toStructureLintBlock(): StructureLintBlock = StructureLintBlock(
-    id = id,
-    formatType = formatType.wireValue,
-    durationMinutes = durationMinutes.orNull()?.toLong(),
-    roundCount = roundCount.orNull()?.toLong(),
-    timeCapMinutes = timeCapMinutes.orNull()?.toLong(),
-    durationSeconds = durationSeconds.orNull()?.toLong(),
-    rounds = rounds.orNull()?.toLong(),
-    workSeconds = workSeconds.orNull()?.toLong(),
-    restSeconds = restSeconds.orNull()?.toLong(),
-    workIntervalSec = workIntervalSec.orNull()?.toLong(),
-    restIntervalSec = restIntervalSec.orNull()?.toLong(),
-    steps = steps.map { step ->
-        StructureLintStep(
-            stepNumber = step.stepNumber.toLong(),
-            stepType = step.stepType?.wireValue,
-            stepRole = step.stepRole.orNull(),
-            targets = step.targets.orNull()?.let { targets ->
-                StructureLintTargets(
-                    reps = targets.reps.orNull()?.toDouble(),
-                    targetReps = targets.targetReps.orNull()?.toDouble(),
-                    time = targets.time.orNull(),
-                    targetTime = targets.targetTime.orNull(),
-                    distance = targets.distance.orNull(),
-                    targetDistance = targets.targetDistance.orNull(),
-                )
-            },
-        )
-    },
+public fun CreateWorkoutRequest.StructureBlocksItem.toStructureLintBlock(): StructureLintBlock = ApiJson.decodeFromJsonElement(
+    StructureLintBlock.serializer(),
+    ApiJson.encodeToJsonElement(CreateWorkoutRequest.StructureBlocksItem.serializer(), this),
 )
 
 /**
