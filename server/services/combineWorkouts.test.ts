@@ -38,7 +38,9 @@ describe("combineWorkouts", () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    // Reset, not clear: clearing keeps a mock's implementation, so a rejection
+    // set by one test (the date rule below) would fail every test run after it.
+    vi.resetAllMocks();
     mockTx = {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
@@ -233,7 +235,7 @@ describe("combineWorkouts", () => {
 // it to the athlete's own tomorrow.
 describe("combineWorkouts date rule", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it("holds the merged log's date to the athlete's own tomorrow, as create does", async () => {
