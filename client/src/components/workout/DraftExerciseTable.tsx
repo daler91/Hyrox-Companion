@@ -1,9 +1,9 @@
 import type { ExerciseName, ExerciseSet, StructureBlockInput } from "@shared/schema";
-import { minutesOrAbsent } from "@shared/units";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { ExerciseTable } from "@/components/workout-detail/ExerciseTable";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api/exerciseSetMutations";
+import { makeDraftExerciseSet } from "@/lib/draftExerciseSet";
 import { createDefaultSet, type SetData, type StructuredExercise } from "@/lib/structuredExercise";
 
 interface DraftExerciseTableProps {
@@ -125,43 +125,34 @@ export function DraftExerciseTable({
         const id = `draft::${blockId}::${i}`;
         locMap.set(id, { blockId, setIdx: i });
         sortMap.set(id, sortOrder);
-        sets.push({
-          id,
-          workoutLogId: null,
-          planDayId: null,
-          exerciseName: data.exerciseName,
-          customLabel: data.customLabel ?? null,
-          category: data.category,
-          setNumber: s.setNumber ?? i + 1,
-          reps: s.reps ?? null,
-          weight: s.weight ?? null,
-          // A client-side DRAFT holds what the athlete typed and is never
-          // persisted from here — the server stamps the unit on ingestion
-          // (audit L4). Unstamped is the correct shape for a draft row.
-          weightUnit: null,
-          distance: s.distance ?? null,
-          distanceUnit: null,
-          time: minutesOrAbsent(s.time ?? null),
-          plannedReps: s.plannedReps ?? null,
-          plannedWeight: s.plannedWeight ?? null,
-          plannedDistance: s.plannedDistance ?? null,
-          plannedTime: minutesOrAbsent(s.plannedTime ?? null),
-          blockId: s.blockId ?? null,
-          stepNumber: s.stepNumber ?? null,
-          intervalMinute: s.intervalMinute ?? null,
-          cycleNumber: s.cycleNumber ?? null,
-          stepRole: s.stepRole ?? null,
-          groupId: s.groupId ?? null,
-          intensity: null,
-          load: null,
-          repMode: null,
-          tempo: null,
-          standards: null,
-          notes: s.notes ?? null,
-          confidence: data.confidence ?? null,
-          sortOrder,
-          version: 1, // draft rows haven't been persisted; placeholder version (W18)
-        });
+        // A block's SetData has no intensity, load, rep mode, tempo or
+        // standards, so the row leaves those null.
+        sets.push(
+          makeDraftExerciseSet({
+            id,
+            exerciseName: data.exerciseName,
+            customLabel: data.customLabel,
+            category: data.category,
+            setNumber: s.setNumber ?? i + 1,
+            sortOrder,
+            reps: s.reps,
+            weight: s.weight,
+            distance: s.distance,
+            time: s.time,
+            plannedReps: s.plannedReps,
+            plannedWeight: s.plannedWeight,
+            plannedDistance: s.plannedDistance,
+            plannedTime: s.plannedTime,
+            notes: s.notes,
+            confidence: data.confidence,
+            blockId: s.blockId,
+            stepNumber: s.stepNumber,
+            intervalMinute: s.intervalMinute,
+            cycleNumber: s.cycleNumber,
+            stepRole: s.stepRole,
+            groupId: s.groupId,
+          }),
+        );
         sortOrder += 1;
       }
     }
