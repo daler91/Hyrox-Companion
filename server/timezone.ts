@@ -10,6 +10,8 @@
  * used by every untrusted call site (the preferences PATCH endpoint).
  */
 
+import { addDaysToISODate } from "@shared/dateUtils";
+
 /** Sunday → 0, Monday → 1, ..., Saturday → 6 — matching Date.getDay(). */
 export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -155,16 +157,14 @@ function parseDateStrToUtcMs(dateStr: string): number {
  * no timezone interpretation needed because the inputs are already calendar
  * dates. DST is irrelevant because a calendar day is a calendar day.
  *
- * Implemented via `Date.UTC` arithmetic to avoid the local-time DST hour
- * shifts that bite `new Date(2024, 2, 10).setDate(...)`.
+ * `addDaysToISODate` from shared/dateUtils.ts with a shape check in front: it
+ * throws on anything but YYYY-MM-DD, which the shared helper does not. The
+ * arithmetic was a copy of the shared helper's (S-addDays, REFACTORING_REVIEW
+ * 2026-09-23).
  */
 export function addDaysLocal(dateStr: string, days: number): string {
-  const utcMs = parseDateStrToUtcMs(dateStr) + days * 24 * 60 * 60 * 1000;
-  const next = new Date(utcMs);
-  const y = next.getUTCFullYear();
-  const m = String(next.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(next.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  parseDateStrToUtcMs(dateStr);
+  return addDaysToISODate(dateStr, days);
 }
 
 /**

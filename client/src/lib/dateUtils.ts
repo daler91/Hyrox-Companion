@@ -44,8 +44,9 @@ export function getYesterdayString(): string {
 // Week starts MONDAY by default. These defaulted to Sunday while the server
 // (analyticsService, weeklyProgress), plan import and the weekly review are all
 // Monday-start, so any caller that omitted the argument silently shifted the
-// week by a day (audit L7). The only caller today passes 1 explicitly; the
-// default is aligned so the next one cannot pick up the wrong week.
+// week by a day (audit L7). The default is aligned so a caller that omits it
+// cannot pick up the wrong week; the workout heatmap relies on it, in place of
+// its own Monday helper (S-mondayOfWeek, REFACTORING_REVIEW 2026-09-23).
 export function getStartOfWeek(date: Date = new Date(), weekStartsOn: 0 | 1 = 1): Date {
   const d = new Date(date);
   const day = d.getDay();

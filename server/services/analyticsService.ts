@@ -37,7 +37,7 @@ import type { LoggedExerciseSetWithDate, SlimLoggedExerciseSet } from "../storag
 import { getLocalDateStrSafe } from "../timezone";
 import { calculateBodySystemLoad } from "./trainingLoad/bodySystemLoad";
 import { type AthleteLoadContext, calculateTrainingLoad } from "./trainingLoadService";
-import { getMondayWeekBoundaries } from "./weeklyProgress";
+import { getMondayWeekBoundaries, utcMondayOf } from "./weeklyProgress";
 
 // Analytics always operates on logged sets, so workoutLogId is guaranteed
 // non-null here. Use the narrowed LoggedExerciseSetWithDate from the
@@ -456,14 +456,7 @@ function getMonday(dateStr: string): string {
   let res = mondayCache.get(dateStr);
   if (res) return res;
 
-  // Parsed as UTC above, so read and write in UTC too: getDay()/setDate() are
-  // local-time accessors and would shift the week boundary under any server TZ
-  // that is not UTC.
-  const d = new Date(dateStr + "T00:00:00Z");
-  const day = d.getUTCDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setUTCDate(d.getUTCDate() + diff);
-  res = d.toISOString().split("T")[0];
+  res = utcMondayOf(dateStr);
   mondayCache.set(dateStr, res);
   if (mondayCache.size > MONDAY_CACHE_MAX_SIZE) {
     const oldestKey = mondayCache.keys().next().value;
