@@ -5,11 +5,9 @@ import {
   type AnalysisTone,
   getFreshnessLabel,
   STALE_AFTER_DAYS,
+  WATCH_AFTER_DAYS,
 } from "@/components/analytics/coverageAnalysis";
 import { cn } from "@/lib/utils";
-
-/** A station has gone quiet well before it counts as stale. */
-const WATCH_AFTER_DAYS = 7;
 
 const TONE_CLASSNAMES: Record<AnalysisTone, string> = {
   good: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",

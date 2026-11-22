@@ -19,13 +19,17 @@ import {
   type AnalysisMetric,
   buildBalanceAnalysis,
   CoverageAnalysisPanel,
+  describeNextFocus,
+  findLeastLoadedCoverage,
   findPriorityGap,
   findTopCoverage,
   formatCount,
   formatPercent,
   getFreshnessLabel,
   hasCoverageWork,
+  STALE_AFTER_DAYS,
   sumCoverageSets,
+  WATCH_AFTER_DAYS,
 } from "./coverageAnalysis";
 import { MuscleHeatMapCard } from "./MuscleHeatMapCard";
 
@@ -33,8 +37,8 @@ type MovementPatternCoverage = TrainingOverview["movementPatternCoverage"][numbe
 
 function getFreshnessColor(daysSince: number | null): string {
   if (daysSince === null) return "bg-muted/40 text-muted-foreground";
-  if (daysSince <= 7) return "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30";
-  if (daysSince <= 14) return "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30";
+  if (daysSince <= WATCH_AFTER_DAYS) return "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30";
+  if (daysSince <= STALE_AFTER_DAYS) return "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30";
   return "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30";
 }
 
@@ -82,20 +86,7 @@ function buildMovementPatternAnalysis(patterns: readonly MovementPatternCoverage
     ),
   ];
   const nextBalance = balances.find((balance) => balance.tone !== "good" && balance.recommendation);
-  // ⚡ Bolt Performance Optimization:
-  // Replaced O(N log N) array sorting (.sort()[0]) with an O(N) linear scan
-  // to avoid unnecessary intermediate allocations and overhead when finding a single minimum.
-  let leastLoaded: MovementPatternCoverage | null = null;
-  for (const item of trainedPatterns) {
-    if (!leastLoaded) {
-      leastLoaded = item;
-      continue;
-    }
-    const cmp = item.totalSets - leastLoaded.totalSets || item.label.localeCompare(leastLoaded.label);
-    if (cmp < 0) {
-      leastLoaded = item;
-    }
-  }
+  const leastLoaded = findLeastLoadedCoverage(patterns);
 
   const metrics: AnalysisMetric[] = [
     {
@@ -115,23 +106,18 @@ function buildMovementPatternAnalysis(patterns: readonly MovementPatternCoverage
     {
       label: "Gap",
       value: priorityGap?.item.label ?? "No stale gaps",
-      detail: priorityGap?.reason ?? "Every trained movement pattern is inside the 14-day freshness window.",
+      detail: priorityGap?.reason ?? `Every trained movement pattern is inside the ${STALE_AFTER_DAYS}-day freshness window.`,
       tone: priorityGap ? "gap" : "good",
     },
   ];
 
-  const nextFocus = (() => {
-    if (priorityGap) {
-      return `Next focus: Add ${priorityGap.item.label}; ${priorityGap.reason}.`;
-    }
-    if (nextBalance?.recommendation) {
-      return `Next focus: ${nextBalance.recommendation}`;
-    }
-    if (leastLoaded) {
-      return `Next focus: Keep ${leastLoaded.label} in rotation; it is the lowest loaded trained pattern.`;
-    }
-    return "Next focus: Log a strength or functional movement so coverage analysis can start.";
-  })();
+  const nextFocus = describeNextFocus({
+    priorityGap,
+    nextBalance,
+    leastLoaded,
+    itemNoun: "pattern",
+    emptyFocus: "Next focus: Log a strength or functional movement so coverage analysis can start.",
+  });
 
   return { metrics, balances, nextFocus, totalSets };
 }

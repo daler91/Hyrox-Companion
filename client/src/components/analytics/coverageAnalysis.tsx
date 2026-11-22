@@ -24,6 +24,12 @@ export type BalanceAnalysis = {
 };
 
 export const STALE_AFTER_DAYS = 14;
+/**
+ * Something has gone quiet well before it counts as stale. Moved here from
+ * StationRadar so the breakdown tab's freshness chips read the same
+ * threshold. (CC-coverage, REFACTORING_REVIEW 2026-09-23)
+ */
+export const WATCH_AFTER_DAYS = 7;
 export const BALANCE_RATIO_THRESHOLD = 1.6;
 
 export function formatCount(value: number, singular: string, plural: string): string {
@@ -115,6 +121,59 @@ export function findPriorityGap<T extends CoverageWork>(
     item: stale,
     reason: `last trained ${getFreshnessLabel(stale.daysSince).toLowerCase()}`,
   };
+}
+
+/**
+ * The trained item with the fewest sets (ties go to the label that sorts
+ * first), or null when nothing is trained. The movement-pattern and muscle
+ * analyses each scanned for it. (CC-coverage, REFACTORING_REVIEW 2026-09-23)
+ */
+export function findLeastLoadedCoverage<T extends CoverageWork>(items: readonly T[]): T | null {
+  // O(N) linear scan instead of O(N log N) sort()[0] when finding a single minimum.
+  let leastLoaded: T | null = null;
+  for (const item of items) {
+    if (!hasCoverageWork(item)) continue;
+    if (!leastLoaded) {
+      leastLoaded = item;
+      continue;
+    }
+    const cmp = item.totalSets - leastLoaded.totalSets || item.label.localeCompare(leastLoaded.label);
+    if (cmp < 0) {
+      leastLoaded = item;
+    }
+  }
+  return leastLoaded;
+}
+
+/**
+ * The "Next focus:" line under a coverage panel: the priority gap, else the
+ * first unbalanced pair's recommendation, else keep the least-loaded trained
+ * item in rotation, else `emptyFocus`. `itemNoun` names what the items are
+ * ("pattern", "muscle group"). (CC-coverage, REFACTORING_REVIEW 2026-09-23)
+ */
+export function describeNextFocus({
+  priorityGap,
+  nextBalance,
+  leastLoaded,
+  itemNoun,
+  emptyFocus,
+}: Readonly<{
+  priorityGap: { readonly item: CoverageWork; readonly reason: string } | null;
+  nextBalance: BalanceAnalysis | undefined;
+  leastLoaded: CoverageWork | null;
+  itemNoun: string;
+  emptyFocus: string;
+}>): string {
+  if (priorityGap) {
+    return `Next focus: Add ${priorityGap.item.label}; ${priorityGap.reason}.`;
+  }
+  if (nextBalance?.recommendation) {
+    return `Next focus: ${nextBalance.recommendation}`;
+  }
+  if (leastLoaded) {
+    return `Next focus: Keep ${leastLoaded.label} in rotation; it is the lowest loaded trained ${itemNoun}.`;
+  }
+  return emptyFocus;
 }
 
 function makeBalanceAnalysis(
