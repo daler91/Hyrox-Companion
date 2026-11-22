@@ -84,6 +84,10 @@ import { EMAIL_TICK_MISSED_TOLERANCE_MS, runCronJobWithLock, startCron, stopCron
 import { runEmailCronJob } from "./emailScheduler";
 import { env } from "./env";
 import { logger } from "./logger";
+import { queue } from "./queue";
+import { runAnalyticsRecomputeScan } from "./services/analyticsRecomputeScheduler";
+import { runStructuredExerciseDailyRollup } from "./services/structuredExerciseHealth";
+import { cleanupExpiredSharedRuntimeState } from "./sharedRuntimeState";
 import { getLocalHour } from "./timezone";
 
 // node-cron is mocked with a bare vi.fn(), so `cron.schedule` returns
@@ -685,5 +689,86 @@ describe("session-stream backfill cron job", () => {
     mocks.runSessionStreamBackfillScan.mockResolvedValueOnce({ usersChecked: 0, enqueued: 0, skipped: "budget" });
     await backfillCallback();
     expect(logger.info).not.toHaveBeenCalled();
+  });
+});
+
+// These jobs moved onto scheduleLockedCronJob but kept the failure log each
+// one wrote before (C-cron, REFACTORING_REVIEW 2026-09-23).
+describe("jobs on scheduleLockedCronJob with their own failure log", () => {
+  const error = new Error("db unavailable");
+  const failing = vi.fn().mockRejectedValue(error);
+  const storage = {
+    idempotency: { cleanupExpired: failing },
+    aiUsage: { deleteExpiredLogs: failing },
+    users: { resetStaleAutoCoaching: failing },
+    coaching: { pruneDanglingChunks: failing },
+  };
+  let scheduled: (expression: string) => () => Promise<void>;
+  let registrations: unknown[][];
+
+  beforeAll(() => {
+    mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
+    scheduled = startCronWith(storage);
+    registrations = [...mocks.cronSchedule.mock.calls];
+  });
+
+  beforeEach(() => {
+    vi.mocked(cleanupExpiredSharedRuntimeState).mockRejectedValue(error);
+    vi.mocked(queue.getQueues).mockRejectedValue(error);
+    vi.mocked(runStructuredExerciseDailyRollup).mockRejectedValue(error);
+    vi.mocked(runAnalyticsRecomputeScan).mockRejectedValue(error);
+    mocks.withPgAdvisoryLock.mockClear();
+    vi.mocked(logger.error).mockClear();
+  });
+
+  afterEach(() => {
+    vi.mocked(cleanupExpiredSharedRuntimeState).mockReset();
+    vi.mocked(queue.getQueues).mockReset();
+    vi.mocked(runStructuredExerciseDailyRollup).mockReset();
+    vi.mocked(runAnalyticsRecomputeScan).mockReset();
+  });
+
+  it.each([
+    { job: "idempotencyCleanup", expression: "30 3 * * *", message: "Idempotency cleanup failed" },
+    { job: "aiUsageCleanup", expression: "0 4 * * *", message: "AI usage cleanup failed" },
+    { job: "sharedRuntimeCleanup", expression: "15 4 * * *", message: "Shared runtime state cleanup failed" },
+    { job: "staleAutoCoaching", expression: "*/10 * * * *", message: "Stale isAutoCoaching recovery failed" },
+    { job: "queueDepthTelemetry", expression: "*/5 * * * *", message: "Queue-depth telemetry failed" },
+    { job: "structuredExerciseRollup", expression: "10 2 * * *", message: "Structured exercise health rollup failed" },
+    { job: "analyticsRecompute", expression: "5 * * * *", message: "Analytics recompute scan failed" },
+    { job: "ragChunkPrune", expression: "50 3 * * *", message: "RAG chunk prune failed" },
+  ] as const)("$job runs under its own lock in Etc/UTC and logs its own failure message", async ({ job, expression, message }) => {
+    await expect(scheduled(expression)()).resolves.toBeUndefined();
+
+    expect(mocks.withPgAdvisoryLock).toHaveBeenCalledWith(
+      mocks.pool,
+      { key: CRON_LOCK_KEYS[job], name: job },
+      expect.any(Function),
+    );
+    expect(logger.error).toHaveBeenCalledWith({ context: "cron", err: error }, message);
+    const [, , options] = registrations.find(([registered]) => registered === expression) ?? [];
+    expect(options).toEqual({ timezone: "Etc/UTC" });
+  });
+});
+
+describe("stopCron", () => {
+  afterEach(() => {
+    mocks.cronSchedule.mockReset();
+  });
+
+  it("stops every job startCron scheduled, once", async () => {
+    const stop = vi.fn();
+    mocks.cronSchedule.mockReset();
+    mocks.cronSchedule.mockImplementation(() => ({ stop }));
+    startCron({} as never);
+    const scheduledCount = mocks.cronSchedule.mock.calls.length;
+    expect(scheduledCount).toBeGreaterThan(1);
+
+    await stopCron();
+    expect(stop).toHaveBeenCalledTimes(scheduledCount);
+
+    // The list is emptied, so a second stop has nothing left to stop.
+    await stopCron();
+    expect(stop).toHaveBeenCalledTimes(scheduledCount);
   });
 });
