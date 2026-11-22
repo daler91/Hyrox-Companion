@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage } from "node:http";
 
-import { getAuth } from "@clerk/express";
 import * as Sentry from "@sentry/node";
 import compression from "compression";
 import cookieParser from "cookie-parser";
@@ -17,6 +16,7 @@ import { probePool, registerHealthEndpoint, type StartupHealthState } from "./bo
 import { registerShutdownHandlers } from "./bootstrap/lifecycle";
 import { configureObservability, registerProcessErrorHandlers } from "./bootstrap/observability";
 import { parseCertFingerprints, registerWellKnownRoutes } from "./bootstrap/wellKnown";
+import { getClerkUserId } from "./clerkUserId";
 import { startCron, stopCron } from "./cron";
 import { pool } from "./db";
 import { env } from "./env";
@@ -259,15 +259,8 @@ app.use(pinoHttp({
     return randomUUID();
   },
   customProps: (req, res) => {
-    let userId = 'anonymous';
-    try {
-      const auth = getAuth(req as Request);
-      if (auth?.userId) {
-        userId = auth.userId;
-      }
-    } catch {
-      userId = 'anonymous';
-    }
+    // No Clerk user, or a call before clerkMiddleware is mounted: anonymous.
+    const userId = getClerkUserId(req as Request) || 'anonymous';
 
     // S2: keep the raw user id out of the high-volume success-path access log
     // to limit PII in log sinks. The real id is attached only when the request

@@ -1,19 +1,16 @@
 // Ensure pino-http's type augmentation (req.log) is visible to TypeScript
 import "pino-http";
 
-import { getAuth } from "@clerk/express";
 import type { Request } from "express";
 
 import { DEV_USER_ID, devBypassAllowedFor } from "./clerkAuth";
+import { getClerkUserId } from "./clerkUserId";
 
 export function getUserId(req: Request): string {
-  try {
-    const auth = getAuth(req);
-    if (auth?.userId) {
-      return auth.userId;
-    }
-  } catch {
-    // intentionally empty - fall through to dev user
+  // No Clerk user (or no Clerk middleware): fall through to the dev user.
+  const userId = getClerkUserId(req);
+  if (userId) {
+    return userId;
   }
 
   if (devBypassAllowedFor(req)) {

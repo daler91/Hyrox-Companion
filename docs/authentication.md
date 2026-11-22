@@ -131,13 +131,10 @@ The `getUserId(req)` function extracts the authenticated user's ID from a reques
 
 ```ts
 export function getUserId(req: Request): string {
-  try {
-    const auth = getAuth(req);
-    if (auth?.userId) {
-      return auth.userId;
-    }
-  } catch {
-    // intentionally empty - fall through to dev user
+  // No Clerk user (or no Clerk middleware): fall through to the dev user.
+  const userId = getClerkUserId(req);
+  if (userId) {
+    return userId;
   }
 
   if (devBypassAllowedFor(req)) {
@@ -147,6 +144,8 @@ export function getUserId(req: Request): string {
   throw new Error("User not authenticated");
 }
 ```
+
+`getClerkUserId(req)` (`server/clerkUserId.ts`) returns `getAuth(req)?.userId`, or `undefined` when `getAuth()` throws because `clerkMiddleware()` has not run (the dev bypass boots without Clerk keys). The request logger, the CSRF session identifier and the rate limiter's user key resolve the caller through it too.
 
 Note the environment check is `development` **or** `test` — the Cypress job boots the
 built server with `NODE_ENV=test` and `ALLOW_DEV_AUTH_BYPASS=true`, so the bypass has to
