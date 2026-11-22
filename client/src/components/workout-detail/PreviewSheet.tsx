@@ -3,7 +3,6 @@ import { CalendarClock, MessageSquare, Pencil, SkipForward } from "lucide-react"
 
 import { featureFlags } from "@/lib/featureFlags";
 
-import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { FuellingPlanPanel } from "./FuellingPlanPanel";
 import {
   ReadOnlyWorkoutActionGrid,
@@ -11,6 +10,7 @@ import {
 } from "./ReadOnlyWorkoutDetailSheet";
 import { SessionPriorityControl } from "./SessionPriorityControl";
 import type { WorkoutCoachChatProps } from "./WorkoutCoachPanel";
+import { WorkoutSheetTitle } from "./WorkoutSheetTitle";
 
 interface PreviewSheetProps extends WorkoutCoachChatProps {
   readonly entry: TimelineEntry | null;
@@ -48,16 +48,11 @@ export function PreviewSheet({
       entry={entry}
       onOpenChange={(open) => !open && onClose()}
       title={
-        <EditableWorkoutTitle
-          title={entry.focus}
+        <WorkoutSheetTitle
+          entry={entry}
           fallbackTitle="Upcoming workout"
-          onSave={
-            onRenameTitle && (entry.workoutLogId || entry.planDayId)
-              ? (title) => onRenameTitle(entry, title)
-              : undefined
-          }
-          isSaving={isRenamingTitle}
-          testIdPrefix={`workout-title-${entry.id}`}
+          onRenameTitle={onRenameTitle}
+          isRenamingTitle={isRenamingTitle}
         />
       }
       sheetTestId={`preview-sheet-${entry.id}`}

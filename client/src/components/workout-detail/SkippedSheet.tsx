@@ -5,12 +5,12 @@ import { type ComponentProps, useState } from "react";
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
 
-import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import {
   ReadOnlyWorkoutActionGrid,
   ReadOnlyWorkoutDetailSheet,
 } from "./ReadOnlyWorkoutDetailSheet";
 import type { WorkoutCoachChatProps } from "./WorkoutCoachPanel";
+import { BadgedWorkoutSheetTitle } from "./WorkoutSheetTitle";
 
 interface SkippedSheetProps extends WorkoutCoachChatProps {
   readonly entry: TimelineEntry | null;
@@ -62,20 +62,13 @@ export function SkippedSheet({
       entry={entry}
       onOpenChange={handleSheetOpenChange}
       title={
-        <span className="flex flex-wrap items-center gap-2">
-          {getStatusBadge(entry.status)}
-          <EditableWorkoutTitle
-            title={entry.focus}
-            fallbackTitle="Skipped workout"
-            onSave={
-              onRenameTitle && (entry.workoutLogId || entry.planDayId)
-                ? (title) => onRenameTitle(entry, title)
-                : undefined
-            }
-            isSaving={isRenamingTitle}
-            testIdPrefix={`workout-title-${entry.id}`}
-          />
-        </span>
+        <BadgedWorkoutSheetTitle
+          badge={getStatusBadge(entry.status)}
+          entry={entry}
+          fallbackTitle="Skipped workout"
+          onRenameTitle={onRenameTitle}
+          isRenamingTitle={isRenamingTitle}
+        />
       }
       sheetTestId={`skipped-sheet-${entry.id}`}
       detailsTestId={`skipped-details-${entry.id}`}
