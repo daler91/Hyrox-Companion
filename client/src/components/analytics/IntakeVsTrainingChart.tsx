@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { ChartEmptyNote } from "./AnalyticsEmptyState";
 import {
   CHART_CARD_CLASS,
   COLOR_GREEN,
@@ -121,12 +122,9 @@ export function IntakeVsTrainingChart({ points }: Readonly<{ points: readonly Bl
           </ResponsiveContainer>
         </div>
       ) : (
-        <div
-          className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground"
-          data-testid="intake-vs-training-empty"
-        >
+        <ChartEmptyNote testId="intake-vs-training-empty">
           Log food across a few training days to see intake against load.
-        </div>
+        </ChartEmptyNote>
       )}
     </div>
   );

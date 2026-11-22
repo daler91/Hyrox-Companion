@@ -36,3 +36,44 @@ function bodyCode(body: string): string | null {
     return null;
   }
 }
+
+/** The string `code` of an object (an error payload or response body), or null. */
+function objectCode(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const code = (value as Record<string, unknown>).code;
+  return typeof code === "string" ? code : null;
+}
+
+/**
+ * The error code a thrown value carries on itself: its own `code`, else a
+ * non-empty `payload.code`, else a non-empty `response.data.code`; null for
+ * anything else. It does not read the message (`extractApiErrorCode` does).
+ *
+ * The workout save and the plan-day parse each kept a private copy, and only
+ * the save's read `response.data`. No error the client API throws has a
+ * `response` (apiRequest throws a plain Error, RateLimitError or
+ * AiBudgetExceededError; a timeout is a DOMException), so the parse reads the
+ * same codes it did. (CH-errorCode, REFACTORING_REVIEW 2026-09-23)
+ */
+export function extractErrorObjectCode(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+
+  const asRecord = error as Record<string, unknown>;
+  if (typeof asRecord.code === "string") return asRecord.code;
+
+  const payloadCode = objectCode(asRecord.payload);
+  if (payloadCode) return payloadCode;
+
+  const response = typeof asRecord.response === "object" ? (asRecord.response as Record<string, unknown> | null) : null;
+  return objectCode(response?.data) || null;
+}
+
+/**
+ * The error code of a failed request: the one the error carries itself
+ * (`extractErrorObjectCode`), else the one in apiRequest's
+ * `${status}: ${body}` message (`parseApiError`).
+ * (CH-errorCode, REFACTORING_REVIEW 2026-09-23)
+ */
+export function extractApiErrorCode(error: unknown): string | null {
+  return extractErrorObjectCode(error) ?? parseApiError(error)?.code ?? null;
+}

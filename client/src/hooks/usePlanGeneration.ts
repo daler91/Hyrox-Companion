@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
 import { QUERY_KEYS } from "@/lib/api/index";
 import { AiBudgetExceededError, humanizeApiError, RateLimitError } from "@/lib/queryClient";
+import { aiBudgetExceededToast } from "@/lib/sharedToasts";
 
 export function getGeneratePlanErrorToast(error: Error) {
   const message = error.message.toLowerCase();
@@ -161,11 +162,7 @@ export function useGeneratePlan(): UseGeneratePlanResult {
     },
     onError: (error: Error) => {
       if (error instanceof AiBudgetExceededError) {
-        toast({
-          title: "Daily AI limit reached",
-          description: "You've used your daily AI allowance. It resets on a rolling 24-hour basis.",
-          variant: "destructive",
-        });
+        toast(aiBudgetExceededToast());
       } else if (error instanceof RateLimitError) {
         const waitMsg = error.retryAfter
           ? `Please wait ${error.retryAfter} seconds before trying again.`

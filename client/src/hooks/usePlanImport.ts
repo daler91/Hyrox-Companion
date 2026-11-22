@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { defaultPlanStartDate } from "@/lib/planStart";
 import { humanizeApiError, queryClient } from "@/lib/queryClient";
+import { isPlanOverlapError, planOverlapToast } from "@/lib/sharedToasts";
 
 import { parsePlanCsvPreview } from "./planCsvPreview";
 import { useUndoDeleteToast } from "./useRecycleBin";
@@ -108,12 +109,8 @@ export function usePlanImport({
       const message = error instanceof Error ? error.message : "";
       // The server refuses a restore that would leave two live plans over the
       // same days — say which plan is in the way rather than "failed".
-      if (message.includes("PLAN_OVERLAP") || message.includes("already covers")) {
-        toast({
-          title: "Can't restore this plan yet",
-          description: "Another plan already covers these dates. Archive that one first.",
-          variant: "destructive",
-        });
+      if (isPlanOverlapError(message)) {
+        toast({ ...planOverlapToast(), variant: "destructive" });
         return;
       }
       toast({ title: "Failed to update plan", variant: "destructive" });

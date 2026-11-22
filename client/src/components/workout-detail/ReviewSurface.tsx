@@ -20,7 +20,6 @@ import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { featureFlags } from "@/lib/featureFlags";
 import { hhmmToMinutes, minutesToHhmm } from "@/lib/timeOfDay";
 
-import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { buildWorkoutCoachSeedMessage } from "./workoutCoachSeed";
 import { ExerciseTable } from "./ExerciseTable";
 import { FuellingAroundSessionPanel } from "./FuellingAroundSessionPanel";
@@ -51,6 +50,7 @@ import {
   WorkoutSummaryHeader,
 } from "./shared/WorkoutSummaryHeader";
 import { type WorkoutCoachChatProps, WorkoutCoachSheet } from "./WorkoutCoachPanel";
+import { BadgedWorkoutSheetTitle } from "./WorkoutSheetTitle";
 
 interface ReviewSurfaceProps extends WorkoutCoachChatProps {
   readonly entry: TimelineEntry | null;
@@ -198,20 +198,13 @@ export function ReviewSurface({
         if (!open) onClose();
       }}
       title={
-        <span className="flex flex-wrap items-center gap-2">
-          {getStatusBadge(entry.status, undefined, entry.excused)}
-          <EditableWorkoutTitle
-            title={displayEntry.focus}
-            fallbackTitle="Workout"
-            onSave={
-              onRenameTitle && (displayEntry.workoutLogId || displayEntry.planDayId)
-                ? (title) => onRenameTitle(displayEntry, title)
-                : undefined
-            }
-            isSaving={isRenamingTitle}
-            testIdPrefix={`workout-title-${displayEntry.id}`}
-          />
-        </span>
+        <BadgedWorkoutSheetTitle
+          badge={getStatusBadge(entry.status, undefined, entry.excused)}
+          entry={displayEntry}
+          fallbackTitle="Workout"
+          onRenameTitle={onRenameTitle}
+          isRenamingTitle={isRenamingTitle}
+        />
       }
       narrowContentClassName="sm:max-w-2xl"
       currentCoachSeedText={currentCoachSeedText}

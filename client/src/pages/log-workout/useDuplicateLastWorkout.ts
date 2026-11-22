@@ -1,10 +1,10 @@
 import type { StructureBlockInput } from "@shared/schema";
 import type { UnitPreferences } from "@shared/unitConversion";
 import { useMutation } from "@tanstack/react-query";
-import { format } from "date-fns";
 
 import type { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
+import { getTodayString } from "@/lib/dateUtils";
 import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
 import type { StructuredExercise } from "@/lib/structuredExercise";
 
@@ -50,7 +50,7 @@ export function useDuplicateLastWorkout({
   const duplicateLastMutation = useMutation({
     mutationFn: () => api.workouts.latest(),
     onSuccess: (latest) => {
-      setDate(format(new Date(), "yyyy-MM-dd"));
+      setDate(getTodayString());
       setRpe(null);
       setDurationMinutes("");
       // Distance/HR are per-session measurements (like RPE and duration), so

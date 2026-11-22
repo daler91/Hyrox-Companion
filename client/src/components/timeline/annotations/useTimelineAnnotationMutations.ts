@@ -59,15 +59,26 @@ export function useTimelineAnnotationMutations({
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.timelineAnnotations.delete(id),
-    onSuccess: () => handleDeleteAnnotationSuccess(toast),
-    onError: () => handleMutationError(toast, "Couldn't delete annotation"),
-  });
+  const deleteMutation = useDeleteTimelineAnnotation();
 
   return {
     createMutation,
     updateMutation,
     deleteMutation,
   };
+}
+
+/**
+ * Delete one annotation, with the same refresh and toasts wherever it is
+ * deleted from: the annotations dialog and the annotation's own timeline row
+ * (useTimelinePageController) each wrote this mutation out.
+ * (CH-annotationDelete, REFACTORING_REVIEW 2026-09-23)
+ */
+export function useDeleteTimelineAnnotation() {
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (id: string) => api.timelineAnnotations.delete(id),
+    onSuccess: () => handleDeleteAnnotationSuccess(toast),
+    onError: () => handleMutationError(toast, "Couldn't delete annotation"),
+  });
 }

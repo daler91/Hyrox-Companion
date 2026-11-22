@@ -1,6 +1,7 @@
 import type { TimelineAnnotation, TimelineAnnotationType } from "@shared/schema";
-import { format } from "date-fns";
 import { useState } from "react";
+
+import { getTodayString } from "@/lib/dateUtils";
 
 const DEFAULT_TYPE: TimelineAnnotationType = "injury";
 
@@ -12,12 +13,11 @@ const DEFAULT_TYPE: TimelineAnnotationType = "injury";
  * U36 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function useAnnotationForm(initialDate?: string, editing: TimelineAnnotation | null = null) {
-  const today = () => format(new Date(), "yyyy-MM-dd");
   const [type, setType] = useState<TimelineAnnotationType>(
     () => (editing?.type as TimelineAnnotationType | undefined) ?? DEFAULT_TYPE,
   );
-  const [startDate, setStartDate] = useState(() => editing?.startDate ?? initialDate ?? today());
-  const [endDate, setEndDate] = useState(() => editing?.endDate ?? initialDate ?? today());
+  const [startDate, setStartDate] = useState(() => editing?.startDate ?? initialDate ?? getTodayString());
+  const [endDate, setEndDate] = useState(() => editing?.endDate ?? initialDate ?? getTodayString());
   const [note, setNote] = useState(() => editing?.note ?? "");
   const [editingId, setEditingId] = useState<string | null>(editing?.id ?? null);
 

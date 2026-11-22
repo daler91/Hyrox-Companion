@@ -1,20 +1,20 @@
 import type { TimelineEntry } from "@shared/schema";
-import { format } from "date-fns";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useOpenWorkoutId } from "@/hooks/useOpenWorkoutId";
 import { entryId, surfaceId } from "@/hooks/workout-actions/timelineEntry";
+import { getTodayString } from "@/lib/dateUtils";
 
 function isFuturePlanned(entry: TimelineEntry): boolean {
   if (entry.status !== "planned") return false;
-  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const todayStr = getTodayString();
   return entry.date > todayStr;
 }
 
 function isLoggablePlanned(entry: TimelineEntry): boolean {
   if (entry.status !== "planned") return false;
   if (!entry.planDayId) return false;
-  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const todayStr = getTodayString();
   return entry.date <= todayStr;
 }
 

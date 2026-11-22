@@ -2,6 +2,7 @@ import { useMutation, type UseMutationOptions } from "@tanstack/react-query";
 
 import { useToast } from "@/hooks/use-toast";
 import { AiBudgetExceededError, humanizeApiError, queryClient, RateLimitError, rateLimitMessage } from "@/lib/queryClient";
+import { aiBudgetExceededToast } from "@/lib/sharedToasts";
 
 type QueryKeyList = readonly (readonly unknown[])[];
 
@@ -52,11 +53,7 @@ export function useApiMutation<
     },
     onError: async (error, variables, context) => {
       if (error instanceof AiBudgetExceededError) {
-        toast({
-          title: "Daily AI limit reached",
-          description: "You've used your daily AI allowance. It resets on a rolling 24-hour basis.",
-          variant: "destructive",
-        });
+        toast(aiBudgetExceededToast());
       } else if (error instanceof RateLimitError) {
         toast({
           title: "Too many requests",

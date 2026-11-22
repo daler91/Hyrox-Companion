@@ -105,4 +105,32 @@ describe("useMoveTimelineEntry", () => {
     });
     expect(cachedEntry()?.recovery).toBeUndefined();
   });
+
+  // The rollback comes from buildOptimisticTimelineHandlers, shared with the
+  // status, log and delete mutations (CH-moveTimeline, REFACTORING_REVIEW 2026-09-23).
+  it("puts the card back on its own day when the move fails", async () => {
+    let reject: (error: Error) => void = () => undefined;
+    apiMocks.updateDayWithoutPlan.mockReturnValue(
+      new Promise((_resolve, rejectMove) => {
+        reject = rejectMove;
+      }),
+    );
+    seed(missed);
+    const { result } = renderHook(() => useMoveTimelineEntry(null), { wrapper });
+
+    act(() => {
+      result.current.moveEntry(missed, day(1));
+    });
+    await waitFor(() => {
+      expect(cachedEntry()).toMatchObject({ date: day(1) });
+    });
+
+    act(() => {
+      reject(new Error('500: {"error":"boom"}'));
+    });
+
+    await waitFor(() => {
+      expect(cachedEntry()).toEqual(missed);
+    });
+  });
 });
