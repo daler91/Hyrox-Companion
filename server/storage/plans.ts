@@ -27,6 +27,7 @@ import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate } from "./planRetirement";
 import { planSlotForMove } from "./planSlot";
 import { capturePlanDays, captureTrainingPlan } from "./recycleBinCapture";
+import { resolveUserToday } from "./shared";
 
 /** `recovery` with a let-go dropped and a fold or shorten kept, for the missed-day sweep. */
 const STALE_LET_GO_CLEARED = sql<string | null>`CASE WHEN ${planDays.recovery} = 'let_go' THEN NULL ELSE ${planDays.recovery} END`;
@@ -1079,13 +1080,4 @@ async function getTrainingPlan(
   });
 
   return { ...plan, days };
-}
-
-/** The athlete's own calendar date, degrading to UTC for an unusable zone. */
-async function resolveUserToday(userId: string, tx?: DbExecutor): Promise<string> {
-  const user = await (tx ?? db).query.users.findFirst({
-    where: eq(users.id, userId),
-    columns: { userTimezone: true },
-  });
-  return getLocalDateStrSafe(new Date(), user?.userTimezone);
 }

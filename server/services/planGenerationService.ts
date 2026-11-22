@@ -29,6 +29,7 @@ import { formatExerciseSelectionBrief } from "../prompts/exerciseSelection";
 import { describeEngineTargetLines } from "../prompts/workoutEngine";
 import { storage } from "../storage";
 import { planSlotFor } from "../storage/planSlot";
+import { resolveUserToday } from "../storage/shared";
 import { getLocalDateStrSafe } from "../timezone";
 import { mapLimitedUntilFailure } from "../utils/limitedFanOut";
 import { formatZodIssues, sanitizeUserInput } from "../utils/sanitize";
@@ -979,15 +980,6 @@ function engineSessionPriority(
   return week?.sessions.find((session) => session.day === day.dayName)?.priority ?? null;
 }
 
-/**
- * The athlete's own calendar date. A UTC "today" would retire a plan a day early
- * for anyone west of Greenwich — the same reasoning as PlanStorage.resolveUserToday.
- */
-async function resolveUserTodayForPlan(userId: string): Promise<string> {
-  const user = await storage.users.getUser(userId);
-  return getLocalDateStrSafe(new Date(), user?.userTimezone);
-}
-
 interface PublishGeneratedPlanOptions {
   readonly planId: string;
   readonly userId: string;
@@ -1013,7 +1005,7 @@ async function scheduleAndPublishPlan(
     await storage.plans.schedulePlan(planId, scheduleStartDate, userId, tx);
   }
   if (scheduleStartDate && supersedeIds.length > 0) {
-    const today = await resolveUserTodayForPlan(userId);
+    const today = await resolveUserToday(userId);
     const effectiveFrom = scheduleStartDate > today ? scheduleStartDate : today;
     const retired = await storage.plans.retirePlans(supersedeIds, userId, effectiveFrom, tx);
     // debug, not info: Bearer's logger-leak rule fires on any structured

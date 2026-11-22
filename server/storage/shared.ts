@@ -2,13 +2,33 @@ import {
   type ExerciseSet,
   type InsertExerciseSet,
   type StructureBlockInput,
+  users,
   workoutLogs,
 } from "@shared/schema";
 import { stampForPreferences, type UnitPreferences } from "@shared/unitConversion";
 import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
 
-import { db } from "../db";
+import { db, type DbExecutor } from "../db";
 import { logger } from "../logger";
+import { getLocalDateStrSafe } from "../timezone";
+
+/**
+ * The athlete's own calendar date — NOT the server's — degrading to UTC for an
+ * unusable zone. "Today" decides whether a scheduled plan day reads as
+ * `planned` or `missed` and when a superseded plan retires, so a UTC date told
+ * every athlete west of UTC that today's session was already missed as soon as
+ * UTC rolled over (from 17:00 for California), and retired a plan a day early.
+ * Pass `executor` to read inside a transaction. One copy for the plan and
+ * timeline storage and plan generation, which each had their own
+ * (C-resolveUserToday, REFACTORING_REVIEW 2026-09-23).
+ */
+export async function resolveUserToday(userId: string, executor: DbExecutor = db): Promise<string> {
+  const user = await executor.query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { userTimezone: true },
+  });
+  return getLocalDateStrSafe(new Date(), user?.userTimezone);
+}
 
 /**
  * Maps a prescribed ExerciseSet row into an InsertExerciseSet for a workout

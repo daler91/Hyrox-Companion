@@ -274,7 +274,7 @@ export async function computeGenerationCalibration(
   // The athlete's calendar date, not the server's: a UTC "today" put the
   // load window a day off for everyone west of Greenwich, so the posture and
   // anchors the plan was calibrated from lagged the schedule it was written
-  // against (resolveUserTodayForPlan makes the same call for the schedule).
+  // against (resolveUserToday makes the same call for the schedule).
   const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
   const history = await loadGenerationHistory(userId, today);
   const exerciseSelection = buildGenerationSelection(input, user, today, history, constraints);
