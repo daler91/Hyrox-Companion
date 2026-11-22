@@ -10,7 +10,7 @@ import { db } from "../db";
 import { env } from "../env";
 import { reqLogger } from "../logger";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
-import { computeStale, getTrainingAnchor, regenerateAndStoreRacePrediction } from "../services/analyticsPersistence";
+import { getTrainingAnchor, regenerateAndStoreRacePrediction } from "../services/analyticsPersistence";
 import { type CacheEntry, createCoalescedCache } from "../services/analyticsRouteCache";
 import { calculateExerciseAnalytics, calculatePersonalRecords, type ExerciseSetWithDate } from "../services/analyticsService";
 import { assembleTrainingOverview } from "../services/trainingOverviewLoader";
@@ -22,6 +22,7 @@ import type { SlimLoggedExerciseSet } from "../storage/shared";
 import { getLocalDateStrSafe } from "../timezone";
 import { getUserId } from "../types";
 import { protectedPost } from "./_helpers/protectedRouteBuilder";
+import { readStoredAnalysis } from "./_helpers/storedAnalysis";
 
 const router = Router();
 
@@ -198,23 +199,10 @@ router.get("/api/v1/race-prediction", isAuthenticated, rateLimiter("race-predict
     const userId = getUserId(req);
     const refresh = req.query.refresh === "1";
     if (!refresh) {
-      // Fetch the stored row and the staleness anchor concurrently — they read
-      // unrelated tables (analytics_results vs workout_logs) so there's no
-      // reason to pay two sequential DB round-trips on this "paint instantly on
-      // tab open" path. Firing both unconditionally costs one harmless unused
-      // query on the (rare) no-stored-row-yet branch below, in exchange for
-      // halving the latency on every returning user's request.
-      const [row, anchor] = await Promise.all([
-        storage.analyticsResults.get(userId, "race_prediction"),
-        // Training logs only, as the prediction reads (PF10).
-        getTrainingAnchor(userId),
-      ]);
-      if (row) {
-        res.json({
-          ...(row.payload as RacePredictionResponse),
-          generatedAt: row.generatedAt.toISOString(),
-          stale: computeStale(row, anchor),
-        });
+      // Training logs only for the anchor, as the prediction reads (PF10).
+      const stored = await readStoredAnalysis<RacePredictionResponse>(userId, "race_prediction", getTrainingAnchor);
+      if (stored) {
+        res.json(stored);
         return;
       }
     }

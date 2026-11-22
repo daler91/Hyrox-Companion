@@ -20,7 +20,7 @@ import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } 
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { analyzeChatSafety, buildChatSafetyNotice, type ChatSafetySignals } from "../services/aiSafety";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
-import { computeStale, getTrainingAnchor, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
+import { getTrainingAnchor, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
 import { type CoachReply, type Conversation, type ConversationTurn, fitHistoryWindow, loadConversation, saveCoachReply, saveUserTurn, type ServerOwnedTurn, serverOwnedTurn, type TurnFocus } from "../services/chatConversation";
 import { decideChatFactProposal, type FactCandidate, settleFactProposal, startFactProposal } from "../services/chatFactProposal";
 import { classifyPlanEditIntent, isPlanEditIntent, mayRequestPlanEdit } from "../services/chatIntentService";
@@ -41,6 +41,7 @@ import { getLocalDateStrSafe } from "../timezone";
 import { getUserId } from "../types";
 import { getChatHistoryUseCase } from "../usecases/ai/chatHistory.usecase";
 import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
+import { readStoredAnalysis } from "./_helpers/storedAnalysis";
 import { serializePlanProposal } from "./planProposals";
 
 const router = Router();
@@ -998,25 +999,8 @@ protectedDelete(router, "/api/v1/chat/history", { limiter: rateLimiter("chatHist
 // consent/budget middleware) and persists the fresh result.
 router.get("/api/v1/coach-insights", isAuthenticated, rateLimiter("analytics", 60), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    // Fetch the stored row and the staleness anchor concurrently — they read
-    // unrelated tables (analytics_results vs workout_logs), so there's no
-    // ordering dependency between them on this "paint instantly on tab open"
-    // path. Halves the DB latency for the common case (row exists) at the cost
-    // of one harmless unused query when a user has no stored insights yet.
-    const [row, anchor] = await Promise.all([
-      storage.analyticsResults.get(userId, "coach_insights"),
-      getWorkoutAnchor(userId),
-    ]);
-    if (!row) {
-      res.json({ insights: null });
-      return;
-    }
-    const payload = row.payload as CoachInsightsResult;
-    res.json({
-      ...payload,
-      generatedAt: row.generatedAt.toISOString(),
-      stale: computeStale(row, anchor),
-    });
+    const stored = await readStoredAnalysis<CoachInsightsResult>(userId, "coach_insights", getWorkoutAnchor);
+    res.json(stored ?? { insights: null });
   }));
 
 protectedPost(router, "/api/v1/coach-insights", { limiter: rateLimiter("suggestions", 3), aiConsent: true, aiBudget: true }, async (req: ExpressRequest, res: Response) => {
@@ -1040,29 +1024,14 @@ protectedPost(router, "/api/v1/coach-insights", { limiter: rateLimiter("suggesti
 router.get("/api/v1/overview-analysis", isAuthenticated, rateLimiter("analytics", 60), validateQuery(overviewAnalysisQuerySchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const { range } = req.query as OverviewAnalysisQuery;
-    // See the coach-insights GET above: row and staleness anchor read
-    // unrelated tables, so fetch them concurrently instead of paying two
-    // sequential DB round-trips on this instant-paint path.
-    const [row, anchor] = await Promise.all([
-      storage.analyticsResults.get(userId, "overview_analysis"),
-      // Training logs only, as the analysis reads (PF10).
-      getTrainingAnchor(userId),
-    ]);
-    if (!row) {
-      res.json({ sections: null });
-      return;
-    }
-    const payload = row.payload as OverviewAnalysisResult;
+    // Training logs only for the anchor, as the analysis reads (PF10).
+    const stored = await readStoredAnalysis<OverviewAnalysisResult>(userId, "overview_analysis", getTrainingAnchor);
     // Without a range (an older client), whatever is stored, as before.
-    if (range !== undefined && !coversOverviewRange(payload, range)) {
+    if (!stored || (range !== undefined && !coversOverviewRange(stored, range))) {
       res.json({ sections: null });
       return;
     }
-    res.json({
-      ...payload,
-      generatedAt: row.generatedAt.toISOString(),
-      stale: computeStale(row, anchor),
-    });
+    res.json(stored);
   }));
 
 // The AI guards stay in `middleware` here: the builder's `aiConsent`/`aiBudget`
