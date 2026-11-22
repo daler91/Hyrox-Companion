@@ -1,5 +1,5 @@
 import type { AllowedImageMimeType } from "@shared/schema";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import {
   AlertDialog,
@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CoachPrescriptionCollapsible, type PrescriptionField } from "@/components/workout-detail/CoachPrescriptionCollapsible";
-import type { CompressedImage } from "@/lib/image";
+import { useImagePreview } from "@/hooks/useImagePreview";
 
 export interface PrescriptionEditorProps {
   /** Stable id of the owning entry; resets transient state when it changes. */
@@ -51,12 +51,6 @@ export interface PrescriptionTextPayload {
   readonly accessory: string | null;
 }
 
-interface ImagePreviewState {
-  readonly url: string;
-  readonly base64: string;
-  readonly mimeType: AllowedImageMimeType;
-}
-
 function normalizeText(value: string | null | undefined): string {
   return value ?? "";
 }
@@ -73,8 +67,9 @@ function normalizeText(value: string | null | undefined): string {
  * logged) to this shape, which keeps the editor decoupled from either
  * source.
  *
- * Image preview state lives here (with blob-URL revocation) so a fresh
- * capture survives across re-renders without leaking object URLs.
+ * Image preview state lives here (useImagePreview, which revokes the blob
+ * URLs) so a fresh capture survives across re-renders without leaking
+ * object URLs.
  */
 export function PrescriptionEditor({
   entryId,
@@ -92,7 +87,7 @@ export function PrescriptionEditor({
   compact,
   showNotes = true,
 }: PrescriptionEditorProps) {
-  const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null);
+  const { imagePreview, captureImage, clearImagePreview } = useImagePreview();
   const [confirmingParse, setConfirmingParse] = useState(false);
   const [pendingParseSource, setPendingParseSource] = useState<PendingParseSource>(null);
   const [lastEntryId, setLastEntryId] = useState(entryId);
@@ -101,28 +96,12 @@ export function PrescriptionEditor({
     accessory: normalizeText(accessory),
   }));
 
-  // Mirror the active preview URL so the unmount cleanup can revoke it
-  // without re-running on every render. Other revoke paths (retake /
-  // success / entry change) handle the URL synchronously inline.
-  const previewUrlRef = useRef<string | null>(null);
-  useEffect(() => {
-    previewUrlRef.current = imagePreview?.url ?? null;
-  }, [imagePreview?.url]);
-  useEffect(() => {
-    return () => {
-      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-    };
-  }, []);
-
   // Render-time reseed — when the editor is mounted on a different entry,
   // wipe transient state so a leftover preview / confirm doesn't bleed
   // across cards.
   if (entryId !== lastEntryId) {
     setLastEntryId(entryId);
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview.url);
-      setImagePreview(null);
-    }
+    if (imagePreview) clearImagePreview();
     setConfirmingParse(false);
     setPendingParseSource(null);
     setDraftText({
@@ -130,18 +109,6 @@ export function PrescriptionEditor({
       accessory: normalizeText(accessory),
     });
   }
-
-  const clearImagePreview = () => {
-    setImagePreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev.url);
-      return null;
-    });
-  };
-
-  const handleCapture = (img: CompressedImage) => {
-    if (imagePreview) URL.revokeObjectURL(imagePreview.url);
-    setImagePreview({ url: img.previewUrl, base64: img.base64, mimeType: img.mimeType });
-  };
 
   const triggerParseText = () => {
     onParseText({
@@ -204,7 +171,7 @@ export function PrescriptionEditor({
         }}
         onParse={handleParseTextClicked}
         isParsing={isParsingText}
-        onCapture={handleCapture}
+        onCapture={captureImage}
         imagePreview={imagePreview ? { url: imagePreview.url } : null}
         onRetakeImage={clearImagePreview}
         onParseImage={handleParseImageClicked}

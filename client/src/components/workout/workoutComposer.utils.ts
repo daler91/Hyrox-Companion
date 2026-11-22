@@ -1,12 +1,7 @@
-import type { AllowedImageMimeType } from "@shared/schema";
-
+import type { ImagePreviewState } from "@/hooks/useImagePreview";
 import type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "@/lib/api";
 
-export interface ImagePreviewState {
-  readonly url: string;
-  readonly base64: string;
-  readonly mimeType: AllowedImageMimeType;
-}
+export type { ImagePreviewState } from "@/hooks/useImagePreview";
 
 export function buildParseImagePayload(preview: ImagePreviewState): ParseFromImagePayload {
   return {
