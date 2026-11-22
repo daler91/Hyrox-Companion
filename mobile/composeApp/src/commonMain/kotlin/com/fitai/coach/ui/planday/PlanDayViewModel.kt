@@ -13,15 +13,19 @@ import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.data.EncodedImage
 import com.fitai.coach.core.data.UserSession
 import com.fitai.coach.core.exercises.generated.EXERCISE_DEFINITIONS
+import com.fitai.coach.core.units.UnitPreferences
 import com.fitai.coach.ui.format.userMessage
 import com.fitai.coach.ui.workout.CUSTOM_EXERCISE
 import com.fitai.coach.ui.workout.ExerciseGroup
 import com.fitai.coach.ui.workout.ExerciseIdentity
 import com.fitai.coach.ui.workout.SetEdit
+import com.fitai.coach.ui.workout.composedIn
 import com.fitai.coach.ui.workout.reorderedSetIds
 import com.fitai.coach.ui.workout.toDoublePatch
 import com.fitai.coach.ui.workout.toIntPatch
 import com.fitai.coach.ui.workout.toNotePatch
+import com.fitai.coach.ui.workout.toPreferenceScale
+import com.fitai.coach.ui.workout.units
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -118,11 +122,16 @@ class PlanDayViewModel(private val session: UserSession, private val entryId: St
     private val toasts = Channel<String>(Channel.BUFFERED)
     val messages: Flow<String> = toasts.receiveAsFlow()
 
-    val state: StateFlow<PlanDayState> = combine(session.timeline.entries, sets) { entries, current ->
+    val state: StateFlow<PlanDayState> = combine(
+        session.timeline.entries,
+        sets,
+        session.preferences.preferences,
+    ) { entries, current, prefs ->
         PlanDayState(
             entry = entries.firstOrNull { it.id == entryId },
             loaded = true,
-            sets = current.rows,
+            // In the athlete's current units, which every edit is in (SetUnits.kt).
+            sets = current.rows.map { it.toPreferenceScale(prefs.units()) },
             loadingSets = current.loading,
             setsFailed = current.failed,
             busy = current.busy,
@@ -183,7 +192,7 @@ class PlanDayViewModel(private val session: UserSession, private val entryId: St
                 distance = edit.distance.toDoublePatch(),
                 time = edit.time.toDoublePatch(),
                 notes = edit.notes.toNotePatch(),
-            ),
+            ).composedIn(units()),
         )
     }
 
@@ -239,7 +248,7 @@ class PlanDayViewModel(private val session: UserSession, private val entryId: St
                     weight = last.weight?.let { Patch.of(it) } ?: Patch.Absent,
                     distance = last.distance?.let { Patch.of(it) } ?: Patch.Absent,
                     time = last.time?.let { Patch.of(it) } ?: Patch.Absent,
-                ),
+                ).composedIn(units()),
             )
             reload(id)
         }
@@ -263,7 +272,7 @@ class PlanDayViewModel(private val session: UserSession, private val entryId: St
                     customLabel = customLabel?.let { Patch.of(it) } ?: Patch.Absent,
                     category = definition?.category ?: CUSTOM_CATEGORY,
                     setNumber = 1,
-                ),
+                ).composedIn(units()),
             )
             reload(id)
         }
@@ -309,6 +318,9 @@ class PlanDayViewModel(private val session: UserSession, private val entryId: St
         val rows = session.planDays.sets(planDayId)
         sets.update { it.copy(rows = rows, failed = false) }
     }
+
+    /** The athlete's units now: what the sets show in, so what an edit's numbers are in. */
+    private suspend fun units(): UnitPreferences = session.preferences.preferences.first().units()
 
     /** A change to the sets that must reach the server; one at a time. */
     private fun online(failure: String, block: suspend (planDayId: String) -> Unit) {

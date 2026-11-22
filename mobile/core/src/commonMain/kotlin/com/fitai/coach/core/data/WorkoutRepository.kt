@@ -96,11 +96,15 @@ public class WorkoutRepository(
     /**
      * Changes a set: at once on the device, then on the server. The patch's
      * `expectedVersion` is ignored; the outbox fills it in when it sends.
+     * Numbers in the units the patch names re-stamp the device's copy as the
+     * server will ([restampedSetBody]).
      */
     public suspend fun updateSet(workoutId: String, setId: String, patch: PatchWorkoutsByIdSetsBySetIdRequest) {
         val body = encode(PatchWorkoutsByIdSetsBySetIdRequest.serializer(), patch.copy(expectedVersion = null))
         db.writeTransaction {
-            dao.set(setId)?.let { row -> dao.upsertSets(listOf(row.copy(json = mergePatch(row.json, body)))) }
+            dao.set(setId)?.let { row ->
+                dao.upsertSets(listOf(row.copy(json = mergePatch(row.json, restampedSetBody(row.json, patch, body)))))
+            }
             sync.enqueue(
                 ApiEndpoints.PatchWorkoutsByIdSetsBySetId,
                 path = ApiEndpoints.PatchWorkoutsByIdSetsBySetId.path(setId = setId, id = workoutId),

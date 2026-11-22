@@ -99,6 +99,49 @@ class WorkoutEditSyncTest {
         assertTrue(db.outbox().all().isEmpty())
     }
 
+    // Tech debt #63: the server reads an edit's numbers in the units it names
+    // and re-stamps the row, so the device's copy must be re-stamped the same
+    // way until the answer arrives, or an untouched planned weight is relabelled.
+    @Test
+    fun aSetEditInNamedUnitsReStampsTheDevicesCopyAsTheServerWill() = runTest {
+        val poundsSet = """{"id":"s1","workoutLogId":"w1","exerciseName":"back_squat","category":"strength","setNumber":1,""" +
+            """"weight":225,"plannedWeight":225,"distance":1000,"weightUnit":"lbs","distanceUnit":"ft","version":1}"""
+        server.on("GET", W1, 200, Samples.workout("w1", poundsSet))
+        workouts.refresh("w1")
+
+        workouts.updateSet(
+            "w1",
+            "s1",
+            PatchWorkoutsByIdSetsBySetIdRequest(weight = Patch.of(100.0), weightUnit = PatchWorkoutsByIdSetsBySetIdRequest.WeightUnit.Kg),
+        )
+
+        val set = local()!!.exerciseSets.single()
+        assertEquals(100.0, set.weight)
+        // 225 lb is 102.06 kg, stored to the nearest half kilo.
+        assertEquals(102.0, set.plannedWeight)
+        assertEquals("kg", set.weightUnit)
+        // The distance axis wasn't touched: its value and stamp stay.
+        assertEquals(1000.0, set.distance)
+        assertEquals("ft", set.distanceUnit)
+
+        server.on("PATCH", "$W1/sets/s1", 200, Samples.setRow("s1", 2))
+        sync.sync()
+        val sent = ApiJson.parseToJsonElement(server.sentTo("PATCH", "$W1/sets/s1").single().body!!).jsonObject
+        assertEquals("kg", sent["weightUnit"]!!.jsonPrimitive.content)
+        assertEquals(setOf("weight", "weightUnit", "expectedVersion"), sent.keys)
+    }
+
+    @Test
+    fun aSetEditNamingNoUnitAppliesAsSent() = runTest {
+        server.on("GET", W1, 200, Samples.workout("w1", Samples.setRow("s1", 1)))
+        workouts.refresh("w1")
+
+        workouts.updateSet("w1", "s1", PatchWorkoutsByIdSetsBySetIdRequest(reps = Patch.of(5)))
+
+        assertEquals(5, local()!!.exerciseSets.single().reps)
+        assertNull(local()!!.exerciseSets.single().weightUnit)
+    }
+
     @Test
     fun aSetTheServerWontDeleteStays() = runTest {
         server.on("GET", W1, 200, Samples.workout("w1", Samples.setRow("s1", 1)))
