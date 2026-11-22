@@ -1,10 +1,9 @@
-import { visionBreaker } from "../../ai/circuitBreaker";
 import { generateJsonText } from "../../ai/providers";
 import { AppError, ErrorCode } from "../../errors";
 import { logger } from "../../logger";
 import { PARSE_EXERCISES_PROMPT } from "../../prompts";
+import { callGeminiVisionJson } from "../../services/nutrition/visionParsing";
 import { sanitizeUserInput, validateAiOutput } from "../../utils/sanitize";
-import { GEMINI_VISION_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "../client";
 import type { ParseUnitPreferences } from "./types";
 
 function buildUnitNote(units: Required<ParseUnitPreferences>): string {
@@ -85,35 +84,16 @@ export async function callGeminiParseImage(
     IMAGE_PARSE_PREAMBLE +
     buildUnitNote(units) +
     buildCustomNote(customExerciseNames);
-  const response = await retryWithBackoff(
-    (signal) =>
-      getAiClient().models.generateContent({
-        model: GEMINI_VISION_MODEL,
-        config: { systemInstruction, responseMimeType: "application/json", abortSignal: signal },
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { inlineData: { mimeType, data: imageBase64 } },
-              {
-                text: "Parse the workout plan shown in the attached image into structured exercise data.",
-              },
-            ],
-          },
-        ],
-      }),
-    "exercise-parse-image",
-    // Vision has its own breaker, apart from the text provider's — AI2
-    // (CODEBASE_ANALYSIS_2026-10-03).
-    visionBreaker,
-  );
-
-  if (userId) trackUsageFromResponse(userId, GEMINI_VISION_MODEL, "parse", response);
-
-  if (!response.text || response.text.length === 0) {
-    logger.error({ response }, "[gemini] exercise-parse-image returned empty response");
-    throw new AppError(ErrorCode.AI_ERROR, "AI returned empty response for exercise parsing", 502);
-  }
-
-  return validateAiOutput(response.text);
+  // The shared vision call: vision model and breaker, retry, usage under
+  // "parse" when there is an athlete, and the empty-response check.
+  return await callGeminiVisionJson({
+    imageBase64,
+    mimeType,
+    userId,
+    systemInstruction,
+    userText: "Parse the workout plan shown in the attached image into structured exercise data.",
+    retryLabel: "exercise-parse-image",
+    emptyResponseMessage: "AI returned empty response for exercise parsing",
+    emptyResponseLog: "[gemini] exercise-parse-image returned empty response",
+  });
 }

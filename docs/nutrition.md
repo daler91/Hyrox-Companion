@@ -1016,7 +1016,7 @@ server/services/nutrition/
   sanitize.ts                   import sanity clamp at the cache boundary
   mealParser.ts                 NL/photo → items (Gemini)
   labelParser.ts                nutrition-label photo → per-100g macros (Gemini vision)
-  visionParsing.ts              the Gemini vision call both photo parsers share
+  visionParsing.ts              the Gemini vision call every photo parser shares
   energy.ts                     the day's energy balance for /summary
   rollup.ts                     daily summary math over joined entries (re-exports the
                                 shared scaling rule)
