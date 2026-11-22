@@ -22,19 +22,16 @@ import type { Logger } from "pino";
 import { z } from "zod";
 
 import { generateJsonText } from "../ai/providers";
-import { env } from "../env";
 import { logger as defaultLogger } from "../logger";
 import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
 import { formatZodIssues } from "../utils/sanitize";
-import { checkAiBudget } from "./aiUsageService";
+import { type AiBlockedReason, resolveAiBlocker } from "./aiGate";
 import { assembleTrainingOverview } from "./trainingOverviewLoader";
-
-export type OverviewAnalysisBlockedReason = "ai_disabled" | "ai_consent_off" | "ai_budget_exceeded";
 
 export type OverviewAnalysisGenerationOutcome =
   | { ok: true; result: OverviewAnalysisResult }
-  | { ok: false; reason: OverviewAnalysisBlockedReason };
+  | { ok: false; reason: AiBlockedReason };
 
 const MIN_POINTS = 2;
 const RECENT_WEEKS = 8;
@@ -430,13 +427,8 @@ export async function generateOverviewAnalysisIfAllowed(
   userId: string,
   log: Logger = defaultLogger,
 ): Promise<OverviewAnalysisGenerationOutcome> {
-  if (env.AI_FEATURES_ENABLED === "false") return { ok: false, reason: "ai_disabled" };
-
-  const user = await storage.users.getUser(userId);
-  if (user?.aiCoachEnabled !== true) return { ok: false, reason: "ai_consent_off" };
-
-  const budget = await checkAiBudget(userId);
-  if (!budget.allowed) return { ok: false, reason: "ai_budget_exceeded" };
+  const blocker = await resolveAiBlocker(userId);
+  if (blocker) return { ok: false, reason: blocker };
 
   const rangeDays = await storedOverviewRangeDays(userId);
   return { ok: true, result: await generateOverviewAnalysis(userId, log, rangeDays) };

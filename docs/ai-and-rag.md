@@ -881,6 +881,9 @@ calls it inline: the auto-coach job, the `…IfAllowed` generators the midnight
 recompute uses (coach insights, overview analysis, nutrition insights), race
 prediction, the planned-session estimate, semantic food search, the structured
 apply of a timeline suggestion and the legacy text parse on workout creation.
+The three `…IfAllowed` generators and race prediction share one gate,
+`resolveAiBlocker()` (`server/services/aiGate.ts`): the kill switch, then
+consent, then the budget, stopping at the first that blocks.
 The food-embedding cron (`embedMissingFoods()`), which embeds cached foods,
 belongs to no athlete: it skips a batch once the application-wide ceiling is
 reached (`isGlobalAiBudgetExhausted()`, which throws, so the batch is skipped,

@@ -25,12 +25,11 @@ import type { Logger } from "pino";
 import { z } from "zod";
 
 import { generateJsonText } from "../../ai/providers";
-import { env } from "../../env";
 import { logger as defaultLogger } from "../../logger";
 import { storage } from "../../storage";
 import { getLocalDateStrSafe } from "../../timezone";
 import { formatZodIssues } from "../../utils/sanitize";
-import { checkAiBudget } from "../aiUsageService";
+import { resolveAiBlocker } from "../aiGate";
 import { calculateTrainingLoad, type TrainingLoadSet } from "../trainingLoadService";
 import {
   buildRacePredictionFeatures,
@@ -419,16 +418,17 @@ function buildAiResponse(
   };
 }
 
-async function resolveAiBlocker(
+/**
+ * The shared AI gate (resolveAiBlocker) on the user already loaded with the
+ * sets. Only its budget lookup can throw.
+ */
+async function resolveRacePredictionBlocker(
   user: { aiCoachEnabled?: boolean | null } | undefined,
   userId: string,
   log: RacePredictionLogger,
 ): Promise<RacePredictionAiUnavailableReason | null> {
-  if (env.AI_FEATURES_ENABLED === "false") return "ai_disabled";
-  if (user?.aiCoachEnabled !== true) return "ai_consent_off";
   try {
-    const budget = await checkAiBudget(userId);
-    if (!budget.allowed) return "ai_budget_exceeded";
+    return await resolveAiBlocker(userId, () => Promise.resolve(user));
   } catch (err) {
     // A budget that can't be confirmed is not spent: the athlete gets the
     // deterministic prediction, flagged as an AI error, as when the provider
@@ -439,7 +439,6 @@ async function resolveAiBlocker(
     log.warn({ err, userId }, "[race-predictor] AI budget check failed; returning the deterministic prediction");
     return "ai_error";
   }
-  return null;
 }
 
 /**
@@ -471,7 +470,7 @@ export async function generateRacePrediction(
   // both the AI and deterministic paths so taper guidance never depends on AI.
   const readiness = await loadRaceReadiness(userId, user, sets ?? [], log);
 
-  const blocker = await resolveAiBlocker(user, userId, log);
+  const blocker = await resolveRacePredictionBlocker(user, userId, log);
   if (blocker) {
     return buildDeterministicResponse(features, storedGender, blocker, readiness);
   }

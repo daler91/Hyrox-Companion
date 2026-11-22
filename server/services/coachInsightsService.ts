@@ -6,20 +6,17 @@
  *
  * `generateCoachInsights` assumes gating already happened (the route runs the
  * aiConsentCheck + aiBudgetCheck middleware before calling it).
- * `generateCoachInsightsIfAllowed` does its OWN gating — mirroring
- * resolveAiBlocker in the race-prediction service — for callers like the cron
- * that run outside that middleware.
+ * `generateCoachInsightsIfAllowed` does its OWN gating (resolveAiBlocker in
+ * aiGate) for callers like the cron that run outside that middleware.
  */
 import type { RagInfo } from "@shared/schema";
 import type { Logger } from "pino";
 
 import { getTextAiConfig } from "../ai/providers/config";
-import { env } from "../env";
 import { chatWithCoach } from "../gemini/index";
 import { logger as defaultLogger } from "../logger";
-import { storage } from "../storage";
 import { buildAIContext } from "./aiContextService";
-import { checkAiBudget } from "./aiUsageService";
+import { type AiBlockedReason, resolveAiBlocker } from "./aiGate";
 import { sanitizeRagInfo } from "./ragRetrieval";
 
 export interface CoachInsightsResult {
@@ -28,11 +25,9 @@ export interface CoachInsightsResult {
   generatedAt: string;
 }
 
-export type CoachInsightsBlockedReason = "ai_disabled" | "ai_consent_off" | "ai_budget_exceeded";
-
 export type CoachInsightsGenerationOutcome =
   | { ok: true; result: CoachInsightsResult }
-  | { ok: false; reason: CoachInsightsBlockedReason };
+  | { ok: false; reason: AiBlockedReason };
 
 // Fixed analysis prompt. Reuses the chat surface (chatWithCoach) with a
 // structured instruction rather than introducing a separate generation path.
@@ -88,8 +83,7 @@ export async function generateCoachInsights(
 /**
  * Self-gating variant for the midnight cron. Returns the reason the analysis
  * was skipped (so the caller can preserve the previously stored result) rather
- * than throwing. Mirrors the gating order of resolveAiBlocker in the
- * race-prediction service.
+ * than throwing. The gate (kill switch, consent, budget) is resolveAiBlocker.
  *
  * A budget lookup that fails is the exception: it throws, and no AI is spent
  * that the budget could not confirm. The recompute job then fails, releases
@@ -100,13 +94,8 @@ export async function generateCoachInsightsIfAllowed(
   userId: string,
   log: Logger = defaultLogger,
 ): Promise<CoachInsightsGenerationOutcome> {
-  if (env.AI_FEATURES_ENABLED === "false") return { ok: false, reason: "ai_disabled" };
-
-  const user = await storage.users.getUser(userId);
-  if (user?.aiCoachEnabled !== true) return { ok: false, reason: "ai_consent_off" };
-
-  const budget = await checkAiBudget(userId);
-  if (!budget.allowed) return { ok: false, reason: "ai_budget_exceeded" };
+  const blocker = await resolveAiBlocker(userId);
+  if (blocker) return { ok: false, reason: blocker };
 
   return { ok: true, result: await generateCoachInsights(userId, log) };
 }
