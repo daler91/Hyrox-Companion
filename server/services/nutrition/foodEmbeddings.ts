@@ -4,8 +4,9 @@ import { inChunks, inSequence } from "@shared/inSequence";
 import { foods, users } from "@shared/schema";
 import { and, asc, eq, gt, inArray, ne, or } from "drizzle-orm";
 
+import { EMBEDDING_DIMENSIONS } from "../../constants";
 import { db } from "../../db";
-import { EMBEDDING_DIMENSIONS, generateEmbeddings } from "../../gemini/client";
+import { generateEmbeddings } from "../../gemini/client";
 import { logger } from "../../logger";
 import { vectorPool } from "../../vectorDb";
 import { isGlobalAiBudgetExhausted, recordAiUsage } from "../aiUsageService";

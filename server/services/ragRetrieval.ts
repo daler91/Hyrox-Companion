@@ -1,7 +1,7 @@
 import type { RagInfo } from "@shared/schema";
 
+import { EMBEDDING_DIMENSIONS } from "../constants";
 import { env } from "../env";
-import { EMBEDDING_DIMENSIONS } from "../gemini/client";
 import { logger } from "../logger";
 import { type CoachingMaterialInput, selectCoachingMaterials } from "../prompts/materialsBuilder";
 import { storage } from "../storage";

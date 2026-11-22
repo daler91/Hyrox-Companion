@@ -1,8 +1,9 @@
 import type { CoachingMaterial } from "@shared/schema";
 import pLimit from "p-limit";
 
+import { EMBEDDING_DIMENSIONS } from "../constants";
 import { env } from "../env";
-import { EMBEDDING_DIMENSIONS,generateEmbedding, generateEmbeddings, trackEmbeddingUsage } from "../gemini/client";
+import { generateEmbedding, generateEmbeddings, trackEmbeddingUsage } from "../gemini/client";
 import { logger } from "../logger";
 import { deleteRuntimeCachePrefix, getRuntimeCache, hashRuntimeKey, setRuntimeCache } from "../sharedRuntimeState";
 import { storage } from "../storage";

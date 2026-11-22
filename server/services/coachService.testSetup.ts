@@ -56,7 +56,6 @@ vi.mock("../gemini/index", () => ({
   generateWorkoutSuggestions: vi.fn(),
   generateReviewNotes: vi.fn().mockResolvedValue([]),
   parseExercisesFromText: vi.fn(),
-  EMBEDDING_DIMENSIONS: 3072,
 }));
 vi.mock("./ragService", () => ({ retrieveRelevantChunks: vi.fn() }));
 vi.mock("../prompts", () => ({

@@ -6,9 +6,8 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
 import { loadPersistedBreakerState } from "./ai/circuitBreaker";
-import { STALE_PLAN_GENERATION_THRESHOLD_MS } from "./constants";
+import { EMBEDDING_DIMENSIONS, STALE_PLAN_GENERATION_THRESHOLD_MS } from "./constants";
 import { pool } from "./db";
-import { EMBEDDING_DIMENSIONS } from "./gemini/client";
 import { logger } from "./logger";
 import {
   assertCriticalTablesExist,
