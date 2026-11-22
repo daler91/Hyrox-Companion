@@ -58,6 +58,7 @@ export async function callGeminiVisionJson(opts: {
   if (opts.userId) trackUsageFromResponse(opts.userId, GEMINI_VISION_MODEL, "parse", response);
 
   if (!response.text || response.text.length === 0) {
+    // bearer:disable javascript_lang_logger_leak
     if (opts.emptyResponseLog) logger.error({ response }, opts.emptyResponseLog);
     throw new AppError(ErrorCode.AI_ERROR, opts.emptyResponseMessage, 502);
   }

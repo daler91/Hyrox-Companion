@@ -729,20 +729,20 @@ describe("jobs on scheduleLockedCronJob with their own failure log", () => {
   });
 
   it.each([
-    { job: "idempotencyCleanup", expression: "30 3 * * *", message: "Idempotency cleanup failed" },
-    { job: "aiUsageCleanup", expression: "0 4 * * *", message: "AI usage cleanup failed" },
-    { job: "sharedRuntimeCleanup", expression: "15 4 * * *", message: "Shared runtime state cleanup failed" },
-    { job: "staleAutoCoaching", expression: "*/10 * * * *", message: "Stale isAutoCoaching recovery failed" },
-    { job: "queueDepthTelemetry", expression: "*/5 * * * *", message: "Queue-depth telemetry failed" },
-    { job: "structuredExerciseRollup", expression: "10 2 * * *", message: "Structured exercise health rollup failed" },
-    { job: "analyticsRecompute", expression: "5 * * * *", message: "Analytics recompute scan failed" },
-    { job: "ragChunkPrune", expression: "50 3 * * *", message: "RAG chunk prune failed" },
-  ] as const)("$job runs under its own lock in Etc/UTC and logs its own failure message", async ({ job, expression, message }) => {
+    { job: "idempotencyCleanup", key: CRON_LOCK_KEYS.idempotencyCleanup, expression: "30 3 * * *", message: "Idempotency cleanup failed" },
+    { job: "aiUsageCleanup", key: CRON_LOCK_KEYS.aiUsageCleanup, expression: "0 4 * * *", message: "AI usage cleanup failed" },
+    { job: "sharedRuntimeCleanup", key: CRON_LOCK_KEYS.sharedRuntimeCleanup, expression: "15 4 * * *", message: "Shared runtime state cleanup failed" },
+    { job: "staleAutoCoaching", key: CRON_LOCK_KEYS.staleAutoCoaching, expression: "*/10 * * * *", message: "Stale isAutoCoaching recovery failed" },
+    { job: "queueDepthTelemetry", key: CRON_LOCK_KEYS.queueDepthTelemetry, expression: "*/5 * * * *", message: "Queue-depth telemetry failed" },
+    { job: "structuredExerciseRollup", key: CRON_LOCK_KEYS.structuredExerciseRollup, expression: "10 2 * * *", message: "Structured exercise health rollup failed" },
+    { job: "analyticsRecompute", key: CRON_LOCK_KEYS.analyticsRecompute, expression: "5 * * * *", message: "Analytics recompute scan failed" },
+    { job: "ragChunkPrune", key: CRON_LOCK_KEYS.ragChunkPrune, expression: "50 3 * * *", message: "RAG chunk prune failed" },
+  ] as const)("$job runs under its own lock in Etc/UTC and logs its own failure message", async ({ job, key, expression, message }) => {
     await expect(scheduled(expression)()).resolves.toBeUndefined();
 
     expect(mocks.withPgAdvisoryLock).toHaveBeenCalledWith(
       mocks.pool,
-      { key: CRON_LOCK_KEYS[job], name: job },
+      { key, name: job },
       expect.any(Function),
     );
     expect(logger.error).toHaveBeenCalledWith({ context: "cron", err: error }, message);

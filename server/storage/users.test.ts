@@ -650,17 +650,19 @@ describe('UserStorage claim ledgers', () => {
     userStorage = new UserStorage();
   });
 
-  const ledgers = [
-    ['claimWeeklySummary', 'lastWeeklySummaryAt'],
-    ['claimMissedReminder', 'lastMissedReminderAt'],
-    ['claimRefuelReminder', 'lastRefuelReminderAt'],
-    ['claimLoggingReminder', 'lastLoggingReminderAt'],
-    ['claimWeeklyReviewReminder', 'lastWeeklyReviewReminderAt'],
-    ['claimTodaySession', 'lastTodaySessionAt'],
-    ['claimAnalysisDigest', 'lastAnalysisDigestAt'],
-  ] as const;
+  type Claim = (storage: UserStorage, notBefore: Date, now: Date) => Promise<boolean>;
+  // [claim, the column it stamps, that column's name in the database]
+  const ledgers: readonly (readonly [string, Claim, string, string])[] = [
+    ['claimWeeklySummary', (u, nb, now) => u.claimWeeklySummary('user-1', nb, now), 'lastWeeklySummaryAt', 'last_weekly_summary_at'],
+    ['claimMissedReminder', (u, nb, now) => u.claimMissedReminder('user-1', nb, now), 'lastMissedReminderAt', 'last_missed_reminder_at'],
+    ['claimRefuelReminder', (u, nb, now) => u.claimRefuelReminder('user-1', nb, now), 'lastRefuelReminderAt', 'last_refuel_reminder_at'],
+    ['claimLoggingReminder', (u, nb, now) => u.claimLoggingReminder('user-1', nb, now), 'lastLoggingReminderAt', 'last_logging_reminder_at'],
+    ['claimWeeklyReviewReminder', (u, nb, now) => u.claimWeeklyReviewReminder('user-1', nb, now), 'lastWeeklyReviewReminderAt', 'last_weekly_review_reminder_at'],
+    ['claimTodaySession', (u, nb, now) => u.claimTodaySession('user-1', nb, now), 'lastTodaySessionAt', 'last_today_session_at'],
+    ['claimAnalysisDigest', (u, nb, now) => u.claimAnalysisDigest('user-1', nb, now), 'lastAnalysisDigestAt', 'last_analysis_digest_at'],
+  ];
 
-  it.each(ledgers)('%s stamps and checks %s only', async (method, column) => {
+  it.each(ledgers)('%s stamps and checks only its own column', async (_label, claim, column, dbName) => {
     const now = new Date('2026-08-06T12:00:00Z');
     const notBefore = new Date('2026-08-06T00:00:00Z');
     const returningMock = vi.fn().mockResolvedValue([{ id: 'user-1' }]);
@@ -668,20 +670,19 @@ describe('UserStorage claim ledgers', () => {
     const setMock = vi.fn().mockReturnValue({ where: whereMock });
     vi.mocked(db.update).mockReturnValue({ set: setMock } as never);
 
-    const result = await userStorage[method]('user-1', notBefore, now);
+    const result = await claim(userStorage, notBefore, now);
 
     expect(result).toBe(true);
     expect(setMock).toHaveBeenCalledWith({ [column]: now });
     // `and` is mocked in this file; its second argument is the stamp check.
     const stampCheck = vi.mocked(and).mock.calls[0][1] as SQL;
     const { sql: rendered, params } = new PgDialect().sqlToQuery(stampCheck);
-    const name = users[column].name;
-    expect(rendered).toBe(`("users"."${name}" is null or "users"."${name}" < $1)`);
+    expect(rendered).toBe(`("users"."${dbName}" is null or "users"."${dbName}" < $1)`);
     expect(params).toEqual([notBefore.toISOString()]);
   });
 
   it('covers every last*At ledger column on users', () => {
     const ledgerColumns = Object.keys(users).filter((key) => /^last\w+(Summary|Reminder|Session|Digest)At$/.test(key));
-    expect([...ledgerColumns].sort()).toEqual(ledgers.map(([, column]) => column).sort());
+    expect([...ledgerColumns].sort()).toEqual(ledgers.map(([, , column]) => column).sort());
   });
 });

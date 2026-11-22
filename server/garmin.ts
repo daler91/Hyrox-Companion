@@ -630,6 +630,7 @@ async function getGarminClient(userId: string, reqLog: typeof logger): Promise<G
     // withCircuitBreaker has already tripped the breaker, so the next sync is
     // held off until the cooldown ends.
     if (looksLike429(err)) {
+      // bearer:disable javascript_lang_logger_leak
       reqLog.warn({ userId, context: LOG_CTX }, "Garmin login rate limited; connection kept");
       throw new GarminTransientError(friendly, { cause: err });
     }

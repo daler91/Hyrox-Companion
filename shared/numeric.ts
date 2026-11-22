@@ -13,7 +13,11 @@
 export function median(values: readonly number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+  // An empty list reads NaN on both sides, so the result is NaN as documented.
+  const upper = sorted[mid] ?? Number.NaN;
+  if (sorted.length % 2 !== 0) return upper;
+  const lower = sorted[mid - 1] ?? Number.NaN;
+  return (lower + upper) / 2;
 }
 
 /** `median`, or null for an empty list. */
