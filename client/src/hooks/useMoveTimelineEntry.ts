@@ -5,13 +5,14 @@ import { useCallback } from "react";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { getTodayString } from "@/lib/dateUtils";
 import { queryClient } from "@/lib/queryClient";
-import { mapTimelineCache, type TimelineCache } from "@/lib/timelineCache";
+import type { TimelineCache } from "@/lib/timelineCache";
 import {
   EXERCISE_HISTORY_QUERY_PREFIX,
   WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
 } from "@/lib/workoutInvalidation";
 
 import { useApiMutation } from "./useApiMutation";
+import { buildOptimisticTimelineHandlers } from "./workout-actions/optimisticTimeline";
 
 interface MoveVariables {
   entry: TimelineEntry;
@@ -76,6 +77,13 @@ function invalidateMovedReads(entry: TimelineEntry): Promise<unknown> {
 }
 
 export function useMoveTimelineEntry(selectedPlanId: string | null) {
+  // The same cancel / snapshot / patch / rollback on the selected plan's
+  // timeline cache as the status, log and delete mutations, rather than a
+  // hand-written copy of it. (CH-moveTimeline, REFACTORING_REVIEW 2026-09-23)
+  const moveHandlers = buildOptimisticTimelineHandlers<MoveVariables>(
+    selectedPlanId,
+    (entries, { entry, newDate }) => moveEntryDate(entries, entry.id, newDate),
+  );
   const moveMutation = useApiMutation<unknown, Error, MoveVariables, MoveContext>({
     mutationFn: async ({ entry, newDate }: MoveVariables) => {
       if (entry.workoutLogId) {
@@ -92,28 +100,7 @@ export function useMoveTimelineEntry(selectedPlanId: string | null) {
     successToast: "Workout moved",
     errorToast: "Couldn't move workout",
     onSuccess: (_data, { entry }) => invalidateMovedReads(entry),
-    onMutate: async ({ entry, newDate }) => {
-      await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
-      const previousTimeline = queryClient.getQueryData<TimelineCache>([
-        ...QUERY_KEYS.timeline,
-        selectedPlanId,
-      ]);
-      if (previousTimeline) {
-        queryClient.setQueryData<TimelineCache>(
-          [...QUERY_KEYS.timeline, selectedPlanId],
-          (old) => mapTimelineCache(old, (entries) => moveEntryDate(entries, entry.id, newDate)),
-        );
-      }
-      return { previousTimeline };
-    },
-    onError: (_err, _variables, context) => {
-      if (context?.previousTimeline) {
-        queryClient.setQueryData(
-          [...QUERY_KEYS.timeline, selectedPlanId],
-          context.previousTimeline,
-        );
-      }
-    },
+    ...moveHandlers,
   });
 
   const moveEntry = useCallback(
