@@ -51,8 +51,17 @@ export function getOrCreateDay(
   return day;
 }
 
+/**
+ * Every date from `start` to `end` (YYYY-MM-DD), inclusive. Empty for an
+ * unparseable bound, like `eachDate` in nutrition/blockView.ts: the loop
+ * compares strings, so a malformed `end` would never stop it. Current callers
+ * pass dates the server computed (S-dateRange, REFACTORING_REVIEW 2026-09-23).
+ */
 export function dateRange(start: string, end: string): string[] {
   const result: string[] = [];
+  if (Number.isNaN(Date.parse(`${start}T00:00:00Z`)) || Number.isNaN(Date.parse(`${end}T00:00:00Z`))) {
+    return result;
+  }
   for (let date = start; date <= end; date = addDays(date, 1)) {
     result.push(date);
   }
