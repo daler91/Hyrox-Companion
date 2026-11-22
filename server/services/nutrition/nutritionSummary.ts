@@ -14,6 +14,7 @@ import type { BlockViewPoint } from "@shared/schema";
 
 import { storage } from "../../storage";
 import { getLocalDateStr } from "../../timezone";
+import { trainingLoadAthleteOptions } from "../trainingLoad/types";
 import { calculateTrainingLoad } from "../trainingLoadService";
 import { buildBlockView } from "./blockView";
 import { buildMicroSummary } from "./micros";
@@ -135,17 +136,7 @@ export async function buildNutritionSummary(userId: string): Promise<NutritionSu
 
   const { dailyLoads } = calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {
     currentDate: to,
-    weightUnit: user?.weightUnit || "kg",
-    distanceUnit: user?.distanceUnit || "km",
-    athlete: {
-      age: user?.age ?? null,
-      gender: user?.gender ?? null,
-      restingHr: user?.restingHr ?? null,
-      // Scales unweighted-rep tonnage with the body being moved (audit M2).
-      bodyweightKg: user?.bodyweightKg ?? null,
-      maxHr: user?.maxHr ?? null,
-      ftp: user?.ftp ?? null,
-    },
+    ...trainingLoadAthleteOptions(user),
   });
   const points = buildBlockView(rows, dailyLoads, { from, to });
   const loggedDays = points.filter((p) => p.calories > 0);

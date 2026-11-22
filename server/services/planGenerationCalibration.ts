@@ -20,6 +20,7 @@ import { getLocalDateStrSafe } from "../timezone";
 import { buildExerciseSelectionBrief, type ExerciseSelectionBrief } from "./ai/exerciseSelection";
 import { buildCoverageSources } from "./analyticsService";
 import { buildLoadAnchors, type LoadAnchor } from "./loadAnchors";
+import { trainingLoadAthleteOptions } from "./trainingLoad/types";
 import { calculateTrainingLoad } from "./trainingLoadService";
 import { ADAPTATION_WINDOW_DAYS } from "./workoutEngine/adaptation";
 import { buildWorkoutEnginePlan, type WorkoutEnginePlan } from "./workoutEngine/enginePlan";
@@ -130,17 +131,7 @@ function describeLoadCalibration(
       history.loadTags,
       {
         currentDate: today,
-        weightUnit: user?.weightUnit || "kg",
-        distanceUnit: user?.distanceUnit || "km",
-        athlete: {
-          age: user?.age ?? null,
-          gender: user?.gender ?? null,
-          restingHr: user?.restingHr ?? null,
-          // Scales unweighted-rep tonnage with the body being moved (audit M2).
-          bodyweightKg: user?.bodyweightKg ?? null,
-          maxHr: user?.maxHr ?? null,
-          ftp: user?.ftp ?? null,
-        },
+        ...trainingLoadAthleteOptions(user),
       },
     );
     return {

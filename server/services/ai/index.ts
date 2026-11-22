@@ -19,6 +19,7 @@ import {
 } from "../analyticsService";
 import { computeRaceReadiness } from "../racePrediction/racePredictionService";
 import { calculateBodySystemLoad } from "../trainingLoad/bodySystemLoad";
+import { trainingLoadAthlete } from "../trainingLoad/types";
 import { type AthleteLoadContext, calculateTrainingLoad } from "../trainingLoadService";
 import { getMondayWeekBoundaries } from "../weeklyProgress";
 import type { EngineSet } from "../workoutEngine/loadMath";
@@ -576,15 +577,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   const weeklyVolume =
     weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal, userTimezone) : undefined;
   const progressionFlags = computeProgressionFlags(timeline, weightUnit, distanceUnit);
-  const athlete: AthleteLoadContext = {
-    age: user?.age ?? null,
-    gender: user?.gender ?? null,
-    restingHr: user?.restingHr ?? null,
-    // Scales unweighted-rep tonnage with the body being moved (audit M2).
-    bodyweightKg: user?.bodyweightKg ?? null,
-    maxHr: user?.maxHr ?? null,
-    ftp: user?.ftp ?? null,
-  };
+  const athlete = trainingLoadAthlete(user);
   const loadGovernor = calculateTrainingLoad(loadWorkoutLogs, loadExerciseSets, loadTags, {
     currentDate: today,
     weightUnit,
