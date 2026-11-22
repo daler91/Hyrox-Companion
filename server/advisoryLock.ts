@@ -90,7 +90,7 @@ export async function withPgAdvisoryLock<T>(
           await client.query("SELECT pg_advisory_unlock_all()");
           // `lockName` and `lockKey`
           // are operational constants (cron-job names + numeric advisory-lock
-          // keys defined in server/cron.ts CRON_LOCK_KEYS); no PII or secret
+          // keys defined in server/advisoryLockKeys.ts); no PII or secret
           // material flows through this log line. Matches the existing
           // unflagged pattern in cron.ts.
           // bearer:disable javascript_lang_logger_leak

@@ -545,7 +545,7 @@ Several doc catalogues are enumerations of things the repo registers — pg-boss
 | Assertion | Canonical doc | Source of truth |
 |---|---|---|
 | Every registered pg-boss queue is listed | `docs/integrations.md` § Job Types | `queue.createQueue(...)` / `queue.work(...)` across `server/` |
-| Every cron advisory-lock key is listed | `docs/integrations.md` § Registered Cron Jobs | `CRON_LOCK_KEYS` in `server/cron.ts` |
+| Every cron advisory-lock key is listed | `docs/integrations.md` § Registered Cron Jobs | `CRON_LOCK_KEYS` in `server/advisoryLockKeys.ts` |
 | Every env var is documented | `docs/env-reference.md` | the Zod schema in `server/env.ts` |
 | Every storage domain is in the documented facade | `docs/database.md` § Composed Facade | the `storage` object in `server/storage/index.ts` |
 | Every schema table is documented | `docs/database.md` § Schema Tables | every `pgTable(...)` under `shared/schema/` |

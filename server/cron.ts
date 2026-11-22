@@ -1,6 +1,7 @@
 import cron from "node-cron";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
+import { CRON_LOCK_KEYS } from "./advisoryLockKeys";
 import { STALE_PLAN_GENERATION_THRESHOLD_MS } from "./constants";
 import { pool } from "./db";
 import { runEmailCronJob } from "./emailScheduler";
@@ -56,37 +57,8 @@ export const EMAIL_TICK_MISSED_TOLERANCE_MS = 10 * 60 * 1000;
 /** How long the athlete's own plan-day moves are kept: past the coach's two-week record, then pruned. */
 const PLAN_DAY_MOVE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Advisory-lock key registry for the 42_010_0xx range. RESERVED OUTSIDE THIS
-// MAP: 42_010_009 (KEY_ROTATION_LOCK_KEY, server/services/keyRotation.ts) and
-// 42_010_010 (MIGRATION_ADVISORY_LOCK_KEY, server/maintenance.ts). Next free
-// key: 42_010_022. A collision is SILENT — pg_try_advisory_lock makes the
-// second caller skip its protected work entirely (analyticsRecompute and
-// nutritionEmbeddingBackfill once collided with those reserved slots, letting
-// a running backfill silently skip boot migrations).
-export const CRON_LOCK_KEYS = {
-  // Renamed from `dailyEmail` when the tick went hourly; the numeric key is
-  // unchanged so old and new replicas contend on the same lock mid-deploy.
-  emailScheduler: 42_010_001n,
-  idempotencyCleanup: 42_010_002n,
-  aiUsageCleanup: 42_010_003n,
-  staleAutoCoaching: 42_010_004n,
-  queueDepthTelemetry: 42_010_005n,
-  structuredExerciseRollup: 42_010_006n,
-  startupEmailCatchUp: 42_010_007n,
-  sharedRuntimeCleanup: 42_010_008n,
-  analyticsRecompute: 42_010_011n,
-  nutritionEmbeddingBackfill: 42_010_012n,
-  nutritionReminders: 42_010_013n,
-  ragChunkPrune: 42_010_014n,
-  accountErasureSweep: 42_010_015n,
-  stravaAutoSync: 42_010_016n,
-  stravaWebhookEnsure: 42_010_017n,
-  recycleBinPurge: 42_010_018n,
-  sessionStreamBackfill: 42_010_019n,
-  planDayMovePrune: 42_010_020n,
-  stalePlanGenerations: 42_010_021n,
-} as const;
-
+// Each job's lock key comes from the registry in server/advisoryLockKeys.ts,
+// with every other fixed advisory-lock key, so one test covers them all.
 export async function runCronJobWithLock<T>(
   name: keyof typeof CRON_LOCK_KEYS,
   run: () => Promise<T>,

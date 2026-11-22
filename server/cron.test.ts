@@ -78,7 +78,9 @@ vi.mock("./logger", () => ({
   },
 }));
 
-import { CRON_LOCK_KEYS, EMAIL_TICK_MISSED_TOLERANCE_MS, runCronJobWithLock, startCron, stopCron } from "./cron";
+import * as advisoryLockKeys from "./advisoryLockKeys";
+import { CRON_LOCK_KEYS } from "./advisoryLockKeys";
+import { EMAIL_TICK_MISSED_TOLERANCE_MS, runCronJobWithLock, startCron, stopCron } from "./cron";
 import { runEmailCronJob } from "./emailScheduler";
 import { env } from "./env";
 import { logger } from "./logger";
@@ -110,10 +112,49 @@ function startCronWith(storage: object): (expression: string) => () => Promise<v
 }
 
 describe("cron advisory lock wiring", () => {
-  it("uses distinct stable advisory lock keys for every scheduled job", () => {
-    const lockKeys = Object.values(CRON_LOCK_KEYS);
+  // Every key the registry exports, whether a single constant or a map of
+  // them, so a key added there is covered without editing this test.
+  const allLockKeys = Object.values(advisoryLockKeys).flatMap((entry) =>
+    typeof entry === "bigint" ? [entry] : Object.values(entry),
+  );
 
-    expect(new Set(lockKeys).size).toBe(lockKeys.length);
+  it("uses a distinct advisory lock key for every lock in the registry, cron or not", () => {
+    expect(allLockKeys).toEqual(expect.arrayContaining([
+      ...Object.values(CRON_LOCK_KEYS),
+      advisoryLockKeys.KEY_ROTATION_LOCK_KEY,
+      advisoryLockKeys.MIGRATION_ADVISORY_LOCK_KEY,
+    ]));
+    expect(new Set(allLockKeys).size).toBe(allLockKeys.length);
+  });
+
+  it("never renumbers a lock: old and new replicas contend on these values mid-deploy", () => {
+    expect({
+      ...CRON_LOCK_KEYS,
+      keyRotation: advisoryLockKeys.KEY_ROTATION_LOCK_KEY,
+      migrations: advisoryLockKeys.MIGRATION_ADVISORY_LOCK_KEY,
+    }).toEqual({
+      emailScheduler: 42_010_001n,
+      idempotencyCleanup: 42_010_002n,
+      aiUsageCleanup: 42_010_003n,
+      staleAutoCoaching: 42_010_004n,
+      queueDepthTelemetry: 42_010_005n,
+      structuredExerciseRollup: 42_010_006n,
+      startupEmailCatchUp: 42_010_007n,
+      sharedRuntimeCleanup: 42_010_008n,
+      keyRotation: 42_010_009n,
+      migrations: 42_010_010n,
+      analyticsRecompute: 42_010_011n,
+      nutritionEmbeddingBackfill: 42_010_012n,
+      nutritionReminders: 42_010_013n,
+      ragChunkPrune: 42_010_014n,
+      accountErasureSweep: 42_010_015n,
+      stravaAutoSync: 42_010_016n,
+      stravaWebhookEnsure: 42_010_017n,
+      recycleBinPurge: 42_010_018n,
+      sessionStreamBackfill: 42_010_019n,
+      planDayMovePrune: 42_010_020n,
+      stalePlanGenerations: 42_010_021n,
+    });
   });
 
   it("delegates scheduled work through the requested advisory lock", async () => {

@@ -466,7 +466,7 @@ Idempotent jobs use `DEFAULT_JOB_OPTIONS` (retry 3× with exponential backoff); 
 
 ### Cron Scheduling
 
-`server/cron.ts` uses `node-cron` for in-process scheduled tasks. Each cron body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`) so duplicate schedulers skip work instead of running the same maintenance job twice.
+`server/cron.ts` uses `node-cron` for in-process scheduled tasks. Each cron body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`) so duplicate schedulers skip work instead of running the same maintenance job twice. Every fixed advisory-lock key, the cron keys and the two boot-time locks (key rotation, migrations), lives in `server/advisoryLockKeys.ts`, and one test in `server/cron.test.ts` checks that no two share a value.
 
 **The schedule catalogue lives in [Integrations → Registered Cron Jobs](integrations.md#registered-cron-jobs)** — expression, timezone and advisory lock for each job. As with the queue table above, the copy that used to sit here drifted from it.
 
