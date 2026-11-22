@@ -213,7 +213,8 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `ExerciseProgressionCharts` -- Per-exercise progression chart group used by the Trends tab.
 - `FuellingTab` -- Fuelling tab (nutrition flag only): `IntakeVsTrainingChart` and `FuellingCorrelationCard` over the nutrition block view, loaded by `useFuellingAnalytics`.
 - `SessionGradesTab` -- "Session Quality" tab, with `session-grades/WeeklyGradesChart` and `session-grades/BlockGradesTable`.
-- `chartConstants.ts` -- Shared chart configuration.
+- `chartConstants.ts` -- Shared chart configuration, and the `formatChartDate` / `formatChartDateWithYear` date labels (also used by `PersonalRecordItem` and `MafTrendTab`'s test history).
+- `AnalyticsEmptyState` -- Empty states several tabs share: `AnalyticsEmptyCard` (Fuelling, MAF trend), `AnalyticsEmptyPanel` (Overview, exercise progression) and `ChartEmptyNote` (intake vs training, ACWR trend).
 - `training-overview/` -- Overview-tab building blocks: `OverviewStatsGrid`, `OverviewTrendCharts`, `WeeklyWorkoutsChart`, `BodySystemLoadCard`, the load trend charts (`AcwrTrendChart`, `FormMonotonyTrendCharts`, `ObjectiveLoadTrendCharts`), the AI chart analysis (`OverviewAnalysisHeader` with its Generate / Regenerate button, `ChartExplanation` under each chart, and the `useOverviewAnalysis` hook), and the `useTrainingOverviewData` hook.
 
 ### `coach/` -- AI Coach Panel Components

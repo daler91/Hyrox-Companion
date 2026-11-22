@@ -3,6 +3,7 @@ import { BarChart3 } from "lucide-react";
 import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
+import { AnalyticsEmptyPanel } from "./AnalyticsEmptyState";
 import { AcwrTrendChart } from "./training-overview/AcwrTrendChart";
 import { BodySystemLoadCard } from "./training-overview/BodySystemLoadCard";
 import { FormMonotonyTrendCharts } from "./training-overview/FormMonotonyTrendCharts";
@@ -69,12 +70,9 @@ export function TrainingOverviewTab({ dateParams, range, weeklyGoal }: TrainingO
 
   if (!overview || (overview.weeklySummaries.length === 0 && !hasTrainingLoadData)) {
     return (
-      <div className="flex items-center justify-center py-12 text-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
-        <div>
-          <BarChart3 className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" aria-hidden="true" />
-          <p>No workout data yet. Log some workouts to see your training overview.</p>
-        </div>
-      </div>
+      <AnalyticsEmptyPanel icon={BarChart3}>
+        <p>No workout data yet. Log some workouts to see your training overview.</p>
+      </AnalyticsEmptyPanel>
     );
   }
 

@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { ChartEmptyNote } from "../AnalyticsEmptyState";
 import {
   CHART_CARD_CLASS,
   COLOR_GREEN,
@@ -206,9 +207,7 @@ export const AcwrTrendChart = memo(function AcwrTrendChart({
           </ResponsiveContainer>
         </div>
       ) : (
-        <div className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
-          More logged history is needed before the ACWR trend is meaningful.
-        </div>
+        <ChartEmptyNote>More logged history is needed before the ACWR trend is meaningful.</ChartEmptyNote>
       )}
 
       <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-3">
