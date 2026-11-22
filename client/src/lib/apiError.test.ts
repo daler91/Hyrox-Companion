@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseApiError } from "./apiError";
+import { extractApiErrorCode, extractErrorObjectCode, parseApiError } from "./apiError";
 import { AiBudgetExceededError, RateLimitError } from "./queryClient";
 
 // CL34 (CODEBASE_ANALYSIS_2026-10-03): a shared reading of apiRequest's
@@ -68,5 +68,52 @@ describe("parseApiError", () => {
     ["undefined", undefined],
   ])("is null for %s, which apiRequest never throws", (_name, error) => {
     expect(parseApiError(error)).toBeNull();
+  });
+});
+
+// CH-errorCode (REFACTORING_REVIEW 2026-09-23): one reading of an error's code
+// for the workout save and the plan-day parse.
+describe("extractErrorObjectCode", () => {
+  it.each([
+    ["its own code", { code: "STRUCTURED_ROWS_REQUIRED" }],
+    ["payload.code", { payload: { code: "STRUCTURED_ROWS_REQUIRED" } }],
+    ["response.data.code", { response: { data: { code: "STRUCTURED_ROWS_REQUIRED" } } }],
+  ])("reads %s", (_name, error) => {
+    expect(extractErrorObjectCode(error)).toBe("STRUCTURED_ROWS_REQUIRED");
+  });
+
+  it("prefers its own code, then the payload, then the response", () => {
+    expect(extractErrorObjectCode({ code: "A", payload: { code: "B" }, response: { data: { code: "C" } } })).toBe("A");
+    expect(extractErrorObjectCode({ payload: { code: "B" }, response: { data: { code: "C" } } })).toBe("B");
+  });
+
+  it("does not read the message", () => {
+    expect(extractErrorObjectCode(new Error('400: {"code":"MAF_SETUP_REQUIRED"}'))).toBeNull();
+  });
+
+  it.each([
+    ["a DOMException's numeric code", new DOMException("Request timed out", "TimeoutError")],
+    ["a null response", { response: null }],
+    ["a string", "STRUCTURED_ROWS_REQUIRED"],
+    ["null", null],
+  ])("is null for %s", (_name, error) => {
+    expect(extractErrorObjectCode(error)).toBeNull();
+  });
+});
+
+describe("extractApiErrorCode", () => {
+  it("reads the code the error carries before the message", () => {
+    const error = Object.assign(new Error('400: {"code":"FROM_MESSAGE"}'), { code: "FROM_OBJECT" });
+
+    expect(extractApiErrorCode(error)).toBe("FROM_OBJECT");
+  });
+
+  it("falls back to apiRequest's message", () => {
+    expect(extractApiErrorCode(new Error('400: {"code":"STRUCTURED_ROWS_REQUIRED"}'))).toBe("STRUCTURED_ROWS_REQUIRED");
+  });
+
+  it("is null when neither has one", () => {
+    expect(extractApiErrorCode(new Error("500: Internal Server Error"))).toBeNull();
+    expect(extractApiErrorCode(new TypeError("Failed to fetch"))).toBeNull();
   });
 });

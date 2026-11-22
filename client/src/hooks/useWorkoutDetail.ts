@@ -21,6 +21,7 @@ import {
   type WorkoutReferenceTextPayload,
 } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+import { photoParseErrorToast } from "@/lib/sharedToasts";
 import {
   EXERCISE_HISTORY_QUERY_PREFIX,
   flushWorkoutWriteInvalidation,
@@ -104,16 +105,6 @@ export function mergeServerStructureBlock(
 // pattern in usePlanDayExercises.
 const workoutSetsMutationKey = (workoutId: string) =>
   ["workout-sets", workoutId] as const;
-
-function isTimeoutLikeError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const message = error.message.toLowerCase();
-  return (
-    message.includes("request timed out") ||
-    message.includes("timeouterror") ||
-    message.includes("aborterror")
-  );
-}
 
 function isWorkoutNotFoundError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
@@ -304,13 +295,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     mutationFn: (payload: ParseFromImagePayload) =>
       api.workouts.reparseFromImage(workoutId!, payload),
     invalidateQueries: workoutId ? setReplacementQueryKeys(workoutId) : undefined,
-    errorToast: (error) =>
-      isTimeoutLikeError(error)
-        ? {
-            title: "Parsing took too long — please retry.",
-            description: "The image may still finish in the background. Refresh to check before retaking.",
-          }
-        : { title: "Couldn't parse that photo — try a clearer shot." },
+    errorToast: photoParseErrorToast,
   });
 
   const isHydrating = seedFromPlan.isPending || reparseFreeText.isPending;

@@ -15,8 +15,9 @@ import { useApiMutation } from "@/hooks/useApiMutation";
 import { useExerciseSetsForOwner } from "@/hooks/useExerciseSetsForOwner";
 import { api, type ParseFromImagePayload, type PlanDayReparseTextPayload, QUERY_KEYS } from "@/lib/api";
 import type { ReparseResponse } from "@/lib/api/constants";
-import { parseApiError } from "@/lib/apiError";
+import { extractErrorObjectCode, parseApiError } from "@/lib/apiError";
 import { queryClient } from "@/lib/queryClient";
+import { photoParseErrorToast } from "@/lib/sharedToasts";
 
 // Tag every plan-day set mutation with this key family so useIsMutating
 // can count ALL in-flight writes for the current plan day — not just
@@ -62,16 +63,6 @@ function normalizePlanDayExerciseData(data: PlanDayExerciseQueryData | undefined
   return Array.isArray(data) ? { exerciseSets: data, structureBlocks: [] } : data;
 }
 
-function isTimeoutLikeError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const message = error.message.toLowerCase();
-  return (
-    message.includes("request timed out") ||
-    message.includes("timeouterror") ||
-    message.includes("aborterror")
-  );
-}
-
 type ApiErrorStatusAndCode = { status: number | null; code: string | null };
 type UnknownRecord = Record<string, unknown>;
 
@@ -86,19 +77,12 @@ function extractApiErrorStatus(error: UnknownRecord): number | null {
   return typeof response?.status === "number" ? response.status : null;
 }
 
-function extractApiErrorCode(error: UnknownRecord): string | null {
-  if (typeof error.code === "string") return error.code;
-
-  const payload = toUnknownRecord(error.payload);
-  return typeof payload?.code === "string" ? payload.code : null;
-}
-
 function extractApiErrorStatusAndCode(error: unknown): ApiErrorStatusAndCode {
   const asRecord = toUnknownRecord(error);
   if (!asRecord) return { status: null, code: null };
 
   const status = extractApiErrorStatus(asRecord);
-  const directCode = extractApiErrorCode(asRecord);
+  const directCode = extractErrorObjectCode(asRecord);
   if (directCode) return { status, code: directCode };
 
   // apiRequest's `${status}: ${body}` message, read by the one shared parser
@@ -256,13 +240,7 @@ export function usePlanDayExercises(planDayId: string | null) {
         retry: payload ? () => reparseFromImage.mutate(payload) : null,
       });
     },
-    errorToast: (error) =>
-      isTimeoutLikeError(error)
-        ? {
-            title: "Parsing took too long — please retry.",
-            description: "The image may still finish in the background. Refresh to check before retaking.",
-          }
-        : { title: "Couldn't parse that photo — try a clearer shot." },
+    errorToast: photoParseErrorToast,
   });
 
   const planData = useMemo(() => normalizePlanDayExerciseData(exercisesQuery.data), [exercisesQuery.data]);
