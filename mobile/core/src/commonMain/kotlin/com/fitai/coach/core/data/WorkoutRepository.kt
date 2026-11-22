@@ -17,6 +17,7 @@ import com.fitai.coach.core.api.generated.UpdateWorkoutRequest
 import com.fitai.coach.core.api.generated.WorkoutLatest
 import com.fitai.coach.core.api.generated.WorkoutLogDetail
 import com.fitai.coach.core.api.generated.WorkoutLogWithSets
+import com.fitai.coach.core.structure.requireValidStructure
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -306,9 +307,15 @@ public class WorkoutRepository(
      * timeout) is it queued, under the same idempotency key, so a request that
      * did reach the server isn't applied twice.
      *
+     * Its structure is linted first, as the web's save does and the server
+     * will: a workout the server would refuse is neither sent nor queued, so
+     * an offline save never waits in the outbox only to fail on replay.
+     *
+     * @throws com.fitai.coach.core.structure.StructureLintException when the structure has schema errors.
      * @throws com.fitai.coach.core.api.ApiException when the server refuses it.
      */
     public suspend fun logWorkout(request: CreateWorkoutRequest): LogResult {
+        request.requireValidStructure()
         val key = newKey()
         return try {
             val body = encode(CreateWorkoutRequest.serializer(), request)
