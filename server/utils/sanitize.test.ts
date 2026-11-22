@@ -1,6 +1,6 @@
 import { describe, expect,it } from "vitest";
 
-import { createStreamingOutputValidator, formatZodIssues, sanitizeForLog, sanitizeUserInput, validateAiOutput } from "./sanitize";
+import { ampersandsToAnd, createStreamingOutputValidator, formatZodIssues, sanitizeForLog, sanitizeUserInput, validateAiOutput } from "./sanitize";
 
 describe("sanitizeUserInput", () => {
   it("should replace XML tags to prevent prompt injection", () => {
@@ -17,6 +17,13 @@ describe("sanitizeUserInput", () => {
 
   it("escapes ampersands but leaves quotes and apostrophes as typed", () => {
     expect(sanitizeUserInput(`I can't do "deep" lunges & squats`)).toBe(`I can't do "deep" lunges &amp; squats`);
+  });
+});
+
+describe("ampersandsToAnd", () => {
+  it("writes every ampersand as and, and leaves the rest as it is", () => {
+    expect(ampersandsToAnd("Sleds & wall balls & burpees")).toBe("Sleds and wall balls and burpees");
+    expect(ampersandsToAnd("No change: <b> \"quoted\"")).toBe("No change: <b> \"quoted\"");
   });
 });
 

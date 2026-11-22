@@ -28,7 +28,7 @@ import { generateJsonText } from "../../ai/providers";
 import { logger as defaultLogger } from "../../logger";
 import { storage } from "../../storage";
 import { getLocalDateStrSafe } from "../../timezone";
-import { formatZodIssues } from "../../utils/sanitize";
+import { ampersandsToAnd, formatZodIssues } from "../../utils/sanitize";
 import { resolveAiBlocker } from "../aiGate";
 import { calculateTrainingLoad, type TrainingLoadSet } from "../trainingLoadService";
 import {
@@ -405,7 +405,7 @@ function buildAiResponse(
     overallConfidence: ai.overallConfidence,
     // Plain text rendered as markdown on the client (rehypeSanitize). Match the
     // repo convention of swapping "&" → "and" to avoid stray HTML entities.
-    narrative: ai.narrative.replaceAll("&", "and").trim().slice(0, 1200),
+    narrative: ampersandsToAnd(ai.narrative).trim().slice(0, 1200),
     division: features.division,
     gender: storedGender,
     genderAssumed: features.genderAssumed,

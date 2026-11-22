@@ -20,7 +20,7 @@ import { formatMafContext } from "../prompts/mafContext";
 import { buildNutritionSection } from "../prompts/nutritionContext";
 import { priorAiContextParts } from "../prompts/priorAiContext";
 import { formatTrainingTargets } from "../prompts/workoutEngine";
-import { formatZodIssues, sanitizeForLog, sanitizeUserInput } from "../utils/sanitize";
+import { ampersandsToAnd, formatZodIssues, sanitizeForLog, sanitizeUserInput } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
 export interface SuggestionPromptOptions {
@@ -173,9 +173,9 @@ export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
     // Pre-encoding here was leaking `&#39;` into the UI as literal chars.
     (item) => ({
       ...item,
-      recommendation: item.recommendation.replaceAll("&", "and"),
-      rationale: item.rationale.replaceAll("&", "and"),
-      workoutFocus: item.workoutFocus.replaceAll("&", "and"),
+      recommendation: ampersandsToAnd(item.recommendation),
+      rationale: ampersandsToAnd(item.rationale),
+      workoutFocus: ampersandsToAnd(item.workoutFocus),
     }),
     "[gemini] Dropping invalid suggestion:",
   );
@@ -464,7 +464,7 @@ export function parseAndValidateReviewNotes(text: string): ReviewNote[] {
     (note) => ({
       workoutId: note.workoutId,
       // Plain text — rendered via React, no HTML encoding needed.
-      note: note.note.replaceAll("&", "and").slice(0, 400),
+      note: ampersandsToAnd(note.note).slice(0, 400),
     }),
     "[gemini] Dropping invalid review note:",
   );
