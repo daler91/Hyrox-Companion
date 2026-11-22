@@ -67,7 +67,7 @@ const ATHLETE = "unlink-edges-athlete";
 const DAY_DATE = "2026-06-01";
 const NEXT_DATE = "2026-06-02";
 
-/** The set routes' use case on the real storage, as workoutsCrud.routes wires it. */
+/** The set routes' use case on the real storage, as routes/_helpers/exerciseSetUseCase.ts wires it. */
 const setRoutes = createMutateExerciseSetUseCase({
   updateSet: (owner, setId, body, userId) => storage.workouts.mutateExerciseSetUpdate(owner, setId, body, userId),
   addSet: (owner, body, userId) => storage.workouts.mutateExerciseSetAdd(owner, body, userId),
