@@ -18,6 +18,8 @@
  * Nothing here writes. It answers a question; the answer is a decision.
  */
 
+import { median } from "@shared/numeric";
+
 /** kg -> lbs. The same constant `unitConversion` uses, restated so a change
  *  there cannot silently retune the detector. */
 const KG_TO_LBS = 2.20462;
@@ -60,12 +62,6 @@ export interface DetectedSwitch {
   readonly direction: "up" | "down";
   readonly expectedFactor: number;
   readonly evidence: readonly SwitchEvidence[];
-}
-
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
 function withinTolerance(ratio: number, factor: number): boolean {

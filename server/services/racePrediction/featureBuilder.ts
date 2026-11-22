@@ -37,6 +37,7 @@
  *    converted INTO that same unit (`kgToUserWeight`, the sanctioned direction)
  *    and compared there.
  */
+import { clamp, medianOrNull } from "@shared/numeric";
 import {
   type Division,
   type Gender,
@@ -122,22 +123,11 @@ export interface AthleteProfileInput {
   ageGroup?: string | null;
 }
 
-function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-}
-
 function daysSince(dateStr: string, now: Date): number | null {
   const then = Date.parse(`${dateStr}T00:00:00Z`);
   if (Number.isNaN(then)) return null;
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   return Math.max(0, Math.round((today - then) / 86_400_000));
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
 
 // --- Race-realism model -----------------------------------------------------
@@ -343,8 +333,8 @@ function accumulateSetMetrics(
     }
   }
 
-  // median() is non-null here because every bucket has at least one split.
-  const sessionTimesSeconds = Array.from(sessionSplits.values(), (splits) => median(splits)!);
+  // medianOrNull() is non-null here because every bucket has at least one split.
+  const sessionTimesSeconds = Array.from(sessionSplits.values(), (splits) => medianOrNull(splits)!);
   return { sessionTimesSeconds, bestSeconds, maxLoad, mostRecent };
 }
 
@@ -376,7 +366,7 @@ function buildSegmentFeature(
     exerciseName,
     kind,
     bestSeconds,
-    medianSeconds: median(sessionTimesSeconds),
+    medianSeconds: medianOrNull(sessionTimesSeconds),
     sampleSize: sessionTimesSeconds.length,
     lastTrainedDaysAgo: mostRecent ? daysSince(mostRecent, now) : null,
     loggedLoadUserUnit,

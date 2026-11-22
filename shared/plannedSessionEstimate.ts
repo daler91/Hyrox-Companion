@@ -17,6 +17,7 @@
  * tighter low-evidence ceiling).
  */
 
+import { clamp } from "./numeric";
 import { EXERCISE_DEFINITIONS, type ExerciseName, normalizeExerciseName } from "./schema/exercises";
 import { storedDistanceToMetersStamped } from "./unitConversion";
 
@@ -233,10 +234,6 @@ const CATEGORY_RPE: Record<string, number> = {
 };
 
 const FALLBACK_RPE = 5;
-
-function clamp(n: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, n));
-}
 
 /** First strictly-positive, finite value among the candidates, or null. */
 function firstPositive(...values: Array<number | null | undefined>): number | null {

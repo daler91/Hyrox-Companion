@@ -9,6 +9,8 @@
  * samples honest, and the output is framed as an association, not causation.
  */
 
+import { round1 } from "./numeric";
+
 export interface FuellingCorrelationDay {
   /** Calories logged that day (kcal). 0 means no food was logged. */
   calories: number;
@@ -47,10 +49,6 @@ export interface FuellingCorrelationResult {
 export const CARB_HIT_RATIO = 0.9;
 /** Each bucket needs this many days before a comparison is reported. */
 export const MIN_DAYS_PER_BUCKET = 3;
-
-function round1(n: number): number {
-  return Math.round(n * 10) / 10;
-}
 
 function mean(values: readonly number[]): number {
   return values.reduce((acc, v) => acc + v, 0) / values.length;

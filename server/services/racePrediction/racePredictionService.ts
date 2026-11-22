@@ -12,6 +12,7 @@
  * server/services/aiSuggestionService.ts.
  */
 import { addDaysToISODate } from "@shared/dateUtils";
+import { clamp } from "@shared/numeric";
 import { deriveAgeGroupFromAge, type HyroxStation, RACE_SEGMENTS } from "@shared/raceSpec";
 import type {
   RacePredictionAiUnavailableReason,
@@ -79,10 +80,6 @@ const racePredictionAiSchema = z.object({
   overallConfidence: z.enum(["low", "medium", "high"]),
   narrative: z.string().max(2000),
 });
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
 
 function normalizeStoredGender(gender: string | null | undefined): StoredGender {
   return gender === "male" || gender === "female" || gender === "prefer_not_to_say" ? gender : null;

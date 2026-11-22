@@ -14,6 +14,7 @@
 
 // Atwater factors live in ONE place so a target and a logged total can never be
 // computed against different ones (the L6 lesson, applied before it could bite).
+import { round1 } from "./numeric";
 import { KCAL_PER_G_CARB, KCAL_PER_G_FAT, KCAL_PER_G_PROTEIN } from "./nutritionScaling";
 
 export type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active";
@@ -52,10 +53,6 @@ export const ABSOLUTE_CALORIE_FLOOR = CALORIE_FLOOR_FEMALE;
 
 function roundKcal(n: number): number {
   return Math.round(n);
-}
-
-function round1(n: number): number {
-  return Math.round(n * 10) / 10;
 }
 
 export interface BmrInput {

@@ -15,6 +15,7 @@
  * they log a harder run, the estimate rises to meet it.
  */
 import { addDaysToISODate } from "@shared/dateUtils";
+import { median } from "@shared/numeric";
 import type { TrainingPhase } from "@shared/nutritionTargets";
 import { storedDistanceToMetersStamped } from "@shared/unitConversion";
 
@@ -190,13 +191,6 @@ export function collectRunEfforts(
     if (effort) efforts.push(effort);
   }
   return efforts;
-}
-
-function median(values: readonly number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  const upper = sorted.at(mid) ?? 0;
-  return sorted.length % 2 === 0 ? ((sorted.at(mid - 1) ?? upper) + upper) / 2 : upper;
 }
 
 /**

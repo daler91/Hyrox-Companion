@@ -1,3 +1,4 @@
+import { round1 } from "@shared/numeric";
 import type { Food, NutritionMacroTotals, RecipeWithIngredients } from "@shared/schema";
 import { Loader2, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -61,8 +62,6 @@ function per100FromNutrition(n: NutritionMacroTotals, quantityG: number): Nutrit
     fiber: n.fiber * f,
   };
 }
-
-const round1 = (v: number) => Math.round(v * 10) / 10;
 
 function RecipeBuilderForm({
   initial,

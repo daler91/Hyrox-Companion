@@ -1,3 +1,4 @@
+import { round1 } from "@shared/numeric";
 import type { MicroDisplayDef, MicroSummaryRow, MicroUnit } from "@shared/schema";
 
 import { type LogEntryWithFood, sumMicros } from "./rollup";
@@ -38,10 +39,6 @@ export const MICRO_DEFS: readonly MicroDef[] = [
 
 // OFF `*_100g` values are in grams; multiply to reach the stored unit.
 export const OFF_GRAMS_TO_UNIT: Record<MicroUnit, number> = { mg: 1000, mcg: 1_000_000 };
-
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
-}
 
 /**
  * Build the day's micronutrient summary (FR-5.1): for each curated micro the
