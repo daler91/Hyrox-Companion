@@ -64,4 +64,23 @@ describe("useTimelinePageController annotation delete", () => {
     expect(keys).toContainEqual(QUERY_KEYS.timeline);
     expect(keys).toContainEqual(QUERY_KEYS.timelineAnnotations);
   });
+
+  // The dialog's delete and this one share useDeleteTimelineAnnotation
+  // (CH-annotationDelete, REFACTORING_REVIEW 2026-09-23).
+  it("says the delete failed when the request does", async () => {
+    mocks.deleteAnnotation.mockImplementationOnce(() => Promise.reject(new Error("500: boom")));
+    const { result } = renderController();
+
+    act(() => {
+      result.current.handleDeleteAnnotation("ann-1");
+    });
+
+    await waitFor(() => {
+      expect(mocks.toast).toHaveBeenCalledWith({
+        title: "Couldn't delete annotation",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    });
+  });
 });
