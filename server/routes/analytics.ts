@@ -1,5 +1,3 @@
-import crypto from "node:crypto";
-
 import { dateStringSchema, type RacePredictionResponse, type User, weeklyReviewIntentSchema, type WorkoutLog } from "@shared/schema";
 import { sql } from "drizzle-orm";
 import { type NextFunction, type Request as ExpressRequest, type Request, type Response,Router } from "express";
@@ -21,6 +19,7 @@ import { storage } from "../storage";
 import type { SlimLoggedExerciseSet } from "../storage/shared";
 import { getLocalDateStrSafe } from "../timezone";
 import { getUserId } from "../types";
+import { safeEqualDigest } from "../utils/safeEqualDigest";
 import { protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
@@ -96,9 +95,7 @@ async function parseDateParams(
 
 function secretsMatch(provided: string | undefined, expected: string | undefined): boolean {
   if (!provided || !expected) return false;
-  const providedHash = crypto.createHash("sha256").update(provided).digest();
-  const expectedHash = crypto.createHash("sha256").update(expected).digest();
-  return crypto.timingSafeEqual(providedHash, expectedHash);
+  return safeEqualDigest(provided, expected);
 }
 
 function requireInternalAnalyticsSecret(req: ExpressRequest, res: Response, next: NextFunction): void {

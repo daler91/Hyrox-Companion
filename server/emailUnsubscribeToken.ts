@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 import { env } from "./env";
+import { safeEqualDigest } from "./utils/safeEqualDigest";
 
 /**
  * Signed, login-free unsubscribe links for every outbound email.
@@ -62,7 +63,7 @@ export function createUnsubscribeToken(userId: string): string {
  */
 export function verifyUnsubscribeToken(token: unknown): { userId: string } | null {
   // Shape checks only — the signature's value is compared in constant time by
-  // timingSafeEqual below, never here.
+  // safeEqualDigest below, never here.
   // bearer:disable javascript_lang_observable_timing
   if (typeof token !== "string" || token.length === 0 || token.length > 512) return null;
   const parts = token.split(".");
@@ -73,12 +74,9 @@ export function verifyUnsubscribeToken(token: unknown): { userId: string } | nul
   const userId = Buffer.from(encodedUserId, "base64url").toString("utf8");
   if (userId.length === 0) return null;
 
-  // Hash both sides so timingSafeEqual sees equal lengths whatever the input
-  // (same shape as verifySignedState in strava.ts).
-  const providedHash = crypto.createHash("sha256").update(signature).digest();
+  // Constant time against each key's signature, whatever the input's length.
   for (const key of verificationKeys()) {
-    const expectedHash = crypto.createHash("sha256").update(sign(userId, key)).digest();
-    if (crypto.timingSafeEqual(providedHash, expectedHash)) return { userId };
+    if (safeEqualDigest(signature, sign(userId, key))) return { userId };
   }
   return null;
 }

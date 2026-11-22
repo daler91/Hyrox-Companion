@@ -1,4 +1,4 @@
-import { parseRetryAfter, RetryableHttpError } from "../../utils/httpRetry";
+import { throwIfRetryableStatus } from "../../utils/httpRetry";
 
 /**
  * Small shared helpers for the external nutrition clients (USDA, OFF, Edamam).
@@ -42,9 +42,7 @@ export async function providerGetJson<T>(
   const timeout = AbortSignal.timeout(timeoutMs);
   const sig = signal ? AbortSignal.any([signal, timeout]) : timeout;
   const res = await fetch(url, { headers: { Accept: "application/json" }, signal: sig });
-  if (res.status === 429 || res.status >= 500) {
-    throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
-  }
+  throwIfRetryableStatus(res);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`${errorPrefix} with HTTP ${res.status}`);
   return (await res.json()) as T;

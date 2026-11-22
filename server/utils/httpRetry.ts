@@ -30,6 +30,18 @@ export class RetryableHttpError extends Error {
   }
 }
 
+/**
+ * Throw a RetryableHttpError, carrying the Retry-After hint, when a response is
+ * a 429 or a 5xx, so `retryWithJitter` retries it. Any other status returns for
+ * the caller to interpret; what a 401 or a 404 means differs per endpoint. Nine
+ * call sites wrote this check by hand (R6, REFACTORING_REVIEW 2026-09-23).
+ */
+export function throwIfRetryableStatus(res: { status: number; headers: Pick<Headers, "get"> }): void {
+  if (res.status === 429 || res.status >= 500) {
+    throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("retry-after")));
+  }
+}
+
 // Transient socket / DNS failures and request timeouts worth a retry. Node's
 // fetch surfaces low-level errors as a TypeError whose `cause` carries the
 // errno code; AbortSignal.timeout() rejects with a DOMException named

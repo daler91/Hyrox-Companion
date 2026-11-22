@@ -1,5 +1,3 @@
-import crypto from "node:crypto";
-
 import { type Request as ExpressRequest, type Response,Router } from "express";
 
 import { checkAndSendEmailsForUser, runEmailCronJob } from "../emailScheduler";
@@ -7,6 +5,7 @@ import { env } from "../env";
 import { asyncHandler, rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
+import { safeEqualDigest } from "../utils/safeEqualDigest";
 import { protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
@@ -33,12 +32,8 @@ router.get("/api/v1/cron/emails", rateLimiter("cronEmails", 10, 60_000), asyncHa
     return res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
   }
 
-  // Use timingSafeEqual with hashed values to prevent timing attacks
-  // and safely handle different string lengths.
-  const secretHash = crypto.createHash("sha256").update(secret).digest();
-  const cronSecretHash = crypto.createHash("sha256").update(cronSecret).digest();
-
-  if (!crypto.timingSafeEqual(secretHash, cronSecretHash)) {
+  // Constant time, and safe for a header of any length.
+  if (!safeEqualDigest(secret, cronSecret)) {
     return res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
   }
     const result = await runEmailCronJob(storage);

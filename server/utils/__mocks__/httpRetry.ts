@@ -2,14 +2,14 @@ import { vi } from "vitest";
 
 /**
  * Manual mock for `server/utils/httpRetry`, loaded when a spec calls the bare
- * `vi.mock("../../utils/httpRetry")`. It keeps the real error class and the
- * transient-error classifiers, and only replaces `retryWithJitter` with a
+ * `vi.mock("../../utils/httpRetry")`. It keeps the real error class, the
+ * retryable-status check and the transient-error classifiers, and only replaces `retryWithJitter` with a
  * delay-free loop so retry-path tests run instantly while still honoring each
  * call's `retries` and the real "is this retryable?" decision.
  */
 const actual = await vi.importActual<typeof import("../httpRetry")>("../httpRetry");
 
-export const { RetryableHttpError, isTransientNetworkError, parseRetryAfter } = actual;
+export const { RetryableHttpError, isTransientNetworkError, parseRetryAfter, throwIfRetryableStatus } = actual;
 
 export const retryWithJitter = async (
   fn: () => Promise<unknown>,

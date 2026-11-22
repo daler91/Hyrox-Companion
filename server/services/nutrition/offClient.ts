@@ -1,5 +1,5 @@
 import { env } from "../../env";
-import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
+import { retryWithJitter, throwIfRetryableStatus } from "../../utils/httpRetry";
 import { MICRO_DEFS, OFF_GRAMS_TO_UNIT } from "./micros";
 import type { MappedFood } from "./types";
 import { num } from "./utils";
@@ -187,9 +187,7 @@ async function offFetch(url: string, signal?: AbortSignal): Promise<Response> {
     headers: { "User-Agent": OFF_USER_AGENT, Accept: "application/json" },
     signal: sig,
   });
-  if (res.status === 429 || res.status >= 500) {
-    throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
-  }
+  throwIfRetryableStatus(res);
   return res;
 }
 

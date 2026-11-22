@@ -1,5 +1,5 @@
 import { env } from "../../env";
-import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
+import { retryWithJitter, throwIfRetryableStatus } from "../../utils/httpRetry";
 import { MICRO_DEFS } from "./micros";
 import type { MappedFood } from "./types";
 import { OZ_TO_GRAMS } from "./utils";
@@ -245,9 +245,7 @@ export async function searchUsdaFoods(
         body,
         signal,
       });
-      if (res.status === 429 || res.status >= 500) {
-        throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
-      }
+      throwIfRetryableStatus(res);
       if (!res.ok) {
         throw new Error(`USDA search failed with HTTP ${res.status}`);
       }
@@ -291,9 +289,7 @@ async function fetchUsdaDetail<T>(fdcId: string, opts: { signal?: AbortSignal })
       const timeout = AbortSignal.timeout(USDA_TIMEOUT_MS);
       const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
       const res = await fetch(url, { signal });
-      if (res.status === 429 || res.status >= 500) {
-        throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
-      }
+      throwIfRetryableStatus(res);
       if (!res.ok) throw new Error(`USDA detail failed with HTTP ${res.status}`);
       return (await res.json()) as T;
     },

@@ -112,7 +112,7 @@ The OAuth state parameter serves as a CSRF token. It is structured as `userId:ti
 - `nonce` is 8 random bytes (hex)
 - `signature` is a full 256-bit HMAC-SHA256 over the payload
 
-Verification uses timing-safe comparison by hashing both the received and expected signatures with SHA-256, then comparing with `crypto.timingSafeEqual`. This prevents timing attacks and safely handles inputs of different lengths.
+Verification uses timing-safe comparison by hashing both the received and expected signatures with SHA-256, then comparing with `crypto.timingSafeEqual` (`safeEqualDigest()` in `server/utils/safeEqualDigest.ts`, which every secret and signature compare on the server shares). This prevents timing attacks and safely handles inputs of different lengths.
 
 States are additionally **single-use**: once a callback has passed the signature, age and binding checks, and before the code is exchanged, the state is claimed in the `server_runtime_cache` table (TTL = the state max age, swept by the shared-runtime cleanup cron), so replaying a valid state fails even inside the 10-minute window.
 
