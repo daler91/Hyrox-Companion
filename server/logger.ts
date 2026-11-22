@@ -92,14 +92,6 @@ export const logger = pino({
   },
 });
 
-export function getContextLogger() {
-  const ctx = getRequestContext();
-  if (ctx) {
-    return logger.child({ requestId: ctx.requestId, userId: ctx.userId });
-  }
-  return logger;
-}
-
 /**
  * Prefer the per-request child logger attached by pino-http, which carries the
  * request id. Its `userId` binding is always 'anonymous': pino-http binds it at

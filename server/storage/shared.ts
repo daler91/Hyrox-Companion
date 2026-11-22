@@ -1,14 +1,59 @@
 import {
   type ExerciseSet,
   type InsertExerciseSet,
+  planDays,
   type StructureBlockInput,
+  trainingPlans,
+  users,
   workoutLogs,
 } from "@shared/schema";
 import { stampForPreferences, type UnitPreferences } from "@shared/unitConversion";
 import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
 
-import { db } from "../db";
+import { db, type DbExecutor } from "../db";
 import { logger } from "../logger";
+import { getLocalDateStrSafe } from "../timezone";
+
+/**
+ * The athlete's own calendar date — NOT the server's — degrading to UTC for an
+ * unusable zone. "Today" decides whether a scheduled plan day reads as
+ * `planned` or `missed` and when a superseded plan retires, so a UTC date told
+ * every athlete west of UTC that today's session was already missed as soon as
+ * UTC rolled over (from 17:00 for California), and retired a plan a day early.
+ * Pass `executor` to read inside a transaction. One copy for the plan and
+ * timeline storage and plan generation, which each had their own
+ * (C-resolveUserToday, REFACTORING_REVIEW 2026-09-23).
+ */
+export async function resolveUserToday(userId: string, executor: DbExecutor = db): Promise<string> {
+  const user = await executor.query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { userTimezone: true },
+  });
+  return getLocalDateStrSafe(new Date(), user?.userTimezone);
+}
+
+/**
+ * Whether `planDayId` names a plan day in a training plan the athlete owns:
+ * the IDOR guard on plan-day reads and writes, so a caller can't reach another
+ * tenant's plan. A missing or blank id owns nothing. Pass `executor` to check
+ * inside a transaction. One copy for the workout and recycle-bin storage and,
+ * through `storage.plans.ownsPlanDay`, the workout create route and use case,
+ * which each had their own (C-ownsPlanDay, REFACTORING_REVIEW 2026-09-23).
+ */
+export async function ownsPlanDay(
+  planDayId: string | null | undefined,
+  userId: string,
+  executor: DbExecutor = db,
+): Promise<boolean> {
+  if (!planDayId?.trim()) return false;
+  const [row] = await executor
+    .select({ id: planDays.id })
+    .from(planDays)
+    .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+    .where(and(eq(planDays.id, planDayId), eq(trainingPlans.userId, userId)))
+    .limit(1);
+  return Boolean(row);
+}
 
 /**
  * Maps a prescribed ExerciseSet row into an InsertExerciseSet for a workout

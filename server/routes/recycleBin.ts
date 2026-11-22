@@ -42,8 +42,6 @@ function sendRestoreOutcome(
   switch (result.reason) {
     case "not_found":
       return sendNotFound(res, result.message);
-    case "plan_overlap":
-      return res.status(409).json({ error: result.message, code: ErrorCode.PLAN_OVERLAP });
     case "id_conflict":
     case "device_activity_reimported":
       return res.status(409).json({ error: result.message, code: ErrorCode.RECYCLE_BIN_CONFLICT });

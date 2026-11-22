@@ -21,6 +21,7 @@
  * The numbers are coaching guidance (the daily target split, with the session
  * anchors placed first) — not prescriptions.
  */
+import { clamp, round1 } from "./numeric";
 import { KCAL_PER_G } from "./nutritionScaling";
 import type { MealType } from "./schema/tables";
 
@@ -161,14 +162,6 @@ function resolveTimingPlan(timing: WorkoutTiming): TimingPlan | null {
     default:
       return null;
   }
-}
-
-function round1(n: number): number {
-  return Math.round(n * 10) / 10;
-}
-
-function clamp(n: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, n));
 }
 
 /** Split a total across meals by (renormalised) weights, rounded to 0.1g. */

@@ -41,39 +41,19 @@ import { dateRange, getOrCreateDay, round } from "./trainingLoad/utils";
 // workout (trainingLoad/stressScores.ts), attributes load to the injury vectors,
 // runs the EWMA / ACWR / monotony pass (trainingLoad/loadDynamics.ts) and builds
 // the overview with its vector restrictions. The taxonomy and the physiology
-// live in trainingLoad/*; every symbol this module used to export is re-exported
-// below so importers and test mocks keep addressing it here (audit A7).
+// live in trainingLoad/*. Only what production code imports from here is
+// re-exported (audit A7); tests import the rest from the module that defines
+// it (S-testOnlyExports, REFACTORING_REVIEW 2026-09-23).
 //
 // CALIBRATION COUPLING. The vector thresholds and restriction windows below are
 // read against the UTSS scale defined in trainingLoad/stressScores.ts and
 // trainingLoad/hrModel.ts. Do not move them without checking that scale.
-export {
-  classifyHrZone,
-  estimateHrMax,
-  estimateLthr,
-  hrIntensityFactor,
-  hrReserveRatio,
-  hrTss,
-  hrZoneBoundaries,
-  powerIntensityFactor,
-  powerTss,
-} from "./trainingLoad/hrModel";
-export { EWMA_WARMUP_DAYS, monotonyZone, resolveAcwrZone } from "./trainingLoad/loadDynamics";
-export {
-  bodyweightRepLoadKg,
-  calculateCardioStressScore,
-  calculateStrengthStressScore,
-} from "./trainingLoad/stressScores";
+export { EWMA_WARMUP_DAYS } from "./trainingLoad/loadDynamics";
 export {
   type AthleteLoadContext,
   type DailyTrainingLoad,
-  DEFAULT_EXERCISE_LOAD_TAGS,
-  type ExerciseLoadTagInput,
-  LOAD_VECTOR_KEYS,
   type LoadGovernorSuggestion,
-  type LoadVector,
   type PromptExerciseForLoad,
-  type TrainingLoadComputation,
   type TrainingLoadSet,
   type UpcomingWorkoutForLoad,
 } from "./trainingLoad/types";

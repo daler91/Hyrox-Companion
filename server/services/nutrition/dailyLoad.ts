@@ -5,6 +5,7 @@ import type { WorkoutLog } from "@shared/schema";
 
 import { storage } from "../../storage";
 import { computePlanPhase } from "../ai/coachingInsights";
+import { trainingLoadAthleteOptions } from "../trainingLoad/types";
 import { calculateTrainingLoad, type DailyTrainingLoad, EWMA_WARMUP_DAYS } from "../trainingLoadService";
 import type { DailyUtss } from "./blockView";
 
@@ -38,17 +39,7 @@ function scoreDailyLoads(
     // Declares the true extent of what was fetched, so the EWMAs are withheld
     // rather than restarted if this range is ever narrowed again (audit H21).
     historyFrom,
-    weightUnit: user?.weightUnit || "kg",
-    distanceUnit: user?.distanceUnit || "km",
-    athlete: {
-      age: user?.age ?? null,
-      gender: user?.gender ?? null,
-      restingHr: user?.restingHr ?? null,
-      // Scales unweighted-rep tonnage with the body being moved (audit M2).
-      bodyweightKg: user?.bodyweightKg ?? null,
-      maxHr: user?.maxHr ?? null,
-      ftp: user?.ftp ?? null,
-    },
+    ...trainingLoadAthleteOptions(user),
   }).dailyLoads;
 }
 

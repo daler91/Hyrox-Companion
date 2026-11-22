@@ -1,3 +1,4 @@
+import { round1 } from "@shared/numeric";
 import { cmToFtIn, ftInToCm, kgToUserWeight, standardizeWeightUnit, userWeightToKg } from "@shared/unitConversion";
 import { useEffect, useRef, useState } from "react";
 
@@ -6,10 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 import { PreferenceSelectRow } from "./PreferenceRows";
-
-function round1(n: number): number {
-  return Math.round(n * 10) / 10;
-}
 
 /**
  * Controlled numeric input that edits a CANONICAL value (kg/cm) through a

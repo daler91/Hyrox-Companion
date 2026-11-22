@@ -317,12 +317,13 @@ app.use(function bindRequestContext(req, _res, next) {
   // context but could never resolve, for two independent reasons: the ordering
   // above, and the @clerk/express v2 contract change that broke the rate-limit
   // key (see resolveAuthUserId in server/routeUtils.ts). Dropped rather than
-  // reworked because `RequestContext.userId`'s only reader, getContextLogger(),
-  // currently has no call sites — pino's mixin() deliberately omits userId to
-  // keep PII out of high-volume logs (S2). Wiring it up would mean either
-  // moving this binding below setupAuth (costing /api/v1/health its requestId)
-  // or having isAuthenticated write userId into the live context object; do
-  // that alongside the first real consumer, not speculatively.
+  // reworked because nothing reads `RequestContext.userId` (its one reader,
+  // getContextLogger(), had no call sites and was removed) — pino's mixin()
+  // deliberately omits userId to keep PII out of high-volume logs (S2).
+  // Wiring it up would mean either moving this binding below setupAuth
+  // (costing /api/v1/health its requestId) or having isAuthenticated write
+  // userId into the live context object; do that alongside the first real
+  // consumer, not speculatively.
   runWithRequestContext({ requestId: reqWithId.id ?? "" }, () => next());
 });
 

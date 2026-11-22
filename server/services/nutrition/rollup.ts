@@ -25,9 +25,9 @@ export type LogEntryWithFood = FoodLogEntry & { food: Food };
 
 // The scaling rule itself now lives in `@shared/nutritionScaling` so the CLIENT
 // can apply it too. It used to be here alone, which left the client scaling
-// already-rounded totals and disagreeing with the server (audit M22). Re-exported
-// so every existing server call site is unchanged.
-export { addInto, emptyTotals, roundMacros, scaleNutrition } from "@shared/nutritionScaling";
+// already-rounded totals and disagreeing with the server (audit M22). The two
+// that server call sites import from here are re-exported.
+export { roundMacros, scaleNutrition } from "@shared/nutritionScaling";
 
 function emptyMeals(): Record<MealType, FoodLogEntryWithNutrition[]> {
   const meals = {} as Record<MealType, FoodLogEntryWithNutrition[]>;

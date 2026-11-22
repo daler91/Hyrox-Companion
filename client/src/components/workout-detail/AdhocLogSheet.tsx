@@ -383,8 +383,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
       saveLogWorkoutDraft(userKey, {
         title,
         date,
-        // /log has no accessory field, so it joins the free text (as in
-        // saveLogWorkoutDraftFromTimelineEntry).
+        // /log has no accessory field, so it joins the free text.
         freeText: [typed.mainWorkout, typed.accessory]
           .filter((part) => part.trim().length > 0)
           .join("\n\n"),

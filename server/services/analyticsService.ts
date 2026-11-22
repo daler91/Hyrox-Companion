@@ -1,4 +1,6 @@
 import { addDaysToISODate, dayDiff } from "@shared/dateUtils";
+import { round1 } from "@shared/numeric";
+import { epley, EPLEY_MAX_REPS, EPLEY_MIN_REPS } from "@shared/progression";
 import { pooledRatio, roundOrNull } from "@shared/ratio";
 import type {
   ExerciseLoadTag,
@@ -35,7 +37,7 @@ import type { LoggedExerciseSetWithDate, SlimLoggedExerciseSet } from "../storag
 import { getLocalDateStrSafe } from "../timezone";
 import { calculateBodySystemLoad } from "./trainingLoad/bodySystemLoad";
 import { type AthleteLoadContext, calculateTrainingLoad } from "./trainingLoadService";
-import { getMondayWeekBoundaries } from "./weeklyProgress";
+import { getMondayWeekBoundaries, utcMondayOf } from "./weeklyProgress";
 
 // Analytics always operates on logged sets, so workoutLogId is guaranteed
 // non-null here. Use the narrowed LoggedExerciseSetWithDate from the
@@ -51,11 +53,11 @@ export function getExerciseKey(set: Pick<SlimLoggedExerciseSet, "exerciseName" |
 // Epley formula — reliable up to ~10 reps; above that the estimate degrades
 // quickly and reps tend to be capacity/endurance rather than strength.
 // 1-rep sets are intentionally excluded: the heavy single already appears as
-// maxWeight, and rendering an identical "e1RM" chip next to it is noise.
-const EPLEY_MIN_REPS = 2;
-const EPLEY_MAX_REPS = 10;
+// maxWeight, and rendering an identical "e1RM" chip next to it is noise. The
+// formula and its rep bounds are shared with the client's next-target
+// suggestion and the Personal Records copy (S-epley, REFACTORING_REVIEW 2026-09-23).
 function estimateOneRepMax(weight: number, reps: number): number {
-  return Math.round(weight * (1 + reps / 30) * 10) / 10;
+  return round1(epley(weight, reps));
 }
 
 /**
@@ -454,14 +456,7 @@ function getMonday(dateStr: string): string {
   let res = mondayCache.get(dateStr);
   if (res) return res;
 
-  // Parsed as UTC above, so read and write in UTC too: getDay()/setDate() are
-  // local-time accessors and would shift the week boundary under any server TZ
-  // that is not UTC.
-  const d = new Date(dateStr + "T00:00:00Z");
-  const day = d.getUTCDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setUTCDate(d.getUTCDate() + diff);
-  res = d.toISOString().split("T")[0];
+  res = utcMondayOf(dateStr);
   mondayCache.set(dateStr, res);
   if (mondayCache.size > MONDAY_CACHE_MAX_SIZE) {
     const oldestKey = mondayCache.keys().next().value;

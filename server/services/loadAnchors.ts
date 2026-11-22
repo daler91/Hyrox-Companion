@@ -22,6 +22,7 @@
  * where the data needed was being paid for and discarded.
  */
 
+import { median } from "@shared/numeric";
 import {
   convertWeight,
   roundStoredWeight,
@@ -44,12 +45,6 @@ export interface LoadAnchor {
 const MIN_SESSIONS = 2;
 /** Enough exercises to anchor a HYROX strength programme; more is prompt noise. */
 const MAX_ANCHORS = 8;
-
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-}
 
 /**
  * The athlete's recent working weights, one anchor per exercise.

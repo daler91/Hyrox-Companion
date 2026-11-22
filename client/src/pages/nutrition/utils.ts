@@ -1,3 +1,4 @@
+import { round1 } from "@shared/numeric";
 import { emptyTotals, KCAL_PER_G, roundMacros, scaleNutrition } from "@shared/nutritionScaling";
 import type { Food, MicroSummaryRow, NutritionMacroTotals, NutritionTarget } from "@shared/schema";
 import type { MealType } from "@shared/schema/enums";
@@ -57,10 +58,6 @@ const PER_100G = 100;
 
 function scale(per100g: number | null, quantityG: number): number {
   return per100g == null ? 0 : (per100g * quantityG) / PER_100G;
-}
-
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
 }
 
 /**

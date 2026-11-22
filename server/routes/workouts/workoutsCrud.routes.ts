@@ -34,7 +34,7 @@ import { deriveMissingWorkoutSetsFromStructure, updateWorkoutStructureBlockScore
 import { assignWorkoutPlanDayUseCase, createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
-import { createMutateExerciseSetUseCase } from "../../usecases/workouts/mutateExerciseSet.usecase";
+import { exerciseSetUseCase } from "../_helpers/exerciseSetUseCase";
 import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/protectedRouteBuilder";
 import { rejectTextOnlyWriteIfNeeded } from "../structuredWriteGuard";
 import { createWorkoutRouteSchema, updateWorkoutRouteSchema } from "./shared";
@@ -43,22 +43,6 @@ const patchExerciseSetSchema = patchExerciseSetBodySchema;
 const addExerciseSetSchema = addExerciseSetBodySchema;
 const WORKOUT_NOT_FOUND = "Workout not found";
 const EXERCISE_SET_NOT_FOUND = "Exercise set not found";
-
-const workoutSetUseCase = createMutateExerciseSetUseCase({
-  updateSet: (owner, setId, body, userId) => storage.workouts.mutateExerciseSetUpdate(owner, setId, body, userId),
-  addSet: (owner, body, userId) => storage.workouts.mutateExerciseSetAdd(owner, body, userId),
-  deleteSet: (owner, setId, userId) => storage.workouts.mutateExerciseSetDelete(owner, setId, userId),
-  getUnitPreferences: async (userId) => {
-    const user = await storage.users.getUser(userId);
-    return { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit };
-  },
-});
-
-/** Whether `planDayId` names a plan day that belongs to the athlete. */
-async function ownsPlanDay(planDayId: string | null | undefined, userId: string): Promise<boolean> {
-  if (!planDayId?.trim()) return false;
-  return Boolean(await storage.plans.getPlanDay(planDayId, userId));
-}
 
 export function uniqueIds(ids: readonly string[]): string[] {
   return Array.from(new Set(ids));
@@ -107,7 +91,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   }));
 
   protectedPatch(router, "/api/v1/workouts/:id/sets/:setId", { limiter: rateLimiter("workoutSet", 120), middleware: [validateBody(patchExerciseSetSchema)] }, async (req: Request<{ id: string; setId: string }, Record<string, never>, PatchExerciseSetBody>, res: Response) => {
-    const updated = await workoutSetUseCase.updateSet({ kind: "workoutLog", ownerId: req.params.id }, req.params.setId, req.body, getUserId(req));
+    const updated = await exerciseSetUseCase.updateSet({ kind: "workoutLog", ownerId: req.params.id }, req.params.setId, req.body, getUserId(req));
     if (!updated) {
       return sendNotFound(res, EXERCISE_SET_NOT_FOUND);
     }
@@ -115,7 +99,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   });
 
   protectedPost(router, "/api/v1/workouts/:id/sets", { limiter: rateLimiter("workoutSet", 60), middleware: [validateBody(addExerciseSetSchema)] }, async (req: Request<{ id: string }, Record<string, never>, AddExerciseSetBody>, res: Response) => {
-    const created = await workoutSetUseCase.addSet({ kind: "workoutLog", ownerId: req.params.id }, req.body, getUserId(req));
+    const created = await exerciseSetUseCase.addSet({ kind: "workoutLog", ownerId: req.params.id }, req.body, getUserId(req));
     if (!created) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
@@ -134,7 +118,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   });
 
   protectedDelete(router, "/api/v1/workouts/:id/sets/:setId", { limiter: rateLimiter("workoutSet", 60) }, async (req: Request<{ id: string; setId: string }>, res: Response) => {
-    const deleted = await workoutSetUseCase.deleteSet({ kind: "workoutLog", ownerId: req.params.id }, req.params.setId, getUserId(req));
+    const deleted = await exerciseSetUseCase.deleteSet({ kind: "workoutLog", ownerId: req.params.id }, req.params.setId, getUserId(req));
     if (!deleted) {
       return sendNotFound(res, EXERCISE_SET_NOT_FOUND);
     }
@@ -204,7 +188,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     // A planDayId exempts a text-only write only when the day is the caller's
     // (TextOnlyWriteContext): another athlete's or a deleted day is dropped on
     // save, so the write is checked as if it named none.
-    const ownedPlanDayLink = await ownsPlanDay(req.body.planDayId, userId);
+    const ownedPlanDayLink = await storage.plans.ownsPlanDay(req.body.planDayId, userId);
     if (rejectTextOnlyWriteIfNeeded(req, res, "workout_log", { ownedPlanDayLink })) return;
     // Typed by its validator, not cast, so tsc checks the body against createWorkout's payload. CL15 (CODEBASE_ANALYSIS_2026-10-03)
     const result = await createWorkout({ userId, payload: req.body });

@@ -13,6 +13,7 @@
  * cool-down margin is graded as one block instead, so "you never got to
  * threshold" is still an answer.
  */
+import { median } from "@shared/numeric";
 import type { SessionStreamSamples } from "@shared/schema/sessionStream";
 
 import {
@@ -37,13 +38,6 @@ export interface Segmentation {
   signal: SegmentSignal | null;
   /** Each segment's bucket indices, in order. */
   segments: number[][];
-}
-
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  const upper = sorted.at(mid) ?? 0;
-  return sorted.length % 2 === 0 ? ((sorted.at(mid - 1) ?? upper) + upper) / 2 : upper;
 }
 
 function chooseSignal(

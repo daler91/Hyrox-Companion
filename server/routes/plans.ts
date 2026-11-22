@@ -21,7 +21,7 @@ import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
 import { getUserId } from "../types";
 import { createUpdatePlanDayUseCase } from "../usecases/plans/updatePlanDay.usecase";
-import { createMutateExerciseSetUseCase } from "../usecases/workouts/mutateExerciseSet.usecase";
+import { exerciseSetUseCase } from "./_helpers/exerciseSetUseCase";
 import { sendPlanOverlap } from "./_helpers/planOverlap";
 import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
 
@@ -107,16 +107,6 @@ function sendPlanDayReparseError(
 
 const updateStoredPlanDay = createUpdatePlanDayUseCase({
   updatePlanDay: updatePlanDayRecordingMove,
-});
-
-const planDaySetUseCase = createMutateExerciseSetUseCase({
-  updateSet: (owner, setId, body, userId) => storage.workouts.mutateExerciseSetUpdate(owner, setId, body, userId),
-  addSet: (owner, body, userId) => storage.workouts.mutateExerciseSetAdd(owner, body, userId),
-  deleteSet: (owner, setId, userId) => storage.workouts.mutateExerciseSetDelete(owner, setId, userId),
-  getUnitPreferences: async (userId) => {
-    const user = await storage.users.getUser(userId);
-    return { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit };
-  },
 });
 
 const handleGetOrDeletePlan = (
@@ -383,7 +373,7 @@ protectedDelete(router, "/api/v1/plans/days/:dayId", { limiter: rateLimiter("pla
 // planned entry is open. Mirrors the workout-log set routes in
 // server/routes/workouts/workoutsCrud.routes.ts
 // but writes to exercise_sets owned by a planDay. Ownership is enforced per-row
-// through storage.workouts.ownsPlanDay + getExerciseSetOwned.
+// through ownsPlanDay (storage/shared.ts) + getExerciseSetOwned.
 // -----------------------------------------------------------------------------
 
 const PLAN_DAY_NOT_FOUND = "Plan day not found";
@@ -479,7 +469,7 @@ protectedPost(
   { limiter: rateLimiter("planDaySet", 60), middleware: [validateBody(addExerciseSetBodySchema)] },
   async (req: ExpressRequest<{ dayId: string }, Record<string, never>, AddPlanDaySetPayload>, res: Response) => {
     const userId = getUserId(req);
-    const created = await planDaySetUseCase.addSet({ kind: "planDay", ownerId: req.params.dayId }, req.body, userId);
+    const created = await exerciseSetUseCase.addSet({ kind: "planDay", ownerId: req.params.dayId }, req.body, userId);
     if (!created) {
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
@@ -493,7 +483,7 @@ protectedPatch(
   { limiter: rateLimiter("planDaySet", 120), middleware: [validateBody(patchExerciseSetBodySchema)] },
   async (req: ExpressRequest<{ dayId: string; setId: string }, Record<string, never>, PatchPlanDaySetPayload>, res: Response) => {
     const userId = getUserId(req);
-    const updated = await planDaySetUseCase.updateSet({ kind: "planDay", ownerId: req.params.dayId }, req.params.setId, req.body, userId);
+    const updated = await exerciseSetUseCase.updateSet({ kind: "planDay", ownerId: req.params.dayId }, req.params.setId, req.body, userId);
     if (!updated) {
       return sendNotFound(res, PLAN_DAY_SET_NOT_FOUND);
     }
@@ -525,7 +515,7 @@ protectedDelete(
   { limiter: rateLimiter("planDaySet", 60) },
   async (req: ExpressRequest<{ dayId: string; setId: string }>, res: Response) => {
     const userId = getUserId(req);
-    const deleted = await planDaySetUseCase.deleteSet({ kind: "planDay", ownerId: req.params.dayId }, req.params.setId, userId);
+    const deleted = await exerciseSetUseCase.deleteSet({ kind: "planDay", ownerId: req.params.dayId }, req.params.setId, userId);
     if (!deleted) {
       return sendNotFound(res, PLAN_DAY_SET_NOT_FOUND);
     }

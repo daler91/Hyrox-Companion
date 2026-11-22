@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { toISODateString } from "@/lib/dateUtils";
+import { getStartOfWeek, toISODateString } from "@/lib/dateUtils";
 
 import { CHART_CARD_CLASS } from "./chartConstants";
 import { ChartExplanation } from "./training-overview/ChartExplanation";
@@ -17,15 +17,6 @@ const DAY_LABELS = [
 ];
 const WEEKS_TO_SHOW = 16;
 const WEEK_GRID_TEMPLATE = `repeat(${WEEKS_TO_SHOW}, minmax(2rem, 1fr))`;
-
-function getMonday(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function toDateStr(d: Date): string {
   // Local-TZ string so heatmap cells line up with workout entries
@@ -71,7 +62,7 @@ export function WorkoutHeatmap({ workoutDates, rangeStart, explanation }: Workou
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const startMonday = getMonday(today);
+    const startMonday = getStartOfWeek(today);
     startMonday.setDate(startMonday.getDate() - (WEEKS_TO_SHOW - 1) * 7);
 
     const weeks: HeatmapCell[][] = [];

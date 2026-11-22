@@ -139,21 +139,12 @@ async function regenerateAndStore<T extends GeneratedResult>(
 }
 
 /**
- * Persist an already-generated race prediction as the user's stored result.
- * Pass `recomputedOn` (a local YYYY-MM-DD) only from the cron path so the row
- * records the daily claim; omit it on manual refresh so the cron's once-per-day
- * guard is preserved. Pass `anchor` when it was captured before generation.
+ * Persist an already-generated Coach Insights result as the user's stored
+ * result. Pass `recomputedOn` (a local YYYY-MM-DD) only from the cron path so
+ * the row records the daily claim; omit it on manual refresh so the cron's
+ * once-per-day guard is preserved. Pass `anchor` when it was captured before
+ * generation.
  */
-export function persistRacePrediction(
-  userId: string,
-  prediction: RacePredictionResponse,
-  recomputedOn?: string,
-  anchor?: HistoryAnchor,
-): Promise<void> {
-  return upsertResult(userId, "race_prediction", prediction, getTrainingAnchor, recomputedOn, anchor);
-}
-
-/** Persist an already-generated Coach Insights result. See persistRacePrediction. */
 export function persistCoachInsights(
   userId: string,
   result: CoachInsightsResult,

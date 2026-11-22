@@ -1,5 +1,6 @@
 import { analyzeFuellingCorrelation, correlationDayFromBlockPoint } from "@shared/fuellingCorrelation";
 import { applyMealTargetOverrides, computeMealFuelTargets, DEFAULT_MEAL_SCHEDULE, type MealFuelOverride, type MealFuelTargets, type MealScheduleCount, type WorkoutTiming } from "@shared/mealFuelling";
+import { round1 } from "@shared/numeric";
 import { clampNutritionRange } from "@shared/nutritionRange";
 import { singleDayWindow } from "@shared/nutritionTargets";
 import {
@@ -91,11 +92,6 @@ async function resolveEffectiveTarget(
     includeFuture: targetReadsFuture(baseline),
   });
   return buildEffectiveTargetSummary(baseline, window);
-}
-
-/** Round to 1 dp — the macro display precision used across the nutrition surface. */
-function round1(n: number): number {
-  return Math.round(n * 10) / 10;
 }
 
 interface DayTrainingContext {

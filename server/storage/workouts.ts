@@ -38,6 +38,7 @@ import {
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { captureWorkoutLogs } from "./recycleBinCapture";
 import {
+  ownsPlanDay,
   prescribedSetToLogRow,
   queryExerciseSetsWithDates,
   structureTargetsFromExerciseSet,
@@ -441,7 +442,7 @@ export class WorkoutStorage {
   }
 
   async getWorkoutStructureByPlanDay(planDayId: string, userId: string) {
-    const owns = await this.ownsPlanDay(planDayId, userId);
+    const owns = await ownsPlanDay(planDayId, userId);
     if (!owns) return null;
     return this.loadWorkoutStructure(eq(workoutStructureBlocks.planDayId, planDayId));
   }
@@ -933,27 +934,12 @@ export class WorkoutStorage {
   // new workoutLog by createWorkoutInTx's copy-from-plan path.
   // -------------------------------------------------------------------
 
-  /**
-   * Confirms the plan day belongs to a training plan owned by the user.
-   * Used as an IDOR guard on every plan-day set mutation so a caller
-   * can't write to another tenant's plan.
-   */
-  private async ownsPlanDay(planDayId: string, userId: string): Promise<boolean> {
-    const [row] = await db
-      .select({ id: planDays.id })
-      .from(planDays)
-      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
-      .where(and(eq(planDays.id, planDayId), eq(trainingPlans.userId, userId)))
-      .limit(1);
-    return !!row;
-  }
-
   async getExerciseSetsByPlanDay(planDayId: string, userId: string): Promise<ExerciseSet[] | null> {
     // Distinguish "unauthorized / missing plan day" (null → 404 at the
     // route) from "owned but prescription is empty" ([]). Returning []
     // in both cases would let a foreign or bogus dayId look like a
     // valid empty plan, weakening IDOR on this read path.
-    if (!(await this.ownsPlanDay(planDayId, userId))) return null;
+    if (!(await ownsPlanDay(planDayId, userId))) return null;
     return await db
       .select()
       .from(exerciseSets)

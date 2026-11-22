@@ -44,9 +44,8 @@ export async function parseExercisesFromImage(
       userId,
     );
     const raw = parseRawResponse(responseText);
-    const rawArray = Array.isArray(raw) ? raw : [];
     const normalized = normalizeParserPayload(raw);
-    const validated = validateRows(normalized.exercises ?? rawArray);
+    const validated = validateRows(normalized.exercises);
 
     if (validated.length === 0) {
       logger.warn(
@@ -91,9 +90,8 @@ export async function parseWorkoutStructureFromImage(
     userId,
   );
   const raw = parseRawResponse(responseText);
-  const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
-  const validated = validateRows(normalized.exercises ?? rawArray);
+  const validated = validateRows(normalized.exercises);
   const { structureBlocks, warnings } = normalizeParserBlocks("", normalized.structureBlocks);
   const rows = linkRowsToStructureBlocks(
     validated.map((exercise) => mapValidatedExercise(exercise, "", units)),
@@ -115,9 +113,8 @@ export async function parseWorkoutStructureFromImageWithDiagnostics(
   const units = resolveParseUnitPreferences({ weightUnit, distanceUnit });
   const responseText = await callGeminiParseImage(imageBase64, mimeType, units, customExerciseNames, userId);
   const raw = parseRawResponse(responseText);
-  const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
-  const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
+  const validated = validateRowsDetailed(normalized.exercises);
   const { structureBlocks, warnings } = normalizeParserBlocks("", normalized.structureBlocks);
 
   return {
