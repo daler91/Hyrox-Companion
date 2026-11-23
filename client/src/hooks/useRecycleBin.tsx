@@ -10,6 +10,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { humanizeApiError, queryClient } from "@/lib/queryClient";
+import { isPlanOverlapError, planOverlapToast } from "@/lib/sharedToasts";
 import {
   EXERCISE_HISTORY_QUERY_PREFIX,
   WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
@@ -53,12 +54,7 @@ export function useRecycleBin(enabled = true) {
 /** The server explains a refused restore in its own words; keep them, but name the two known cases. */
 function restoreErrorToast(error: Error): { title: string; description: string } {
   const message = error.message;
-  if (message.includes("PLAN_OVERLAP") || message.includes("already covers")) {
-    return {
-      title: "Can't restore this plan yet",
-      description: "Another plan already covers these dates. Archive that one first.",
-    };
-  }
+  if (isPlanOverlapError(message)) return planOverlapToast();
   if (message.includes("RECYCLE_BIN_CONFLICT")) {
     return { title: "Couldn't restore", description: humanizeApiError(error) };
   }

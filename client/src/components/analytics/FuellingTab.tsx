@@ -1,27 +1,19 @@
 import { UtensilsCrossed } from "lucide-react";
 
 import { LoadErrorCard } from "@/components/LoadErrorCard";
-import { Card, CardContent } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { queryLoadState } from "@/lib/queryLoadState";
 
+import { AnalyticsEmptyCard } from "./AnalyticsEmptyState";
 import { FuellingCorrelationCard } from "./FuellingCorrelationCard";
 import { IntakeVsTrainingChart } from "./IntakeVsTrainingChart";
 import { useFuellingAnalytics } from "./useFuellingAnalytics";
 
 function EmptyState() {
   return (
-    <Card data-testid="fuelling-tab-empty">
-      <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-        <UtensilsCrossed className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
-        <div>
-          <p className="font-medium">No nutrition logged in this range</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Log food on the Nutrition page to see how your daily intake tracks against training load.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+    <AnalyticsEmptyCard testId="fuelling-tab-empty" icon={UtensilsCrossed} title="No nutrition logged in this range">
+      Log food on the Nutrition page to see how your daily intake tracks against training load.
+    </AnalyticsEmptyCard>
   );
 }
 

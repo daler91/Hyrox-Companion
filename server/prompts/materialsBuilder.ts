@@ -74,3 +74,27 @@ export function buildRetrievedChunksSection(chunks: string[]): string {
   section += `--- END COACHING MATERIALS ---\n`;
   return section;
 }
+
+/** Which coaching materials a prompt carries, rendered, and where they came from. */
+export interface SelectedCoachingMaterials {
+  /** The rendered section; "" when there is nothing to carry. */
+  text: string;
+  source: "rag" | "legacy" | null;
+}
+
+/**
+ * The retrieved chunks when there are any, else the legacy full-text
+ * materials, else nothing. The chat prompt, the suggestions prompt and the
+ * auto-coach each wrote this rule out (C-coachService, REFACTORING_REVIEW
+ * 2026-09-23).
+ */
+export function selectCoachingMaterials(
+  retrievedChunks: string[] | undefined,
+  coachingMaterials: CoachingMaterialInput[] | undefined,
+): SelectedCoachingMaterials {
+  if (retrievedChunks && retrievedChunks.length > 0) {
+    return { text: buildRetrievedChunksSection(retrievedChunks), source: "rag" };
+  }
+  const text = buildCoachingMaterialsSection(coachingMaterials ?? []);
+  return { text, source: text ? "legacy" : null };
+}

@@ -1,9 +1,9 @@
 import type { RagInfo } from "@shared/schema";
 
+import { EMBEDDING_DIMENSIONS } from "../constants";
 import { env } from "../env";
-import { EMBEDDING_DIMENSIONS } from "../gemini/client";
 import { logger } from "../logger";
-import { buildCoachingMaterialsSection, buildRetrievedChunksSection, type CoachingMaterialInput } from "../prompts";
+import { type CoachingMaterialInput, selectCoachingMaterials } from "../prompts/materialsBuilder";
 import { storage } from "../storage";
 import { type RetrievedChunk, retrieveRelevantChunks } from "./ragService";
 
@@ -118,15 +118,6 @@ export async function retrieveCoachingText(
   log: Log = logger,
 ): Promise<CoachingTextResult> {
   const result = await retrieveCoachingContext(userId, query, log);
-
-  if (result.retrievedChunks && result.retrievedChunks.length > 0) {
-    return { text: buildRetrievedChunksSection(result.retrievedChunks), source: "rag" };
-  }
-
-  if (result.coachingMaterials && result.coachingMaterials.length > 0) {
-    const text = buildCoachingMaterialsSection(result.coachingMaterials) || undefined;
-    return { text, source: text ? "legacy" : null };
-  }
-
-  return { text: undefined, source: null };
+  const { text, source } = selectCoachingMaterials(result.retrievedChunks, result.coachingMaterials);
+  return { text: text || undefined, source };
 }

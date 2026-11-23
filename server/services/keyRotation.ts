@@ -3,15 +3,11 @@ import { garminConnections, stravaConnections } from "@shared/schema";
 import { and, type AnyColumn, eq, isNull, type SQL } from "drizzle-orm";
 
 import { withPgAdvisoryLock } from "../advisoryLock";
+import { KEY_ROTATION_LOCK_KEY } from "../advisoryLockKeys";
 import { currentKeyVersion, needsMissingKey, reencryptToken } from "../crypto";
 import { db, pool } from "../db";
 import { env } from "../env";
 import { logger } from "../logger";
-
-// Distinct from CRON_LOCK_KEYS in server/cron.ts and MIGRATION_ADVISORY_LOCK_KEY
-// in server/maintenance.ts (registry documented above CRON_LOCK_KEYS) so the
-// startup re-encrypt sweep never collides with a concurrently-running job.
-const KEY_ROTATION_LOCK_KEY = 42_010_009n;
 
 export interface ReencryptSummary {
   stravaUpdated: number;

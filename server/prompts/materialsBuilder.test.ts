@@ -4,6 +4,7 @@ import {
   buildCoachingMaterialsSection,
   buildRetrievedChunksSection,
   COACHING_MATERIALS_ARE_DATA,
+  selectCoachingMaterials,
 } from "./materialsBuilder";
 
 /**
@@ -90,5 +91,27 @@ describe("coaching-material prompt builders", () => {
 
     expect(section).toContain("... [truncated]");
     expect(section.length).toBeLessThan(9000);
+  });
+});
+
+describe("selectCoachingMaterials", () => {
+  const materials = [{ title: "Pacing", content: "Even splits", type: "notes" }];
+
+  it("takes the retrieved chunks first, even when legacy materials exist", () => {
+    expect(selectCoachingMaterials(["chunk"], materials)).toEqual({
+      text: buildRetrievedChunksSection(["chunk"]),
+      source: "rag",
+    });
+  });
+
+  it("falls back to the legacy materials when no chunk was retrieved", () => {
+    const legacy = { text: buildCoachingMaterialsSection(materials), source: "legacy" };
+    expect(selectCoachingMaterials([], materials)).toEqual(legacy);
+    expect(selectCoachingMaterials(undefined, materials)).toEqual(legacy);
+  });
+
+  it("carries nothing when there is neither", () => {
+    expect(selectCoachingMaterials(undefined, undefined)).toEqual({ text: "", source: null });
+    expect(selectCoachingMaterials([], [])).toEqual({ text: "", source: null });
   });
 });

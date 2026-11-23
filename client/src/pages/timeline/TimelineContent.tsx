@@ -1,6 +1,6 @@
 import type { FuellingDayPoint, TimelineAnnotation, TimelineEntry } from "@shared/schema";
 import type { Virtualizer } from "@tanstack/react-virtual";
-import { format, isToday, parseISO } from "date-fns";
+import { isToday, parseISO } from "date-fns";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import type { ChangeEvent } from "react";
 
@@ -9,6 +9,7 @@ import { TimelineDateGroup, TimelineEmptyState, TimelineSkeleton } from "@/compo
 import type { RecoverEntryHandler } from "@/components/timeline/missed-recovery";
 import { Button } from "@/components/ui/button";
 import { useTimelineState } from "@/hooks/useTimelineState";
+import { getTodayString } from "@/lib/dateUtils";
 
 type TimelineState = ReturnType<typeof useTimelineState>;
 type TimelineData = TimelineState["data"];
@@ -215,7 +216,7 @@ export function TimelineContent({
         handleFileUpload={handleFileUpload}
         setSchedulingPlanId={setSchedulingPlanId}
         setFilterStatus={setFilterStatus}
-        onLogNote={() => onAddAnnotation(format(new Date(), "yyyy-MM-dd"))}
+        onLogNote={() => onAddAnnotation(getTodayString())}
       />
     );
   }

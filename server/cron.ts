@@ -1,6 +1,7 @@
 import cron from "node-cron";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
+import { CRON_LOCK_KEYS } from "./advisoryLockKeys";
 import { STALE_PLAN_GENERATION_THRESHOLD_MS } from "./constants";
 import { pool } from "./db";
 import { runEmailCronJob } from "./emailScheduler";
@@ -19,24 +20,17 @@ import type { IStorage } from "./storage";
 import { STALE_AUTO_COACHING_THRESHOLD_MS } from "./storage/users";
 import { ensureStravaWebhookSubscription } from "./stravaWebhook";
 
-let task: ReturnType<typeof cron.schedule> | null = null;
-let idempotencyCleanupTask: ReturnType<typeof cron.schedule> | null = null;
-let aiUsageCleanupTask: ReturnType<typeof cron.schedule> | null = null;
-let staleAutoCoachTask: ReturnType<typeof cron.schedule> | null = null;
-let queueDepthTask: ReturnType<typeof cron.schedule> | null = null;
-let structuredExerciseRollupTask: ReturnType<typeof cron.schedule> | null = null;
-let sharedRuntimeCleanupTask: ReturnType<typeof cron.schedule> | null = null;
-let analyticsRecomputeTask: ReturnType<typeof cron.schedule> | null = null;
-let nutritionEmbeddingTask: ReturnType<typeof cron.schedule> | null = null;
-let nutritionRemindersTask: ReturnType<typeof cron.schedule> | null = null;
-let ragChunkPruneTask: ReturnType<typeof cron.schedule> | null = null;
-let accountErasureSweepTask: ReturnType<typeof cron.schedule> | null = null;
-let stravaAutoSyncTask: ReturnType<typeof cron.schedule> | null = null;
-let stravaWebhookEnsureTask: ReturnType<typeof cron.schedule> | null = null;
-let recycleBinPurgeTask: ReturnType<typeof cron.schedule> | null = null;
-let sessionStreamBackfillTask: ReturnType<typeof cron.schedule> | null = null;
-let planDayMovePruneTask: ReturnType<typeof cron.schedule> | null = null;
-let stalePlanGenerationTask: ReturnType<typeof cron.schedule> | null = null;
+type ScheduledTask = ReturnType<typeof cron.schedule>;
+
+// The hourly email tick, kept apart because it doubles as startCron's
+// "already running" guard.
+let task: ScheduledTask | null = null;
+/**
+ * Every other scheduled job, for stopCron to stop. Jobs register here instead
+ * of each getting a variable and a hand-written stop line, which a new job
+ * could miss (C-cron, REFACTORING_REVIEW 2026-09-23).
+ */
+const scheduledJobs: ScheduledTask[] = [];
 let stravaWebhookStartupTimer: ReturnType<typeof setTimeout> | null = null;
 let emailCatchUpTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -56,37 +50,8 @@ export const EMAIL_TICK_MISSED_TOLERANCE_MS = 10 * 60 * 1000;
 /** How long the athlete's own plan-day moves are kept: past the coach's two-week record, then pruned. */
 const PLAN_DAY_MOVE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Advisory-lock key registry for the 42_010_0xx range. RESERVED OUTSIDE THIS
-// MAP: 42_010_009 (KEY_ROTATION_LOCK_KEY, server/services/keyRotation.ts) and
-// 42_010_010 (MIGRATION_ADVISORY_LOCK_KEY, server/maintenance.ts). Next free
-// key: 42_010_022. A collision is SILENT — pg_try_advisory_lock makes the
-// second caller skip its protected work entirely (analyticsRecompute and
-// nutritionEmbeddingBackfill once collided with those reserved slots, letting
-// a running backfill silently skip boot migrations).
-export const CRON_LOCK_KEYS = {
-  // Renamed from `dailyEmail` when the tick went hourly; the numeric key is
-  // unchanged so old and new replicas contend on the same lock mid-deploy.
-  emailScheduler: 42_010_001n,
-  idempotencyCleanup: 42_010_002n,
-  aiUsageCleanup: 42_010_003n,
-  staleAutoCoaching: 42_010_004n,
-  queueDepthTelemetry: 42_010_005n,
-  structuredExerciseRollup: 42_010_006n,
-  startupEmailCatchUp: 42_010_007n,
-  sharedRuntimeCleanup: 42_010_008n,
-  analyticsRecompute: 42_010_011n,
-  nutritionEmbeddingBackfill: 42_010_012n,
-  nutritionReminders: 42_010_013n,
-  ragChunkPrune: 42_010_014n,
-  accountErasureSweep: 42_010_015n,
-  stravaAutoSync: 42_010_016n,
-  stravaWebhookEnsure: 42_010_017n,
-  recycleBinPurge: 42_010_018n,
-  sessionStreamBackfill: 42_010_019n,
-  planDayMovePrune: 42_010_020n,
-  stalePlanGenerations: 42_010_021n,
-} as const;
-
+// Each job's lock key comes from the registry in server/advisoryLockKeys.ts,
+// with every other fixed advisory-lock key, so one test covers them all.
 export async function runCronJobWithLock<T>(
   name: keyof typeof CRON_LOCK_KEYS,
   run: () => Promise<T>,
@@ -100,29 +65,38 @@ export async function runCronJobWithLock<T>(
 }
 
 /**
- * Schedule a task that holds its named advisory lock for the run and never
- * lets a throw reach the scheduler. The tasks below still inline this shape
- * for historical reasons; new ones should be registered through here.
+ * Schedule a UTC task that holds its named advisory lock for the run and never
+ * lets a throw reach the scheduler, and register it for stopCron. `onError`
+ * replaces the generic failure log, for jobs whose failure log predates this
+ * helper and is kept as it was. New jobs should be registered through here.
+ * Three jobs still schedule themselves: the email tick (the start guard, with
+ * its own late-tick tolerance) and the two nutrition jobs (they gate on a
+ * feature flag before taking the lock).
  */
 function scheduleLockedCronJob(
   name: keyof typeof CRON_LOCK_KEYS,
   expression: string,
   run: () => Promise<void>,
-): ReturnType<typeof cron.schedule> {
-  return cron.schedule(
-    expression,
-    async () => {
-      await runCronJobWithLock(name, async () => {
-        try {
-          await run();
-        } catch (err) {
-          // The job name is a static key and err is a DB/upstream error; no PII.
-          // bearer:disable javascript_lang_logger_leak
-          logger.error({ context: "cron", err, job: name }, "Cron job failed");
-        }
-      });
-    },
-    { timezone: "Etc/UTC" },
+  onError: (err: unknown) => void = (err) => {
+    // The job name is a static key and err is a DB/upstream error; no PII.
+    // bearer:disable javascript_lang_logger_leak
+    logger.error({ context: "cron", err, job: name }, "Cron job failed");
+  },
+): void {
+  scheduledJobs.push(
+    cron.schedule(
+      expression,
+      async () => {
+        await runCronJobWithLock(name, async () => {
+          try {
+            await run();
+          } catch (err) {
+            onError(err);
+          }
+        });
+      },
+      { timezone: "Etc/UTC" },
+    ),
   );
 }
 
@@ -169,80 +143,68 @@ export function startCron(storage: IStorage): void {
   // TTL on `expiresAt` (IDEMPOTENCY_TTL_SECONDS in middleware/idempotency.ts,
   // matching the offline queue's max age); this prunes stale entries so the
   // table does not grow unbounded.
-  idempotencyCleanupTask = cron.schedule(
+  scheduleLockedCronJob(
+    "idempotencyCleanup",
     "30 3 * * *",
     async () => {
-      await runCronJobWithLock("idempotencyCleanup", async () => {
-        try {
-          const deleted = await storage.idempotency.cleanupExpired();
-          if (deleted > 0) {
-            logger.info({ context: "cron", deleted }, `Idempotency cleanup: removed ${deleted} expired row(s)`);
-          }
-        } catch (err) {
-          logger.error({ context: "cron", err }, "Idempotency cleanup failed");
-        }
-      });
+      const deleted = await storage.idempotency.cleanupExpired();
+      if (deleted > 0) {
+        // bearer:disable javascript_lang_logger_leak
+        logger.info({ context: "cron", deleted }, `Idempotency cleanup: removed ${deleted} expired row(s)`);
+      }
     },
-    { timezone: "Etc/UTC" },
+    // bearer:disable javascript_lang_logger_leak
+    (err) => logger.error({ context: "cron", err }, "Idempotency cleanup failed"),
   );
   logger.info({ context: "cron" }, "Idempotency cleanup scheduled: daily at 03:30 UTC");
 
   // Prune AI usage logs older than 7 days at 04:00 UTC daily.
-  aiUsageCleanupTask = cron.schedule(
+  scheduleLockedCronJob(
+    "aiUsageCleanup",
     "0 4 * * *",
     async () => {
-      await runCronJobWithLock("aiUsageCleanup", async () => {
-        try {
-          const deleted = await storage.aiUsage.deleteExpiredLogs(7);
-          if (deleted > 0) {
-            logger.info({ context: "cron", deleted }, `AI usage cleanup: removed ${deleted} expired row(s)`);
-          }
-        } catch (err) {
-          logger.error({ context: "cron", err }, "AI usage cleanup failed");
-        }
-      });
+      const deleted = await storage.aiUsage.deleteExpiredLogs(7);
+      if (deleted > 0) {
+        // bearer:disable javascript_lang_logger_leak
+        logger.info({ context: "cron", deleted }, `AI usage cleanup: removed ${deleted} expired row(s)`);
+      }
     },
-    { timezone: "Etc/UTC" },
+    // bearer:disable javascript_lang_logger_leak
+    (err) => logger.error({ context: "cron", err }, "AI usage cleanup failed"),
   );
   logger.info({ context: "cron" }, "AI usage cleanup scheduled: daily at 04:00 UTC");
 
-  sharedRuntimeCleanupTask = cron.schedule(
+  scheduleLockedCronJob(
+    "sharedRuntimeCleanup",
     "15 4 * * *",
     async () => {
-      await runCronJobWithLock("sharedRuntimeCleanup", async () => {
-        try {
-          const deleted = await cleanupExpiredSharedRuntimeState();
-          const totalDeleted = deleted.rateLimitBuckets + deleted.runtimeCache;
-          if (totalDeleted > 0) {
-            logger.info({ context: "cron", ...deleted }, "Shared runtime state cleanup complete");
-          }
-        } catch (err) {
-          logger.error({ context: "cron", err }, "Shared runtime state cleanup failed");
-        }
-      });
+      const deleted = await cleanupExpiredSharedRuntimeState();
+      const totalDeleted = deleted.rateLimitBuckets + deleted.runtimeCache;
+      if (totalDeleted > 0) {
+        // bearer:disable javascript_lang_logger_leak
+        logger.info({ context: "cron", ...deleted }, "Shared runtime state cleanup complete");
+      }
     },
-    { timezone: "Etc/UTC" },
+    // bearer:disable javascript_lang_logger_leak
+    (err) => logger.error({ context: "cron", err }, "Shared runtime state cleanup failed"),
   );
   logger.info({ context: "cron" }, "Shared runtime state cleanup scheduled: daily at 04:15 UTC");
 
   // Recover orphaned isAutoCoaching flags every 10 minutes. Without this,
   // a worker crashing mid-job would leave users stuck seeing "AI Coach
   // thinking…" until the next server restart (W5).
-  staleAutoCoachTask = cron.schedule(
+  scheduleLockedCronJob(
+    "staleAutoCoaching",
     "*/10 * * * *",
     async () => {
-      await runCronJobWithLock("staleAutoCoaching", async () => {
-        try {
-          const reset = await storage.users.resetStaleAutoCoaching(STALE_AUTO_COACHING_THRESHOLD_MS);
-          if (reset > 0) {
-            logger.warn({ context: "cron", reset }, `Reset ${reset} orphaned isAutoCoaching flag(s)`);
-          }
-        } catch (err) {
-          logger.error({ context: "cron", err }, "Stale isAutoCoaching recovery failed");
-        }
-      });
+      const reset = await storage.users.resetStaleAutoCoaching(STALE_AUTO_COACHING_THRESHOLD_MS);
+      if (reset > 0) {
+        // bearer:disable javascript_lang_logger_leak
+        logger.warn({ context: "cron", reset }, `Reset ${reset} orphaned isAutoCoaching flag(s)`);
+      }
     },
-    { timezone: "Etc/UTC" },
+    // bearer:disable javascript_lang_logger_leak
+    (err) => logger.error({ context: "cron", err }, "Stale isAutoCoaching recovery failed"),
   );
   logger.info({ context: "cron" }, "Stale isAutoCoaching recovery scheduled: every 10 minutes");
 
@@ -254,53 +216,49 @@ export function startCron(storage: IStorage): void {
   // pg-boss v10; tolerates absence gracefully for older versions.
   const QUEUE_WARN_DEFERRED = 100;
   const QUEUE_WARN_ACTIVE = 5;
-  queueDepthTask = cron.schedule(
+  scheduleLockedCronJob(
+    "queueDepthTelemetry",
     "*/5 * * * *",
     async () => {
-      await runCronJobWithLock("queueDepthTelemetry", async () => {
-        try {
-          type QueueDepth = { name: string; queuedCount?: number; deferredCount?: number; activeCount?: number };
-          const queues: QueueDepth[] = await queue.getQueues();
-          for (const q of queues) {
-            const deferred = q.deferredCount ?? 0;
-            const active = q.activeCount ?? 0;
-            const queued = q.queuedCount ?? 0;
-            const backlogged = deferred > QUEUE_WARN_DEFERRED || active > QUEUE_WARN_ACTIVE;
-            const log = backlogged ? logger.warn.bind(logger) : logger.info.bind(logger);
-            log(
-              {
-                context: "queue-depth",
-                queue: q.name,
-                deferred,
-                active,
-                queued,
-              },
-              backlogged ? "pg-boss queue is backlogged" : "pg-boss queue depth",
-            );
-          }
-        } catch (err) {
-          logger.error({ context: "cron", err }, "Queue-depth telemetry failed");
-        }
-      });
+      type QueueDepth = { name: string; queuedCount?: number; deferredCount?: number; activeCount?: number };
+      const queues: QueueDepth[] = await queue.getQueues();
+      for (const q of queues) {
+        const deferred = q.deferredCount ?? 0;
+        const active = q.activeCount ?? 0;
+        const queued = q.queuedCount ?? 0;
+        const backlogged = deferred > QUEUE_WARN_DEFERRED || active > QUEUE_WARN_ACTIVE;
+        const log = backlogged ? logger.warn.bind(logger) : logger.info.bind(logger);
+        // bearer:disable javascript_lang_logger_leak
+        log(
+          {
+            context: "queue-depth",
+            queue: q.name,
+            deferred,
+            active,
+            queued,
+          },
+          backlogged ? "pg-boss queue is backlogged" : "pg-boss queue depth",
+        );
+      }
     },
-    { timezone: "Etc/UTC" },
+    // bearer:disable javascript_lang_logger_leak
+    (err) => logger.error({ context: "cron", err }, "Queue-depth telemetry failed"),
   );
   logger.info({ context: "cron" }, "Queue-depth telemetry scheduled: every 5 minutes");
 
-  structuredExerciseRollupTask = cron.schedule(
+  // Scheduled in "Etc/UTC" like every other job; it used to pass "UTC", the
+  // same zone under another name (node-cron only hands it to Intl).
+  scheduleLockedCronJob(
+    "structuredExerciseRollup",
     "10 2 * * *",
     async () => {
-      await runCronJobWithLock("structuredExerciseRollup", async () => {
-        try {
-          const previousUtcDay = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-          await runStructuredExerciseDailyRollup(previousUtcDay);
-          logger.info({ context: "cron", day: previousUtcDay }, "Structured exercise health rollup complete");
-        } catch (err) {
-          logger.error({ context: "cron", err }, "Structured exercise health rollup failed");
-        }
-      });
+      const previousUtcDay = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      await runStructuredExerciseDailyRollup(previousUtcDay);
+      // bearer:disable javascript_lang_logger_leak
+      logger.info({ context: "cron", day: previousUtcDay }, "Structured exercise health rollup complete");
     },
-    { timezone: "UTC" },
+    // bearer:disable javascript_lang_logger_leak
+    (err) => logger.error({ context: "cron", err }, "Structured exercise health rollup failed"),
   );
   logger.info({ context: "cron" }, "Structured exercise health rollup scheduled: daily at 02:10 UTC");
 
@@ -313,24 +271,21 @@ export function startCron(storage: IStorage): void {
   // own anchor (analyticsRecomputeScheduler.ts). Scoped to users who already
   // have a stored result, so AI is never spent for users who never opened the
   // feature.
-  analyticsRecomputeTask = cron.schedule(
+  scheduleLockedCronJob(
+    "analyticsRecompute",
     "5 * * * *",
     async () => {
-      await runCronJobWithLock("analyticsRecompute", async () => {
-        try {
-          const result = await runAnalyticsRecomputeScan(storage, new Date());
-          if (result.enqueued > 0) {
-            logger.info(
-              { context: "cron", ...result },
-              `Analytics recompute: enqueued ${result.enqueued} job(s) for ${result.usersChecked} user(s) at local midnight`,
-            );
-          }
-        } catch (err) {
-          logger.error({ context: "cron", err }, "Analytics recompute scan failed");
-        }
-      });
+      const result = await runAnalyticsRecomputeScan(storage, new Date());
+      if (result.enqueued > 0) {
+        // bearer:disable javascript_lang_logger_leak
+        logger.info(
+          { context: "cron", ...result },
+          `Analytics recompute: enqueued ${result.enqueued} job(s) for ${result.usersChecked} user(s) at local midnight`,
+        );
+      }
     },
-    { timezone: "Etc/UTC" },
+    // bearer:disable javascript_lang_logger_leak
+    (err) => logger.error({ context: "cron", err }, "Analytics recompute scan failed"),
   );
   logger.info({ context: "cron" }, "Analytics recompute scheduled: hourly, fires at each user's local midnight");
 
@@ -338,7 +293,7 @@ export function startCron(storage: IStorage): void {
   // batches so vector search has data. No-op (returns before the lock) unless the
   // feature is enabled and AI is configured. Every 30 min drains the initial backlog,
   // then mostly idles (unchanged foods are skipped by text_hash).
-  nutritionEmbeddingTask = cron.schedule(
+  scheduledJobs.push(cron.schedule(
     "*/30 * * * *",
     async () => {
       if (env.NUTRITION_SEMANTIC_ENABLED !== "true") return;
@@ -367,7 +322,7 @@ export function startCron(storage: IStorage): void {
       });
     },
     { timezone: "Etc/UTC" },
-  );
+  ));
   logger.info({ context: "cron" }, "Food embedding backfill scheduled: every 30 min (when semantic search enabled)");
 
   // Self-healing GDPR sweep for coaching-material RAG chunks: in production
@@ -377,25 +332,22 @@ export function startCron(storage: IStorage): void {
   // Mirrors the dangling food-embedding prune. Daily is enough — the delete
   // route purges inline; this only catches its failures and pre-existing
   // orphans.
-  ragChunkPruneTask = cron.schedule(
+  scheduleLockedCronJob(
+    "ragChunkPrune",
     "50 3 * * *",
     async () => {
-      await runCronJobWithLock("ragChunkPrune", async () => {
-        try {
-          const { pruned } = await storage.coaching.pruneDanglingChunks();
-          if (pruned > 0) {
-            // Count and static context only, no PII.
-            // bearer:disable javascript_lang_logger_leak
-            logger.info({ context: "cron", pruned }, `RAG chunk prune: removed ${pruned} dangling chunk(s)`);
-          }
-        } catch (err) {
-          // err is a DB/vector error, no PII.
-          // bearer:disable javascript_lang_logger_leak
-          logger.error({ context: "cron", err }, "RAG chunk prune failed");
-        }
-      });
+      const { pruned } = await storage.coaching.pruneDanglingChunks();
+      if (pruned > 0) {
+        // Count and static context only, no PII.
+        // bearer:disable javascript_lang_logger_leak
+        logger.info({ context: "cron", pruned }, `RAG chunk prune: removed ${pruned} dangling chunk(s)`);
+      }
     },
-    { timezone: "Etc/UTC" },
+    (err) => {
+      // err is a DB/vector error, no PII.
+      // bearer:disable javascript_lang_logger_leak
+      logger.error({ context: "cron", err }, "RAG chunk prune failed");
+    },
   );
   // Static message and static context only.
   // bearer:disable javascript_lang_logger_leak
@@ -408,7 +360,7 @@ export function startCron(storage: IStorage): void {
   // their data would otherwise sit here indefinitely (GDPR Art. 17). Hourly,
   // because nothing else will ever finish these — the route erases inline and
   // this only catches its failures.
-  accountErasureSweepTask = scheduleLockedCronJob("accountErasureSweep", "35 * * * *", async () => {
+  scheduleLockedCronJob("accountErasureSweep", "35 * * * *", async () => {
     const { swept, failed } = await runStrandedErasureSweep();
     if (swept === 0 && failed === 0) return;
     // Counts and a static context only, no PII.
@@ -427,7 +379,7 @@ export function startCron(storage: IStorage): void {
   // resolved inside the runner, mirroring the analytics-recompute pattern.
   // No-ops before the lock when the nutrition module is off; push-disabled
   // deployments no-op inside the runner (isPushEnabled).
-  nutritionRemindersTask = cron.schedule(
+  scheduledJobs.push(cron.schedule(
     "25 * * * *",
     async () => {
       if (env.NUTRITION_ENABLED !== "true") return;
@@ -451,7 +403,7 @@ export function startCron(storage: IStorage): void {
       });
     },
     { timezone: "Etc/UTC" },
-  );
+  ));
   // static schedule copy only
   // bearer:disable javascript_lang_logger_leak
   logger.info({ context: "cron" }, "Nutrition reminders scheduled: hourly (refuel window + 20:00 local logging nudge)");
@@ -462,7 +414,7 @@ export function startCron(storage: IStorage): void {
   // stalest first and capped per tick so a large user base can never spend
   // the app's shared Strava read budget in one go. No-ops under the kill
   // switch and while a Strava 429 cooldown is in force.
-  stravaAutoSyncTask = scheduleLockedCronJob("stravaAutoSync", "7,22,37,52 * * * *", async () => {
+  scheduleLockedCronJob("stravaAutoSync", "7,22,37,52 * * * *", async () => {
     const result = await runStravaAutoSyncScan(storage, new Date());
     if (result.enqueued === 0) return;
     // Counts and a static context only, no PII.
@@ -481,7 +433,7 @@ export function startCron(storage: IStorage): void {
   // Strava's read budget in the same minute: queue a stream fetch for a few
   // athletes whose graded runs still lack one. Capped per tick; no-ops under
   // the kill switch, during a 429 cooldown, and once its read share is spent.
-  sessionStreamBackfillTask = scheduleLockedCronJob("sessionStreamBackfill", "11,26,41,56 * * * *", async () => {
+  scheduleLockedCronJob("sessionStreamBackfill", "11,26,41,56 * * * *", async () => {
     const result = await runSessionStreamBackfillScan(storage, new Date());
     if (result.enqueued === 0) return;
     // Counts and a static context only, no PII.
@@ -500,7 +452,7 @@ export function startCron(storage: IStorage): void {
   // shortly after boot — Strava validates the callback URL synchronously
   // while creating the subscription, so the server has to be serving
   // requests first, which is why this cannot run in the startup sequence.
-  stravaWebhookEnsureTask = scheduleLockedCronJob("stravaWebhookEnsure", "20 */6 * * *", async () => {
+  scheduleLockedCronJob("stravaWebhookEnsure", "20 */6 * * *", async () => {
     await ensureStravaWebhookSubscription(logger);
   });
   // Static message and static context only.
@@ -524,7 +476,7 @@ export function startCron(storage: IStorage): void {
   // Recycle bin purge: drop snapshots past their 90-day expiry. Listing,
   // restore and the device-sync dedupe already ignore expired rows, so this
   // only reclaims space and honours the retention promise; nightly is plenty.
-  recycleBinPurgeTask = scheduleLockedCronJob("recycleBinPurge", "45 3 * * *", async () => {
+  scheduleLockedCronJob("recycleBinPurge", "45 3 * * *", async () => {
     const purged = await storage.recycleBin.purgeExpired();
     if (purged === 0) return;
     // A count and a static context only, no PII.
@@ -538,7 +490,7 @@ export function startCron(storage: IStorage): void {
   // Plan-day move prune: the coach's record of plan changes reads the last two
   // weeks of the athlete's own moves (services/recentPlanChanges.ts); a month
   // is kept, then dropped.
-  planDayMovePruneTask = scheduleLockedCronJob("planDayMovePrune", "55 3 * * *", async () => {
+  scheduleLockedCronJob("planDayMovePrune", "55 3 * * *", async () => {
     const pruned = await storage.planDayMoves.deleteBefore(new Date(Date.now() - PLAN_DAY_MOVE_RETENTION_MS));
     if (pruned === 0) return;
     // A count and a static context only, no PII.
@@ -555,7 +507,7 @@ export function startCron(storage: IStorage): void {
   // attempt. The boot-time sweep alone missed it: the boot that follows a
   // deploy finds the row minutes old. Every 10 minutes, offset from the
   // auto-coach recovery tick.
-  stalePlanGenerationTask = scheduleLockedCronJob("stalePlanGenerations", "3,13,23,33,43,53 * * * *", async () => {
+  scheduleLockedCronJob("stalePlanGenerations", "3,13,23,33,43,53 * * * *", async () => {
     const failed = await storage.plans.failStalePlanGenerations(STALE_PLAN_GENERATION_THRESHOLD_MS);
     if (failed === 0) return;
     // A count and a static context only, no PII.
@@ -604,12 +556,9 @@ export function startCron(storage: IStorage): void {
   emailCatchUpTimer.unref();
 }
 
-type ScheduledTask = ReturnType<typeof cron.schedule>;
-
-/** Stop a task if one is scheduled; returns null so the caller can clear its slot. */
-async function stopTask(scheduled: ScheduledTask | null): Promise<null> {
+/** Stop a task if one is scheduled. */
+async function stopTask(scheduled: ScheduledTask | null): Promise<void> {
   if (scheduled) await scheduled.stop();
-  return null;
 }
 
 export async function stopCron(): Promise<void> {
@@ -618,19 +567,11 @@ export async function stopCron(): Promise<void> {
     task = null;
     logger.info({ context: "cron" }, "Cron stopped");
   }
-  idempotencyCleanupTask = await stopTask(idempotencyCleanupTask);
-  aiUsageCleanupTask = await stopTask(aiUsageCleanupTask);
-  staleAutoCoachTask = await stopTask(staleAutoCoachTask);
-  queueDepthTask = await stopTask(queueDepthTask);
-  structuredExerciseRollupTask = await stopTask(structuredExerciseRollupTask);
-  sharedRuntimeCleanupTask = await stopTask(sharedRuntimeCleanupTask);
-  analyticsRecomputeTask = await stopTask(analyticsRecomputeTask);
-  nutritionEmbeddingTask = await stopTask(nutritionEmbeddingTask);
-  nutritionRemindersTask = await stopTask(nutritionRemindersTask);
-  ragChunkPruneTask = await stopTask(ragChunkPruneTask);
-  accountErasureSweepTask = await stopTask(accountErasureSweepTask);
-  stravaAutoSyncTask = await stopTask(stravaAutoSyncTask);
-  stravaWebhookEnsureTask = await stopTask(stravaWebhookEnsureTask);
+  // splice(0) empties the list as it stops each job, like the per-job slots
+  // it replaced were reset to null.
+  for (const scheduled of scheduledJobs.splice(0)) {
+    await stopTask(scheduled);
+  }
   if (stravaWebhookStartupTimer) {
     clearTimeout(stravaWebhookStartupTimer);
     stravaWebhookStartupTimer = null;
@@ -639,8 +580,4 @@ export async function stopCron(): Promise<void> {
     clearTimeout(emailCatchUpTimer);
     emailCatchUpTimer = null;
   }
-  recycleBinPurgeTask = await stopTask(recycleBinPurgeTask);
-  sessionStreamBackfillTask = await stopTask(sessionStreamBackfillTask);
-  planDayMovePruneTask = await stopTask(planDayMovePruneTask);
-  stalePlanGenerationTask = await stopTask(stalePlanGenerationTask);
 }

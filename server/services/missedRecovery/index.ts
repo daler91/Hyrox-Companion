@@ -1,6 +1,7 @@
 import { type AbsenceRange, isDateExcused } from "@shared/absence";
 import { addDaysToISODate, dayDiff } from "@shared/dateUtils";
 import { RECOVERABLE_WITHIN_DAYS, RECOVERY_WINDOW_DAYS } from "@shared/missedRecovery";
+import { clamp } from "@shared/numeric";
 import { estimatePlannedSession } from "@shared/plannedSessionEstimate";
 import type {
   ApplyMissedRecoveryBody,
@@ -64,10 +65,6 @@ interface RecoveryContext {
   readonly sets: readonly ExerciseSet[];
   readonly input: PlannerInput;
   readonly shortenPlan: ShortenPlan;
-}
-
-function clamp(value: number, low: number, high: number): number {
-  return Math.min(high, Math.max(low, value));
 }
 
 function notMissed(message: string): AppError {

@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage } from "node:http";
 
-import { getAuth } from "@clerk/express";
 import * as Sentry from "@sentry/node";
 import compression from "compression";
 import cookieParser from "cookie-parser";
@@ -17,6 +16,7 @@ import { probePool, registerHealthEndpoint, type StartupHealthState } from "./bo
 import { registerShutdownHandlers } from "./bootstrap/lifecycle";
 import { configureObservability, registerProcessErrorHandlers } from "./bootstrap/observability";
 import { parseCertFingerprints, registerWellKnownRoutes } from "./bootstrap/wellKnown";
+import { getClerkUserId } from "./clerkUserId";
 import { startCron, stopCron } from "./cron";
 import { pool } from "./db";
 import { env } from "./env";
@@ -85,7 +85,7 @@ if (env.NODE_ENV === "production") {
   }
 }
 
-const clientEmomFlagRaw = process.env.VITE_EMOM_BUILDER_ENABLED;
+const clientEmomFlagRaw = env.VITE_EMOM_BUILDER_ENABLED;
 const clientEmomFlag = clientEmomFlagRaw === "true";
 const serverEmomFlag = env.EMOM_BUILDER_ENABLED === "true";
 // NODE_ENV and the EMOM builder's on/off flags only.
@@ -259,15 +259,8 @@ app.use(pinoHttp({
     return randomUUID();
   },
   customProps: (req, res) => {
-    let userId = 'anonymous';
-    try {
-      const auth = getAuth(req as Request);
-      if (auth?.userId) {
-        userId = auth.userId;
-      }
-    } catch {
-      userId = 'anonymous';
-    }
+    // No Clerk user, or a call before clerkMiddleware is mounted: anonymous.
+    const userId = getClerkUserId(req as Request) || 'anonymous';
 
     // S2: keep the raw user id out of the high-volume success-path access log
     // to limit PII in log sinks. The real id is attached only when the request
@@ -324,12 +317,13 @@ app.use(function bindRequestContext(req, _res, next) {
   // context but could never resolve, for two independent reasons: the ordering
   // above, and the @clerk/express v2 contract change that broke the rate-limit
   // key (see resolveAuthUserId in server/routeUtils.ts). Dropped rather than
-  // reworked because `RequestContext.userId`'s only reader, getContextLogger(),
-  // currently has no call sites — pino's mixin() deliberately omits userId to
-  // keep PII out of high-volume logs (S2). Wiring it up would mean either
-  // moving this binding below setupAuth (costing /api/v1/health its requestId)
-  // or having isAuthenticated write userId into the live context object; do
-  // that alongside the first real consumer, not speculatively.
+  // reworked because nothing reads `RequestContext.userId` (its one reader,
+  // getContextLogger(), had no call sites and was removed) — pino's mixin()
+  // deliberately omits userId to keep PII out of high-volume logs (S2).
+  // Wiring it up would mean either moving this binding below setupAuth
+  // (costing /api/v1/health its requestId) or having isAuthenticated write
+  // userId into the live context object; do that alongside the first real
+  // consumer, not speculatively.
   runWithRequestContext({ requestId: reqWithId.id ?? "" }, () => next());
 });
 

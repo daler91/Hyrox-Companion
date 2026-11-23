@@ -10,6 +10,7 @@
  * budget degrades gracefully to the deterministic+personalized value.
  */
 
+import { clamp } from "@shared/numeric";
 import { estimatePlannedSession } from "@shared/plannedSessionEstimate";
 import type {
   ExerciseSet,
@@ -50,10 +51,6 @@ const SYSTEM_PROMPT =
   "it (e.g. dense supersets run longer; long easy aerobic work is low RPE). Stay within " +
   "±20% of the given duration and ±2 of the given RPE. Respond ONLY with JSON: " +
   '{"durationMin": number, "rpe": number, "rationale": string}. Keep rationale under 20 words.';
-
-function clamp(n: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, n));
-}
 
 /** Stable signature of everything that affects the estimate, for cache invalidation. */
 function buildSignature(

@@ -96,7 +96,6 @@ vi.mock("../../../storage", () => ({
 }));
 
 vi.mock("../../../services/analyticsPersistence", () => ({
-  computeStale: vi.fn(() => false),
   getNutritionAnchor: vi.fn(async () => ({ latestDate: null, entryCount: 0 })),
   regenerateAndStoreNutritionInsights: vi.fn(),
 }));
@@ -932,15 +931,15 @@ describe("nutrition routes", () => {
       vi.mocked(storage.analyticsResults.get).mockResolvedValue({
         payload: { insights: "# Eat up", generatedAt: "2026-06-01T00:00:00.000Z" },
         generatedAt: new Date("2026-06-01T00:00:00.000Z"),
+        lastWorkoutDateAtGeneration: "2026-06-01",
+        entryCountAtGeneration: 10,
       });
-      // The athlete has logged since the analysis was generated; computeStale is
-      // mocked here, so this only has to be a well-formed anchor.
+      // The athlete has logged since the analysis was generated.
       vi.mocked(getNutritionAnchor).mockResolvedValue({ latestDate: "2026-06-07", entryCount: 12 });
 
       const res = await request(app).get("/api/v1/nutrition/insights");
       expect(res.status).toBe(200);
-      expect(res.body.insights).toBe("# Eat up");
-      expect(res.body).toHaveProperty("stale");
+      expect(res.body).toEqual({ insights: "# Eat up", generatedAt: "2026-06-01T00:00:00.000Z", stale: true });
     });
 
     it("regenerates on POST", async () => {

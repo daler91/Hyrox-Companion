@@ -540,9 +540,7 @@ ${data.currentStreak > 0 ? `
 
     ${missedSessionsMessage}
 
-    <div style="text-align:center;margin-top:24px;">
-      <a href="${getAppUrl()}/review?week=${encodeURIComponent(data.weekStartDate)}" class="cta">See your week in review</a>
-    </div>
+    ${ctaButton(`${getAppUrl()}/review?week=${encodeURIComponent(data.weekStartDate)}`, "See your week in review")}
   </div>
   ${renderEmailFooter(user)}
 </div>
@@ -557,13 +555,13 @@ export function buildMissedWorkoutEmail(
 ): { subject: string; html: string } {
   const name = getUserName(user);
   const count = missed.length;
-  let pluralSuffix = "";
+  let sessionsSuffix = "";
   let wasWere = "was";
   if (count !== 1) {
-    pluralSuffix = "s";
+    sessionsSuffix = "s";
     wasWere = "were";
   }
-  const subject = `${count} missed workout${pluralSuffix} — get back on track`;
+  const subject = `${count} missed workout${sessionsSuffix} — get back on track`;
 
   const workoutItems = missed
     .map(
@@ -600,7 +598,7 @@ export function buildMissedWorkoutEmail(
     <p>Don't let momentum slip away</p>
   </div>
   <div class="content">
-    <p style="font-size:16px;color:#334155;">Hey ${sanitizeHtml(name)}, you had ${count} planned session${pluralSuffix} that ${wasWere} missed:</p>
+    <p style="font-size:16px;color:#334155;">Hey ${sanitizeHtml(name)}, you had ${count} planned session${sessionsSuffix} that ${wasWere} missed:</p>
 ${workoutItems}
     <p style="font-size:14px;color:#64748b;margin-top:16px;">Missing a session happens to everyone. Open it in the app to fold it into another day, shorten it, or let it go — each option shows what it does to the rest of your plan.</p>
 

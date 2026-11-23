@@ -1,6 +1,6 @@
 import type { ExerciseName } from "@shared/schema";
 import { ChevronDown, Sparkles } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -9,8 +9,8 @@ import { ParseStatusStrip } from "@/components/workout/ParseStatusStrip";
 import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
 import { WorkoutContentsStatus } from "@/components/workout-detail/shared/WorkoutContentsStatus";
 import type { toast as toastFn } from "@/hooks/use-toast";
+import { useImagePreview } from "@/hooks/useImagePreview";
 import type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "@/lib/api";
-import type { CompressedImage } from "@/lib/image";
 import type { StructuredExercise } from "@/lib/structuredExercise";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +20,7 @@ import type {
   ComposerTextProps,
   ComposerVoiceProps,
 } from "./workoutComposer.types";
-import { buildParseImagePayload, type ImagePreviewState,shouldRetainImagePreview } from "./workoutComposer.utils";
+import { buildParseImagePayload, shouldRetainImagePreview } from "./workoutComposer.utils";
 
 interface WorkoutComposerProps
   extends ComposerTextProps,
@@ -85,23 +85,9 @@ export function WorkoutComposer({
   onParseImage,
   isParsingImage,
 }: WorkoutComposerProps) {
-  const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null);
-
-  // Mirror the active preview URL into a ref so a single unmount-only
-  // cleanup effect can revoke it without re-running on every preview swap
-  // (the swap paths — Retake, success, replace-on-recapture — already
-  // revoke the previous URL synchronously). Without this, a user who
-  // captures and then navigates away leaks the underlying Blob until the
-  // tab is closed.
-  const previewUrlRef = useRef<string | null>(null);
-  useEffect(() => {
-    previewUrlRef.current = imagePreview?.url ?? null;
-  }, [imagePreview?.url]);
-  useEffect(() => {
-    return () => {
-      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-    };
-  }, []);
+  // The captured photo's preview; the hook revokes its blob URL on Retake,
+  // re-capture, a landed parse and unmount.
+  const { imagePreview, captureImage, clearImagePreview, releaseImagePreview } = useImagePreview();
   const [panelOpen, setPanelOpen] = useState(() => defaultPanelOpen ?? freeText.trim().length > 0);
   // Reconcile panel visibility with external changes to `freeText`.
   // The panel can only receive typed input while it's open — anything
@@ -203,23 +189,9 @@ export function WorkoutComposer({
             interimTranscript={interimTranscript}
             toast={toast}
             isParsingText={autoParsing}
-            onCaptureImage={
-              onParseImage
-                ? (img: CompressedImage) => {
-                    if (imagePreview) URL.revokeObjectURL(imagePreview.url);
-                    setImagePreview({
-                      url: img.previewUrl,
-                      base64: img.base64,
-                      mimeType: img.mimeType,
-                    });
-                  }
-                : undefined
-            }
+            onCaptureImage={onParseImage ? captureImage : undefined}
             imagePreview={imagePreview ? { url: imagePreview.url } : null}
-            onRetakeImage={() => {
-              if (imagePreview) URL.revokeObjectURL(imagePreview.url);
-              setImagePreview(null);
-            }}
+            onRetakeImage={clearImagePreview}
             onParseImage={
               onParseImage
                 ? () => {
@@ -242,10 +214,7 @@ export function WorkoutComposer({
                           // so the user can retake/retry without losing
                           // the capture.
                           if (shouldRetainImagePreview(parsed)) return;
-                          URL.revokeObjectURL(capturedPreview.url);
-                          setImagePreview((current) =>
-                            current?.url === capturedPreview.url ? null : current,
-                          );
+                          releaseImagePreview(capturedPreview);
                         },
                       },
                     );

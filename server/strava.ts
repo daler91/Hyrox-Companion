@@ -35,7 +35,8 @@ import { claimRuntimeCacheKey, runtimeCacheKey } from "./sharedRuntimeState";
 import { storage } from "./storage";
 import { getStravaWebhookState } from "./stravaWebhook";
 import { getUserId } from "./types";
-import { parseRetryAfter,RetryableHttpError, retryWithJitter } from "./utils/httpRetry";
+import { RetryableHttpError, retryWithJitter, throwIfRetryableStatus } from "./utils/httpRetry";
+import { safeEqualDigest } from "./utils/safeEqualDigest";
 
 const STRAVA_CLIENT_ID = env.STRAVA_CLIENT_ID;
 const STRAVA_CLIENT_SECRET = env.STRAVA_CLIENT_SECRET;
@@ -128,11 +129,8 @@ function readBindingCookie(req: Request): unknown {
 
 function isStateBoundToBrowser(cookieValue: unknown, state: string): boolean {
   if (typeof cookieValue !== "string" || cookieValue === "") return false;
-  // Hash both sides to equal-length buffers so timingSafeEqual never throws
-  // on a malformed cookie (same approach as verifySignedState).
-  const presented = crypto.createHash("sha256").update(cookieValue).digest();
-  const expected = crypto.createHash("sha256").update(stateBindingValue(state)).digest();
-  return crypto.timingSafeEqual(presented, expected);
+  // Constant time, and never throws on a malformed cookie of another length.
+  return safeEqualDigest(cookieValue, stateBindingValue(state));
 }
 
 export function codeChallengeFor(verifier: string): string {
@@ -164,12 +162,8 @@ export function verifySignedState(state: string): { userId: string; codeChalleng
   const payload = codeChallenge ? `${userId}:${timestamp}:${nonce}:${codeChallenge}` : `${userId}:${timestamp}:${nonce}`;
   const expected = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex");
 
-  // Use timingSafeEqual with hashed values to prevent timing attacks
-  // and safely handle different string lengths.
-  const signatureHash = crypto.createHash("sha256").update(signature).digest();
-  const expectedHash = crypto.createHash("sha256").update(expected).digest();
-
-  if (!crypto.timingSafeEqual(signatureHash, expectedHash)) return null;
+  // Constant time, and safe for a signature of any length.
+  if (!safeEqualDigest(signature, expected)) return null;
   const ts = Number.parseInt(timestamp, 36);
   if (Date.now() - ts > STATE_MAX_AGE_MS) return null;
   return codeChallenge ? { userId, codeChallenge } : { userId };
@@ -177,9 +171,7 @@ export function verifySignedState(state: string): { userId: string; codeChalleng
 
 /** Whether `verifier` hashes to `challenge`, compared in constant time. */
 function verifierMatchesChallenge(verifier: string, challenge: string): boolean {
-  const presented = crypto.createHash("sha256").update(codeChallengeFor(verifier)).digest();
-  const expected = crypto.createHash("sha256").update(challenge).digest();
-  return crypto.timingSafeEqual(presented, expected);
+  return safeEqualDigest(codeChallengeFor(verifier), challenge);
 }
 
 interface StravaTokenResponse {
@@ -227,12 +219,7 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaRefreshRe
           signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
         });
 
-        if (response.status === 429 || response.status >= 500) {
-          throw new RetryableHttpError(
-            response.status,
-            parseRetryAfter(response.headers.get("retry-after")),
-          );
-        }
+        throwIfRetryableStatus(response);
         if (!response.ok) {
           // Do NOT log the raw response body — Strava OAuth token-endpoint
           // bodies can echo token/secret material and a hand-built `err` string
@@ -593,9 +580,7 @@ async function linkStravaAccount(req: Request, userId: string, code: string): Pr
         signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
       });
 
-      if (r.status === 429 || r.status >= 500) {
-        throw new RetryableHttpError(r.status, parseRetryAfter(r.headers.get("retry-after")));
-      }
+      throwIfRetryableStatus(r);
       return r;
     }, { label: "strava.oauthToken", retries: 3 });
 
@@ -737,12 +722,7 @@ export async function fetchStravaActivities(
           signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
         });
 
-        if (response.status === 429 || response.status >= 500) {
-          throw new RetryableHttpError(
-            response.status,
-            parseRetryAfter(response.headers.get("retry-after")),
-          );
-        }
+        throwIfRetryableStatus(response);
         if (response.status === 401 || response.status === 403) {
           // Token was revoked on Strava's side (user removed our app) — a
           // refresh won't help, we need the user to reconnect. Non-retryable.
@@ -865,12 +845,7 @@ export async function enrichFromActivityDetail(
               signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
             },
           );
-          if (response.status === 429 || response.status >= 500) {
-            throw new RetryableHttpError(
-              response.status,
-              parseRetryAfter(response.headers.get("retry-after")),
-            );
-          }
+          throwIfRetryableStatus(response);
           // Any other failure: keep the list-derived row as it is.
           if (!response.ok) return null;
           return (await response.json()) as StravaDetailedActivity;
@@ -932,12 +907,7 @@ export async function fetchStravaActivityStreams(
           headers: { Authorization: `Bearer ${accessToken}` },
           signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
         });
-        if (response.status === 429 || response.status >= 500) {
-          throw new RetryableHttpError(
-            response.status,
-            parseRetryAfter(response.headers.get("retry-after")),
-          );
-        }
+        throwIfRetryableStatus(response);
         if (response.status === 401 || response.status === 403) {
           return { ok: false, reason: "reauth_required" };
         }

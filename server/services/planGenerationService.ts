@@ -22,16 +22,17 @@ import { generateJsonText } from "../ai/providers";
 import { PLAN_GENERATION_AI_TIMEOUT_MS } from "../constants";
 import { db, type Tx } from "../db";
 import { AppError, ErrorCode } from "../errors";
-import { sanitizeLabel } from "../gemini/exerciseParser/mapping";
+import { resolveConfidence } from "../gemini/exerciseParser/mapping";
 import { logger } from "../logger";
 import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../prompts";
 import { formatExerciseSelectionBrief } from "../prompts/exerciseSelection";
 import { describeEngineTargetLines } from "../prompts/workoutEngine";
 import { storage } from "../storage";
 import { planSlotFor } from "../storage/planSlot";
+import { resolveUserToday } from "../storage/shared";
 import { getLocalDateStrSafe } from "../timezone";
 import { mapLimitedUntilFailure } from "../utils/limitedFanOut";
-import { formatZodIssues, sanitizeUserInput } from "../utils/sanitize";
+import { ampersandsToAnd, formatZodIssues, sanitizeUserInput } from "../utils/sanitize";
 import { describeLoadAnchorLines } from "./loadAnchors";
 import { describeProgramBlueprintLines, planDeloadWeeks } from "./planBlueprint";
 import { computeGenerationCalibration, type GenerationCalibration } from "./planGenerationCalibration";
@@ -317,44 +318,33 @@ export function buildGenerationPrompt(
   return lines.join("\n");
 }
 
-function defaultConfidence(isKnown: boolean): number {
-  return isKnown ? 95 : 50;
-}
-
-function resolveGeneratedConfidence(raw: GeneratedExercise, isKnown: boolean): number {
-  if (typeof raw.confidence === "number") {
-    return Math.min(100, Math.max(0, Math.round(raw.confidence)));
-  }
-  return defaultConfidence(isKnown);
-}
-
 // Normalize a single AI-returned exercise into the ParsedExercise shape the
 // rest of the backend already consumes. Mirrors the hardening in the exercise
-// parser (server/gemini/exerciseParser/mapping.ts, whose sanitizeLabel this
-// shares): unknown exerciseName collapses to "custom" + a customLabel, an
+// parser (server/gemini/exerciseParser/mapping.ts, whose resolveConfidence
+// this shares): unknown exerciseName collapses to "custom" + a customLabel, an
 // empty label triggers low-confidence so the UI can prompt for review.
 function normalizeGeneratedExercise(raw: GeneratedExercise, unitPreferences: UnitPreferences): ParsedExercise {
   const isKnown = VALID_EXERCISE_NAMES.has(raw.exerciseName) && raw.exerciseName !== "custom";
   const validCategory = VALID_CATEGORIES.has(raw.category);
-  let confidence = resolveGeneratedConfidence(raw, isKnown);
+  let confidence = resolveConfidence(raw, isKnown);
 
   let customLabel: string | undefined;
   if (isKnown) {
-    customLabel = raw.customLabel ? sanitizeLabel(raw.customLabel) : undefined;
+    customLabel = raw.customLabel ? ampersandsToAnd(raw.customLabel) : undefined;
   } else {
     const label =
       (raw.customLabel && raw.customLabel.trim().length > 0 && raw.customLabel) ||
       (raw.exerciseName !== "custom" && raw.exerciseName.trim().length > 0 && raw.exerciseName) ||
       "Unknown exercise";
-    customLabel = sanitizeLabel(label);
+    customLabel = ampersandsToAnd(label);
     if (!raw.customLabel || raw.customLabel.trim().length === 0) {
       confidence = Math.min(confidence, 40);
     }
   }
 
   return {
-    exerciseName: isKnown ? sanitizeLabel(raw.exerciseName) : "custom",
-    category: validCategory ? sanitizeLabel(raw.category) : "conditioning",
+    exerciseName: isKnown ? ampersandsToAnd(raw.exerciseName) : "custom",
+    category: validCategory ? ampersandsToAnd(raw.category) : "conditioning",
     customLabel,
     confidence,
     sets: raw.sets.map((s, i) => ({
@@ -363,7 +353,7 @@ function normalizeGeneratedExercise(raw: GeneratedExercise, unitPreferences: Uni
       ...(s.weight != null && { weight: normalizeParsedWeight(s.weight, s.weightUnit, unitPreferences) }),
       ...(s.distance != null && { distance: normalizeParsedDistance(s.distance, s.distanceUnit, unitPreferences) }),
       ...(s.time != null && { time: s.time }),
-      ...(s.notes != null && { notes: sanitizeLabel(s.notes) }),
+      ...(s.notes != null && { notes: ampersandsToAnd(s.notes) }),
     })),
   };
 }
@@ -411,10 +401,10 @@ function parseAndValidateDays(text: string): GeneratedDay[] {
       const exercises = validateDayExercises(item as Record<string, unknown>);
       validated.push({
         ...result.data,
-        focus: result.data.focus.replaceAll("&", "and"),
-        mainWorkout: result.data.mainWorkout.replaceAll("&", "and"),
-        accessory: result.data.accessory ? result.data.accessory.replaceAll("&", "and") : null,
-        notes: result.data.notes ? result.data.notes.replaceAll("&", "and") : null,
+        focus: ampersandsToAnd(result.data.focus),
+        mainWorkout: ampersandsToAnd(result.data.mainWorkout),
+        accessory: result.data.accessory ? ampersandsToAnd(result.data.accessory) : null,
+        notes: result.data.notes ? ampersandsToAnd(result.data.notes) : null,
         exercises,
       });
     } else {
@@ -979,15 +969,6 @@ function engineSessionPriority(
   return week?.sessions.find((session) => session.day === day.dayName)?.priority ?? null;
 }
 
-/**
- * The athlete's own calendar date. A UTC "today" would retire a plan a day early
- * for anyone west of Greenwich — the same reasoning as PlanStorage.resolveUserToday.
- */
-async function resolveUserTodayForPlan(userId: string): Promise<string> {
-  const user = await storage.users.getUser(userId);
-  return getLocalDateStrSafe(new Date(), user?.userTimezone);
-}
-
 interface PublishGeneratedPlanOptions {
   readonly planId: string;
   readonly userId: string;
@@ -1013,7 +994,7 @@ async function scheduleAndPublishPlan(
     await storage.plans.schedulePlan(planId, scheduleStartDate, userId, tx);
   }
   if (scheduleStartDate && supersedeIds.length > 0) {
-    const today = await resolveUserTodayForPlan(userId);
+    const today = await resolveUserToday(userId);
     const effectiveFrom = scheduleStartDate > today ? scheduleStartDate : today;
     const retired = await storage.plans.retirePlans(supersedeIds, userId, effectiveFrom, tx);
     // debug, not info: Bearer's logger-leak rule fires on any structured

@@ -14,10 +14,10 @@ import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { featureFlags } from "@/lib/featureFlags";
 
-import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { buildWorkoutCoachSeedMessage } from "./workoutCoachSeed";
 import { ExerciseTable } from "./ExerciseTable";
 import { FuellingPlanPanel } from "./FuellingPlanPanel";
+import { ReadOnlyWorkoutActionGrid } from "./ReadOnlyWorkoutDetailSheet";
 import { SessionPriorityControl } from "./SessionPriorityControl";
 import { CoachRationaleSection, DetailSection } from "./shared/DetailSection";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
@@ -27,6 +27,7 @@ import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
 import { buildWorkoutSummaryStats, WorkoutSummaryHeader } from "./shared/WorkoutSummaryHeader";
 import { type WorkoutCoachChatProps, WorkoutCoachSheet } from "./WorkoutCoachPanel";
+import { WorkoutSheetTitle } from "./WorkoutSheetTitle";
 
 interface LogSheetBaseProps extends WorkoutCoachChatProps {
   readonly entry: TimelineEntry | null;
@@ -99,34 +100,6 @@ function hasPrescriptionText(entry: TimelineEntry): boolean {
 
 function isParseHelperVisible(entry: TimelineEntry, planSets: PlanDayExerciseState): boolean {
   return !!entry.planDayId && planSets.parseFailed && planSets.exerciseSets.length === 0;
-}
-
-function getTitleSaveHandler(
-  entry: TimelineEntry,
-  onRenameTitle?: (entry: TimelineEntry, title: string) => void,
-): ((title: string) => void) | undefined {
-  if (!onRenameTitle) return undefined;
-  if (!entry.workoutLogId && !entry.planDayId) return undefined;
-  return (nextTitle) => onRenameTitle(entry, nextTitle);
-}
-
-interface LogSheetTitleProps {
-  readonly entry: TimelineEntry;
-  readonly mode: "edit" | "log";
-  readonly onRenameTitle?: (entry: TimelineEntry, title: string) => void;
-  readonly isRenamingTitle: boolean;
-}
-
-function LogSheetTitle({ entry, mode, onRenameTitle, isRenamingTitle }: LogSheetTitleProps) {
-  return (
-    <EditableWorkoutTitle
-      title={entry.focus}
-      fallbackTitle={mode === "edit" ? "Edit workout" : "Log workout"}
-      onSave={getTitleSaveHandler(entry, onRenameTitle)}
-      isSaving={isRenamingTitle}
-      testIdPrefix={`workout-title-${entry.id}`}
-    />
-  );
 }
 
 interface PlannedPrescriptionProps {
@@ -284,32 +257,30 @@ interface SecondaryLogActionsProps {
   readonly onSkip?: (entry: TimelineEntry) => void;
 }
 
+/**
+ * The same grid the read-only sheets render; an action with no handler is
+ * dropped. (CC-sheetMarkup, REFACTORING_REVIEW 2026-09-23)
+ */
 function SecondaryLogActions({ entry, onAskCoach, onSkip }: SecondaryLogActionsProps) {
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      {onAskCoach ? (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => onAskCoach(entry)}
-          data-testid={`log-ask-coach-${entry.id}`}
-        >
-          <MessageSquare className="mr-2 h-4 w-4" aria-hidden="true" />
-          Ask coach
-        </Button>
-      ) : null}
-      {onSkip ? (
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => onSkip(entry)}
-          data-testid={`log-skip-${entry.id}`}
-        >
-          <SkipForward className="mr-2 h-4 w-4" aria-hidden="true" />
-          Skip
-        </Button>
-      ) : null}
-    </div>
+    <ReadOnlyWorkoutActionGrid
+      actions={[
+        {
+          icon: MessageSquare,
+          label: "Ask coach",
+          onClick: onAskCoach ? () => onAskCoach(entry) : undefined,
+          testId: `log-ask-coach-${entry.id}`,
+          variant: "outline",
+        },
+        {
+          icon: SkipForward,
+          label: "Skip",
+          onClick: onSkip ? () => onSkip(entry) : undefined,
+          testId: `log-skip-${entry.id}`,
+          variant: "ghost",
+        },
+      ]}
+    />
   );
 }
 
@@ -647,9 +618,9 @@ export function LogSheet({
 
   const isEditMode = mode === "edit";
   const title = (
-    <LogSheetTitle
+    <WorkoutSheetTitle
       entry={entry}
-      mode={mode}
+      fallbackTitle={isEditMode ? "Edit workout" : "Log workout"}
       onRenameTitle={onRenameTitle}
       isRenamingTitle={isRenamingTitle}
     />

@@ -15,6 +15,8 @@ import { api, type MafTestsListResponse, QUERY_KEYS } from "@/lib/api";
 import { queryLoadState } from "@/lib/queryLoadState";
 import { formatSecondsToMmSs } from "@/lib/statsUtils";
 
+import { AnalyticsEmptyCard } from "./AnalyticsEmptyState";
+import { formatChartDateWithYear } from "./chartConstants";
 import { LastUpdatedNote } from "./LastUpdatedNote";
 import { buildComplianceTrendData, buildPaceTrendData, buildTestRows, classificationMeta } from "./mafTrend.helpers";
 import { MiniLineChart } from "./MiniLineChart";
@@ -27,23 +29,15 @@ const TONE_BADGE_CLASS: Record<"green" | "amber" | "red", string> = {
 
 function formatTestDate(date: string | null): string {
   if (!date) return "—";
-  return new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return formatChartDateWithYear(date);
 }
 
 function EmptyState() {
   return (
-    <Card data-testid="maf-trend-empty">
-      <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-        <HeartPulse className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
-        <div>
-          <p className="font-medium">No MAF tests yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Run a fixed distance or time at your MAF heart-rate ceiling, then open that workout and
-            tag it as a MAF test. Your compliance trend builds here over time.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+    <AnalyticsEmptyCard testId="maf-trend-empty" icon={HeartPulse} title="No MAF tests yet">
+      Run a fixed distance or time at your MAF heart-rate ceiling, then open that workout and
+      tag it as a MAF test. Your compliance trend builds here over time.
+    </AnalyticsEmptyCard>
   );
 }
 

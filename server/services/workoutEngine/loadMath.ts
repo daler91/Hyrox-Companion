@@ -10,7 +10,7 @@
  * on the same scale.
  */
 import { implementFor, loadIncrement } from "@shared/exerciseEquipment";
-import { epley } from "@shared/progression";
+import { epley, epleyLoad } from "@shared/progression";
 import { storedWeightToDisplay, type WeightUnit } from "@shared/unitConversion";
 
 // The implement table and its steps live in shared/, where the workout
@@ -99,7 +99,7 @@ export function rirFor(rpe: number): number {
  * charts coaches prescribe from.
  */
 export function loadForReps(e1rm: number, reps: number, rpe: number): number {
-  return e1rm / (1 + (reps + rirFor(rpe)) / 30);
+  return epleyLoad(e1rm, reps + rirFor(rpe));
 }
 
 /** The effort a load implies for `reps` against an estimated 1RM: loadForReps inverted. */

@@ -1,3 +1,4 @@
+import { round1 } from "@shared/numeric";
 import {
   CALORIES_PER_100G_MAX,
   type ExtractedNutritionLabel,
@@ -80,8 +81,6 @@ type RawLabel = z.infer<typeof rawLabelSchema>;
 type RawMacroSet = z.infer<typeof rawMacroSetSchema>;
 
 const NO_LABEL: ParseLabelResponse = { label: null, suggestion: null, warnings: [] };
-
-const round1 = (n: number) => Math.round(n * 10) / 10;
 
 function hasAnyValue(set: RawMacroSet): set is NonNullable<RawMacroSet> {
   return set != null && Object.values(set).some((v) => v != null);

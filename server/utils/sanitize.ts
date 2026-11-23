@@ -101,6 +101,17 @@ function checkAiOutput(output: string, afterIndex: number): void {
 }
 
 /**
+ * Every "&" in model output, as "and": "A & B" reads "A and B". AI text is
+ * stored and rendered as plain React text, never HTML-encoded (encoding leaked
+ * `&#39;` into the UI as literal characters). The exercise parser, suggestions
+ * and review notes, plan adjustments, plan generation and the race predictor
+ * each wrote their own (C-labels, REFACTORING_REVIEW 2026-09-23).
+ */
+export function ampersandsToAnd(value: string): string {
+  return value.replaceAll("&", "and");
+}
+
+/**
  * Validates AI output to detect prompt injection leakage or unexpected system-level content.
  * Throws an error or returns a safe fallback if restricted content is detected.
  */

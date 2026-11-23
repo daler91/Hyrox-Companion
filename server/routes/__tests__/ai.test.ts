@@ -109,7 +109,6 @@ vi.mock("../../gemini", () => ({
   chatWithCoach: vi.fn(),
   streamChatWithCoach: vi.fn(),
   generateWorkoutSuggestions: vi.fn(),
-  EMBEDDING_DIMENSIONS: 3072,
 }));
 
 // Mock aiService

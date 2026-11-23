@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
-import { parseApiError } from "@/lib/apiError";
+import { extractApiErrorCode } from "@/lib/apiError";
 import { runWithOfflineFallback } from "@/lib/offlineMutationFallback";
 import { WORKOUT_CREATE_URL } from "@/lib/pendingWorkouts";
 import { toastPersonalRecordAchievements } from "@/lib/personalRecordAchievements";
@@ -74,30 +74,4 @@ export function useSaveWorkoutMutation(onSaveSuccess?: () => void) {
 
 function createWorkoutOptions(idempotencyKey: string | undefined): { idempotencyKey: string } | undefined {
   return idempotencyKey ? { idempotencyKey } : undefined;
-}
-
-function extractApiErrorCode(error: unknown): string | null {
-  if (!error || typeof error !== "object") return null;
-
-  const asRecord = error as Record<string, unknown>;
-  const directCode = asRecord.code;
-  if (typeof directCode === "string") return directCode;
-
-  const payloadCode = getCodeFromPayload(asRecord.payload);
-  if (payloadCode) return payloadCode;
-
-  const responseDataCode = getCodeFromPayload(
-    typeof asRecord.response === "object" ? (asRecord.response as Record<string, unknown> | null)?.data : null,
-  );
-  if (responseDataCode) return responseDataCode;
-
-  // apiRequest's `${status}: ${body}` message, read by the shared
-  // parseApiError (CL34, CODEBASE_ANALYSIS_2026-10-03).
-  return parseApiError(error)?.code ?? null;
-}
-
-function getCodeFromPayload(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const code = (payload as Record<string, unknown>).code;
-  return typeof code === "string" ? code : null;
 }

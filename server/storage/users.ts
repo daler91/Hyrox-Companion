@@ -218,6 +218,17 @@ type ClaimLedgerColumn =
   | "lastTodaySessionAt"
   | "lastAnalysisDigestAt";
 
+/** Each ledger's column, by name: a Map lookup rather than variable-key indexing of the table. */
+const CLAIM_LEDGER_COLUMNS: ReadonlyMap<ClaimLedgerColumn, AnyColumn> = new Map<ClaimLedgerColumn, AnyColumn>([
+  ["lastWeeklySummaryAt", users.lastWeeklySummaryAt],
+  ["lastMissedReminderAt", users.lastMissedReminderAt],
+  ["lastRefuelReminderAt", users.lastRefuelReminderAt],
+  ["lastLoggingReminderAt", users.lastLoggingReminderAt],
+  ["lastWeeklyReviewReminderAt", users.lastWeeklyReviewReminderAt],
+  ["lastTodaySessionAt", users.lastTodaySessionAt],
+  ["lastAnalysisDigestAt", users.lastAnalysisDigestAt],
+]);
+
 export class UserStorage {
   async getUsers(ids: string[]): Promise<User[]> {
     if (ids.length === 0) return [];
@@ -936,7 +947,8 @@ export class UserStorage {
     notBefore: Date,
     now: Date,
   ): Promise<boolean> {
-    const stamp = users[column];
+    const stamp = CLAIM_LEDGER_COLUMNS.get(column);
+    if (!stamp) throw new Error(`No claim ledger column named ${column}`);
     const values: Partial<Record<ClaimLedgerColumn, Date>> = { [column]: now };
     const claimed = await db
       .update(users)

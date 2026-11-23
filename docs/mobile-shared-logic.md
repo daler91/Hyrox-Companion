@@ -372,11 +372,12 @@ client.
 ### `shared/mealFuelling.ts`
 
 **Functions:** `mergeMealOverride` only, with the private `keepsUnsetMacroShare`,
-`overriddenMealCalories`, `mealMacroKcal` and `round1`, and the types `MealFuelValues`,
+`overriddenMealCalories` and `mealMacroKcal`, and the types `MealFuelValues`,
 `MealFuelOverride` and `MergedMealOverride`. `computeMealFuelTargets` is about 600 lines. It stays on
 the server, which returns the split in the nutrition day summary.
 
-**Depends on:** `KCAL_PER_G` from `shared/nutritionScaling.ts`.
+**Depends on:** `KCAL_PER_G` from `shared/nutritionScaling.ts`, and `round1` (`Math.round(n * 10) / 10`)
+from `shared/numeric.ts`.
 
 **Fixture inputs:**
 
@@ -401,10 +402,10 @@ the server, which returns the split in the nutrition day summary.
 
 ### `shared/sessionFuellingTargets.ts`
 
-**Functions:** `computeSessionFuellingTarget`, with the private `intensityFactor` and `clamp` and all
-the constants.
+**Functions:** `computeSessionFuellingTarget`, with the private `intensityFactor` and all the
+constants.
 
-**Depends on:** nothing.
+**Depends on:** `clamp` (`Math.min(hi, Math.max(lo, n))`) from `shared/numeric.ts`.
 
 **Notes:** The inputs come from the athlete's saved `expectedDurationMin` / `expectedRpe`, or from
 the `sessionEstimate` API field (see API fields), plus `bodyweightKg` from preferences. If the
@@ -436,7 +437,7 @@ and this port can wait. The panel and the chip are in the app (`ui/fuelling/Fuel
 saves with it). Not `effectiveTarget*`: the server applies load scaling and returns
 the day's effective target in the summary.
 
-**Depends on:** the Atwater factors from `nutritionScaling`.
+**Depends on:** the Atwater factors from `nutritionScaling`, and `round1` from `shared/numeric.ts`.
 
 **Notes:** "Calculate from profile" and the save payload of the targets editor
 (`pages/nutrition/TargetsDialog.tsx`). `defaultPeriodizationConfig`'s `referenceBasis` is a
@@ -460,7 +461,8 @@ Boolean, `referenceMeasured`, in Kotlin; the fixture test maps it back.
 
 - From `progression`: `suggestNextTarget`, `unmetPrescription` and `epley`, with the private
   `weightSteps`, `stepsToTry`, `uniformValue`, `roundWeight`, `deloadFrom`, `progressFrom` and their
-  constants.
+  constants. `EPLEY_MIN_REPS` and `EPLEY_MAX_REPS` (2 and 10) are exported too, for the web's
+  Personal Records note. `epleyLoad` serves only the server's workout engine.
 - From `exerciseEquipment`: `implementFor` and `loadIncrement`, with the data in
   `EXERCISE_EQUIPMENT`, `IMPLEMENT_OVERRIDES`, `INCREMENTS` and `LOADED_IMPLEMENTS`. Only the
   loaded-implement entries matter to `implementFor`.

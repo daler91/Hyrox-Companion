@@ -1,7 +1,7 @@
 import { SET_NUMBER_MAX } from "@shared/schema";
 import { EXERCISE_DEFINITIONS, normalizeExerciseName } from "@shared/schema/exercises";
 
-import { sanitizeLabel } from "./mapping";
+import { ampersandsToAnd } from "../../utils/sanitize";
 
 const HEURISTIC_CHUNK_SPLIT_PATTERN = /[.;\n]+/;
 const HEURISTIC_TIME_UNITS = ["minutes", "minute", "mins", "min"] as const;
@@ -322,7 +322,7 @@ function buildHeuristicFallbackRow(candidate: HeuristicFallbackCandidate): unkno
   return {
     exerciseName,
     category: categoryForExercise(exerciseName, candidate.name),
-    ...(exerciseName === "custom" ? { customLabel: sanitizeLabel(candidate.name) } : {}),
+    ...(exerciseName === "custom" ? { customLabel: ampersandsToAnd(candidate.name) } : {}),
     missingFields: ["Heuristic fallback parser used after malformed AI rows."],
     sets: Array.from({ length: candidate.sets }, (_value, index) => ({
       setNumber: index + 1,

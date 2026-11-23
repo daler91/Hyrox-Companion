@@ -78,10 +78,16 @@ vi.mock("./logger", () => ({
   },
 }));
 
-import { CRON_LOCK_KEYS, EMAIL_TICK_MISSED_TOLERANCE_MS, runCronJobWithLock, startCron, stopCron } from "./cron";
+import * as advisoryLockKeys from "./advisoryLockKeys";
+import { CRON_LOCK_KEYS } from "./advisoryLockKeys";
+import { EMAIL_TICK_MISSED_TOLERANCE_MS, runCronJobWithLock, startCron, stopCron } from "./cron";
 import { runEmailCronJob } from "./emailScheduler";
 import { env } from "./env";
 import { logger } from "./logger";
+import { queue } from "./queue";
+import { runAnalyticsRecomputeScan } from "./services/analyticsRecomputeScheduler";
+import { runStructuredExerciseDailyRollup } from "./services/structuredExerciseHealth";
+import { cleanupExpiredSharedRuntimeState } from "./sharedRuntimeState";
 import { getLocalHour } from "./timezone";
 
 // node-cron is mocked with a bare vi.fn(), so `cron.schedule` returns
@@ -110,10 +116,49 @@ function startCronWith(storage: object): (expression: string) => () => Promise<v
 }
 
 describe("cron advisory lock wiring", () => {
-  it("uses distinct stable advisory lock keys for every scheduled job", () => {
-    const lockKeys = Object.values(CRON_LOCK_KEYS);
+  // Every key the registry exports, whether a single constant or a map of
+  // them, so a key added there is covered without editing this test.
+  const allLockKeys = Object.values(advisoryLockKeys).flatMap((entry) =>
+    typeof entry === "bigint" ? [entry] : Object.values(entry),
+  );
 
-    expect(new Set(lockKeys).size).toBe(lockKeys.length);
+  it("uses a distinct advisory lock key for every lock in the registry, cron or not", () => {
+    expect(allLockKeys).toEqual(expect.arrayContaining([
+      ...Object.values(CRON_LOCK_KEYS),
+      advisoryLockKeys.KEY_ROTATION_LOCK_KEY,
+      advisoryLockKeys.MIGRATION_ADVISORY_LOCK_KEY,
+    ]));
+    expect(new Set(allLockKeys).size).toBe(allLockKeys.length);
+  });
+
+  it("never renumbers a lock: old and new replicas contend on these values mid-deploy", () => {
+    expect({
+      ...CRON_LOCK_KEYS,
+      keyRotation: advisoryLockKeys.KEY_ROTATION_LOCK_KEY,
+      migrations: advisoryLockKeys.MIGRATION_ADVISORY_LOCK_KEY,
+    }).toEqual({
+      emailScheduler: 42_010_001n,
+      idempotencyCleanup: 42_010_002n,
+      aiUsageCleanup: 42_010_003n,
+      staleAutoCoaching: 42_010_004n,
+      queueDepthTelemetry: 42_010_005n,
+      structuredExerciseRollup: 42_010_006n,
+      startupEmailCatchUp: 42_010_007n,
+      sharedRuntimeCleanup: 42_010_008n,
+      keyRotation: 42_010_009n,
+      migrations: 42_010_010n,
+      analyticsRecompute: 42_010_011n,
+      nutritionEmbeddingBackfill: 42_010_012n,
+      nutritionReminders: 42_010_013n,
+      ragChunkPrune: 42_010_014n,
+      accountErasureSweep: 42_010_015n,
+      stravaAutoSync: 42_010_016n,
+      stravaWebhookEnsure: 42_010_017n,
+      recycleBinPurge: 42_010_018n,
+      sessionStreamBackfill: 42_010_019n,
+      planDayMovePrune: 42_010_020n,
+      stalePlanGenerations: 42_010_021n,
+    });
   });
 
   it("delegates scheduled work through the requested advisory lock", async () => {
@@ -644,5 +689,86 @@ describe("session-stream backfill cron job", () => {
     mocks.runSessionStreamBackfillScan.mockResolvedValueOnce({ usersChecked: 0, enqueued: 0, skipped: "budget" });
     await backfillCallback();
     expect(logger.info).not.toHaveBeenCalled();
+  });
+});
+
+// These jobs moved onto scheduleLockedCronJob but kept the failure log each
+// one wrote before (C-cron, REFACTORING_REVIEW 2026-09-23).
+describe("jobs on scheduleLockedCronJob with their own failure log", () => {
+  const error = new Error("db unavailable");
+  const failing = vi.fn().mockRejectedValue(error);
+  const storage = {
+    idempotency: { cleanupExpired: failing },
+    aiUsage: { deleteExpiredLogs: failing },
+    users: { resetStaleAutoCoaching: failing },
+    coaching: { pruneDanglingChunks: failing },
+  };
+  let scheduled: (expression: string) => () => Promise<void>;
+  let registrations: unknown[][];
+
+  beforeAll(() => {
+    mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
+    scheduled = startCronWith(storage);
+    registrations = [...mocks.cronSchedule.mock.calls];
+  });
+
+  beforeEach(() => {
+    vi.mocked(cleanupExpiredSharedRuntimeState).mockRejectedValue(error);
+    vi.mocked(queue.getQueues).mockRejectedValue(error);
+    vi.mocked(runStructuredExerciseDailyRollup).mockRejectedValue(error);
+    vi.mocked(runAnalyticsRecomputeScan).mockRejectedValue(error);
+    mocks.withPgAdvisoryLock.mockClear();
+    vi.mocked(logger.error).mockClear();
+  });
+
+  afterEach(() => {
+    vi.mocked(cleanupExpiredSharedRuntimeState).mockReset();
+    vi.mocked(queue.getQueues).mockReset();
+    vi.mocked(runStructuredExerciseDailyRollup).mockReset();
+    vi.mocked(runAnalyticsRecomputeScan).mockReset();
+  });
+
+  it.each([
+    { job: "idempotencyCleanup", key: CRON_LOCK_KEYS.idempotencyCleanup, expression: "30 3 * * *", message: "Idempotency cleanup failed" },
+    { job: "aiUsageCleanup", key: CRON_LOCK_KEYS.aiUsageCleanup, expression: "0 4 * * *", message: "AI usage cleanup failed" },
+    { job: "sharedRuntimeCleanup", key: CRON_LOCK_KEYS.sharedRuntimeCleanup, expression: "15 4 * * *", message: "Shared runtime state cleanup failed" },
+    { job: "staleAutoCoaching", key: CRON_LOCK_KEYS.staleAutoCoaching, expression: "*/10 * * * *", message: "Stale isAutoCoaching recovery failed" },
+    { job: "queueDepthTelemetry", key: CRON_LOCK_KEYS.queueDepthTelemetry, expression: "*/5 * * * *", message: "Queue-depth telemetry failed" },
+    { job: "structuredExerciseRollup", key: CRON_LOCK_KEYS.structuredExerciseRollup, expression: "10 2 * * *", message: "Structured exercise health rollup failed" },
+    { job: "analyticsRecompute", key: CRON_LOCK_KEYS.analyticsRecompute, expression: "5 * * * *", message: "Analytics recompute scan failed" },
+    { job: "ragChunkPrune", key: CRON_LOCK_KEYS.ragChunkPrune, expression: "50 3 * * *", message: "RAG chunk prune failed" },
+  ] as const)("$job runs under its own lock in Etc/UTC and logs its own failure message", async ({ job, key, expression, message }) => {
+    await expect(scheduled(expression)()).resolves.toBeUndefined();
+
+    expect(mocks.withPgAdvisoryLock).toHaveBeenCalledWith(
+      mocks.pool,
+      { key, name: job },
+      expect.any(Function),
+    );
+    expect(logger.error).toHaveBeenCalledWith({ context: "cron", err: error }, message);
+    const [, , options] = registrations.find(([registered]) => registered === expression) ?? [];
+    expect(options).toEqual({ timezone: "Etc/UTC" });
+  });
+});
+
+describe("stopCron", () => {
+  afterEach(() => {
+    mocks.cronSchedule.mockReset();
+  });
+
+  it("stops every job startCron scheduled, once", async () => {
+    const stop = vi.fn();
+    mocks.cronSchedule.mockReset();
+    mocks.cronSchedule.mockImplementation(() => ({ stop }));
+    startCron({} as never);
+    const scheduledCount = mocks.cronSchedule.mock.calls.length;
+    expect(scheduledCount).toBeGreaterThan(1);
+
+    await stopCron();
+    expect(stop).toHaveBeenCalledTimes(scheduledCount);
+
+    // The list is emptied, so a second stop has nothing left to stop.
+    await stopCron();
+    expect(stop).toHaveBeenCalledTimes(scheduledCount);
   });
 });

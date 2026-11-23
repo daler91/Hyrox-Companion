@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { isTransientNetworkError, parseRetryAfter, RetryableHttpError, retryWithJitter } from "./httpRetry";
+import { isTransientNetworkError, parseRetryAfter, RetryableHttpError, retryWithJitter, throwIfRetryableStatus } from "./httpRetry";
 
 // Zero delays keep the retry loop instant under test.
 const fast = { retries: 2, minDelayMs: 0, maxDelayMs: 0 } as const;
@@ -79,5 +79,31 @@ describe("parseRetryAfter", () => {
   it("returns null for missing or unparseable headers", () => {
     expect(parseRetryAfter(null)).toBeNull();
     expect(parseRetryAfter("not-a-date")).toBeNull();
+  });
+});
+
+describe("throwIfRetryableStatus", () => {
+  const response = (status: number, retryAfter: string | null = null) =>
+    new Response(null, { status, headers: retryAfter === null ? {} : { "Retry-After": retryAfter } });
+
+  it.each([429, 500, 502, 503, 504, 599])("throws a RetryableHttpError for %i", (status) => {
+    let thrown: unknown;
+    try {
+      throwIfRetryableStatus(response(status));
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(RetryableHttpError);
+    expect(thrown).toMatchObject({ status, retryAfterMs: null, message: `Retryable HTTP ${status}` });
+  });
+
+  it("carries the Retry-After hint, whatever the header's case", () => {
+    expect(() => throwIfRetryableStatus(response(429, "3"))).toThrow(
+      expect.objectContaining({ status: 429, retryAfterMs: 3000 }),
+    );
+  });
+
+  it.each([200, 201, 204, 304, 400, 401, 403, 404, 408, 422, 499])("returns for %i, for the caller to handle", (status) => {
+    expect(() => throwIfRetryableStatus(response(status))).not.toThrow();
   });
 });

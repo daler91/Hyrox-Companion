@@ -3,10 +3,10 @@ import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { asyncHandler, rateLimiter } from "../../routeUtils";
-import { computeStale, getNutritionAnchor, regenerateAndStoreNutritionInsights } from "../../services/analyticsPersistence";
-import { storage } from "../../storage";
+import { getNutritionAnchor, regenerateAndStoreNutritionInsights } from "../../services/analyticsPersistence";
 import { getUserId } from "../../types";
 import { protectedPost } from "../_helpers/protectedRouteBuilder";
+import { readStoredAnalysis } from "../_helpers/storedAnalysis";
 
 // AI nutrition insights (FR-5.3): read the stored analysis, or regenerate it.
 export function registerNutritionInsightRoutes(router: Router): void {
@@ -19,26 +19,9 @@ export function registerNutritionInsightRoutes(router: Router): void {
     rateLimiter("nutritionRead", 60),
     asyncHandler(async (req: Request, res: Response) => {
       const userId = getUserId(req);
-      // Fetch the stored row and the staleness anchor concurrently — they read
-      // unrelated tables (analytics_results vs food_log_entries), so there's no
-      // ordering dependency on this "paint instantly on tab open" path. Halves
-      // the DB latency for the common case (row exists) at the cost of one
-      // harmless unused query when a user has no stored insights yet.
-      const [row, anchor] = await Promise.all([
-        storage.analyticsResults.get(userId, "nutrition_insights"),
-        getNutritionAnchor(userId),
-      ]);
-      if (!row) {
-        const empty: NutritionInsightsResponse = { insights: null };
-        res.json(empty);
-        return;
-      }
-      const payload = row.payload as NutritionInsightsResponse;
-      const response: NutritionInsightsResponse = {
-        ...payload,
-        generatedAt: row.generatedAt.toISOString(),
-        stale: computeStale(row, anchor),
-      };
+      // The anchor is the food log, not the workouts.
+      const stored = await readStoredAnalysis<NutritionInsightsResponse>(userId, "nutrition_insights", getNutritionAnchor);
+      const response: NutritionInsightsResponse = stored ?? { insights: null };
       res.json(response);
     }),
   );

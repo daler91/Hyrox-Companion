@@ -6,6 +6,7 @@
  * recent running to trust a personalized pace.
  */
 
+import { clamp, median } from "@shared/numeric";
 import {
   GENERIC_RUN_PACE_SEC_PER_M,
   MAX_RUN_PACE_RATIO,
@@ -32,16 +33,6 @@ const RUN_FOCUS = /run/i;
 // logging making no difference (audit M4).
 const MIN_RUN_SPEED_MS = 1.1;
 const MAX_RUN_SPEED_MS = 6.5;
-
-function clamp(n: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, n));
-}
-
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-}
 
 /** Seconds per meter for a run log, from avgSpeed when present, else distance/duration. */
 function logSecPerMeter(log: WorkoutLog): number | null {

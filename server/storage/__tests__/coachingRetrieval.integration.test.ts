@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { EMBEDDING_DIMENSIONS } from "../../gemini/client";
+import { EMBEDDING_DIMENSIONS } from "../../constants";
 import { ensureVectorSchema } from "../../maintenance";
 import { vectorPool } from "../../vectorDb";
 import { storage } from "../index";

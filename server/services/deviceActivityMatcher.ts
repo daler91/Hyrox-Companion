@@ -464,21 +464,6 @@ export function rankCandidates(
   return candidates.map((c) => scoreCandidate(activity, c)).sort((a, b) => b.score - a.score);
 }
 
-export function decideMatch(
-  activity: DeviceActivityInput,
-  candidates: readonly MatchCandidate[],
-  thresholds: MatchThresholds = DEFAULT_MATCH_THRESHOLDS,
-): MatchDecision {
-  if (activity.movingTimeSec < MIN_MATCHABLE_MOVING_SEC) return { outcome: "none", score: null };
-  const [best] = rankCandidates(activity, candidates);
-  if (!best) return { outcome: "none", score: null };
-  if (best.score >= thresholds.autoLink)
-    return { outcome: "link", candidate: best.candidate, score: best.score };
-  if (best.score >= thresholds.suggest)
-    return { outcome: "suggest", candidate: best.candidate, score: best.score };
-  return { outcome: "none", score: best.score };
-}
-
 // ── Batch assignment ────────────────────────────────────────────────────────
 
 export interface PlannedMatch {

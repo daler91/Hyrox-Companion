@@ -14,6 +14,7 @@ import type { TrainingOverview, User, WorkoutLog } from "@shared/schema";
 import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
 import { calculateTrainingOverview, type DistanceSet, type ExerciseSetWithDate } from "./analyticsService";
+import { trainingLoadAthlete } from "./trainingLoad/types";
 
 /** Add (or subtract) whole calendar days to a YYYY-MM-DD string, in UTC. */
 export const addCalendarDays = addDaysToISODate;
@@ -159,15 +160,7 @@ function overviewAthleteSettings(user: User | undefined) {
     userTimezone: user?.userTimezone,
     weightUnit: user?.weightUnit ?? "kg",
     distanceUnit: user?.distanceUnit ?? "km",
-    athlete: {
-      age: user?.age ?? null,
-      gender: user?.gender ?? null,
-      restingHr: user?.restingHr ?? null,
-      // Scales unweighted-rep tonnage with the body being moved (audit M2).
-      bodyweightKg: user?.bodyweightKg ?? null,
-      maxHr: user?.maxHr ?? null,
-      ftp: user?.ftp ?? null,
-    },
+    athlete: trainingLoadAthlete(user),
   };
 }
 

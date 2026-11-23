@@ -4,6 +4,7 @@ import { getAuth } from "@clerk/express";
 import { type CsrfRequestMethod, doubleCsrf } from "csrf-csrf";
 import type { Request, RequestHandler } from "express";
 
+import { getClerkUserId } from "../clerkUserId";
 import { env } from "../env";
 import { logger } from "../logger";
 
@@ -59,12 +60,9 @@ const CSRF_IGNORED_METHODS: ReadonlySet<string> = new Set(CSRF_IGNORED_METHOD_LI
 const { doubleCsrfProtection, generateCsrfToken } = doubleCsrf({
   getSecret: () => csrfSecret,
   getSessionIdentifier: (req: Request) => {
-    try {
-      const auth = getAuth(req);
-      if (auth?.userId) return auth.userId;
-    } catch {
-      // getAuth throws if clerk middleware hasn't run — fall through
-    }
+    // No Clerk user (or no Clerk middleware): fall through to the IP.
+    const userId = getClerkUserId(req);
+    if (userId) return userId;
     return req.ip ?? "anonymous";
   },
   cookieName: env.NODE_ENV === "production" ? "__Host-fitai.x-csrf" : "fitai.x-csrf",
@@ -130,7 +128,8 @@ export function bearerAuthState(req: Request): "none" | "authenticated" | "rejec
   try {
     userId = getAuth(req)?.userId;
   } catch {
-    // getAuth throws when clerkMiddleware has not run (no Clerk keys).
+    // getAuth throws when clerkMiddleware has not run (no Clerk keys). Not
+    // getClerkUserId: this case answers "none", where no user is "rejected".
     return "none";
   }
   return userId ? "authenticated" : "rejected";

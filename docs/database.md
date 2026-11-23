@@ -1263,7 +1263,7 @@ The `fromDriver` function parses the PostgreSQL `[0.1,0.2,...]` text representat
 
 ### Embedding Dimensions
 
-The embedding column uses **3072 dimensions**, matching the output of the Gemini embedding model `gemini-embedding-001`. The dimension count is the `EMBEDDING_DIMENSIONS` constant in `server/gemini/client.ts` (alongside the `EMBEDDING_MODEL` constant), and is mirrored in the table definition:
+The embedding column uses **3072 dimensions**, matching the output of the Gemini embedding model `gemini-embedding-001`. The dimension count is the `EMBEDDING_DIMENSIONS` constant in `server/constants.ts` (the model is `EMBEDDING_MODEL` in `server/gemini/client.ts`; the count sits apart so the storage layer need not import the Gemini client), and is mirrored in the table definition:
 
 ```typescript
 embedding: vector("embedding", { dimensions: 3072 }),

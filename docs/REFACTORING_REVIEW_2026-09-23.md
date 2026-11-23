@@ -36,9 +36,10 @@ the new shared helpers.
 
 ## Status (updated 2026-11-22)
 
-Every open item below was re-checked against `main` at `634f123`. Eight were fixed on the
-branch `claude/loving-lovelace-jixmuw` ("this branch" below); the rest of this document
-still describes the code as it was reviewed on 2026-09-23.
+Every open item below was re-checked against `main` at `634f123`, then worked on the branch
+`claude/loving-lovelace-jixmuw` ("this branch" below). The rest of this document still
+describes the code as it was reviewed on 2026-09-23. What remains open: the owner decisions
+D2, D4 and D6, and the parts marked "left" below, each with its reason.
 
 **Needs an owner decision**
 
@@ -62,38 +63,79 @@ still describes the code as it was reviewed on 2026-09-23.
 | --- | ------ | --------------- |
 | R1  | Fixed  | This branch: every push in `emailScheduler.ts` goes through `sendPushDetached`, and a test fails if another `sendPushToUser(` call appears there. |
 | R2  | Fixed  | This branch: the seven claims call one private `claimLedger(column, …)`; a test renders each one's SET and WHERE. |
-| R3  | Open   | `getDueSessionCount` still hand-writes the absence `NOT EXISTS`. |
-| R4  | Open   | Lock keys still live in three files; `CRON_LOCK_KEYS` now holds 19. |
-| R5  | Open   | Still four copies of the AI gate. Tests now cover the budget branch of all four. |
-| R6  | Open, grown | 9 retryable-status branches (was 8) and 7 sha256 + `timingSafeEqual` copies (was 5): the Strava stream fetch, `isStateBoundToBrowser` and `verifierMatchesChallenge` were added since. |
+| R3  | Fixed  | This branch: `getDueSessionCount` uses `not(absenceDeclaredForPlanDay(db, userId))`; the rendered SQL was byte-identical before and after, and a test pins it. |
+| R4  | Fixed  | This branch: `server/advisoryLockKeys.ts` holds every fixed key (values unchanged). The uniqueness test covers all of them, and a second test pins all 21 values. Per-user hashed keys are not listed there. |
+| R5  | Fixed  | This branch: `resolveAiBlocker()` and `AiBlockedReason` in `server/services/aiGate.ts`, used by all four analyses; the race predictor keeps a small wrapper that turns a failed budget lookup into `"ai_error"`, as before. |
+| R6  | Fixed  | This branch: `throwIfRetryableStatus` (`server/utils/httpRetry.ts`) at all 9 retryable-status sites, and `safeEqualDigest` (`server/utils/safeEqualDigest.ts`) at all 7 constant-time compares. |
 
-**Consolidation, moderate payoff**
+**Consolidation, moderate payoff** (all on this branch unless a commit is named)
 
-- Partly done: training-load inputs (`dailyLoad.ts` fetches once, `1bea53e5`; the athlete
-  options are still built at 6 call sites); `suggestionService.ts` (parsing and failure
-  handling shared, `f280be3f`; the prompt, generate and validate pairs remain; the review-notes
-  side is now tested); `emailTemplates.ts` (the three suffixes call `pluralSuffix`, `e8e34fdc`;
-  the shadowing local and the weekly-summary button remain).
-- Client: the food-log invalidation set is shared (`foodLogQueryKeys`, `7b7272be`); the
-  annotation delete shares its success handling (`3690f495`) but not the mutation;
-  `MoveEntryMenu` is its own file (`3690f495`), though its quick jumps and the logged-workout
-  clamp are untested. `format(new Date(), "yyyy-MM-dd")` is at 9 non-test sites; "about 16"
-  above was an overcount.
-- Grown: cron jobs are now 18, with 11 still inlining `scheduleLockedCronJob`'s shape;
-  `ownsPlanDay` has 4 copies (two more in `workoutUseCases.ts` and `workoutsCrud.routes.ts`);
-  the Clerk `getAuth` try/catch has 5.
-- Everything else in that list is unchanged.
+- Fixed:
+  - `suggestionService.ts` shares `buildCoachPrompt`, `runCoachCall` and `validateReplyItems`;
+    the prompts are byte-identical.
+  - The label sanitiser is one `ampersandsToAnd` (`server/utils/sanitize.ts`), and plan
+    generation uses `resolveConfidence`.
+  - `coachService.ts` reuses `buildReviewNotes`; `toUpcomingWorkout` lives in
+    `aiModificationGuard.ts`; the materials rule is `selectCoachingMaterials`
+    (`server/prompts/materialsBuilder.ts`).
+  - Stored analysis reads: `readStoredAnalysis` (`server/routes/_helpers/storedAnalysis.ts`).
+  - Route wiring: `server/routes/_helpers/exerciseSetUseCase.ts`.
+  - `resolveUserToday` and `ownsPlanDay` are one each, in `server/storage/shared.ts`.
+  - `emailTemplates.ts`: the shadowing local is renamed and the weekly-summary button uses
+    `ctaButton()`.
+  - Client: `isTimeoutLikeApiError` and one `extractApiErrorCode` (`client/src/lib/apiError.ts`);
+    `getTodayString()` at all 9 sites; `useMoveTimelineEntry` uses
+    `buildOptimisticTimelineHandlers`; one annotation-delete mutation; `makeDraftExerciseSet`;
+    the food-log set (`7b7272be`).
+  - Client components: `WorkoutSheetTitle`; LogSheet's actions use `ReadOnlyWorkoutActionGrid`;
+    `findLeastLoadedCoverage`/`describeNextFocus` with the thresholds read from
+    `STALE_AFTER_DAYS`/`WATCH_AFTER_DAYS`; `useImagePreview`; `MoveEntryMenu` is tested.
+- Partly, with what was left and why:
+  - Training-load inputs: `trainingLoadAthlete`/`trainingLoadAthleteOptions`
+    (`server/services/trainingLoad/types.ts`) at 5 sites. Left: `loadRaceReadiness`, which
+    defaults units with `??` rather than `||`.
+  - Cron: 15 of 18 jobs go through `scheduleLockedCronJob`, and one `scheduledJobs` list is
+    stopped. Left inline: the email tick, which is also the start guard and has its own late-tick
+    tolerance, and the two nutrition jobs, which check a feature flag before taking the lock.
+  - Vision: the exercise image parse calls `callGeminiVisionJson`. Left: the re-export shim in
+    `gemini/client.ts`, which `visionParsing.ts` and its tests still read through.
+  - AI guards: 10 routes use the builder's `aiConsent`/`aiBudget`. Left: `POST
+    /overview-analysis`, whose query validation must run before the guards (a bad `range` would
+    otherwise answer 403 instead of 400).
+  - Clerk `getAuth`: `getClerkUserId` (`server/clerkUserId.ts`) at 4 of 5 sites. Left:
+    `bearerAuthState`, where a throw means something different from a missing user.
+  - Toasts: `client/src/lib/sharedToasts.ts` holds the photo-parse, AI-limit and plan-overlap
+    toasts. Left: plan generation's rate-limit toast shows the generic wait while
+    `useApiMutation`'s shows the 429 body's message; sharing it would change the copy, so that is
+    an owner decision.
+  - Analytics: `AnalyticsEmptyState.tsx` and the shared chart-date formatters. Left: the
+    `formatTsb`, `formatMonotony` and `formatLoad` copies (their outputs differ) and five empty
+    states with different markup.
 
-**Small or cosmetic**
+**Small or cosmetic** (all on this branch)
 
-- Partly done: Epley (the client uses `epley` from `shared/progression.ts`, `d1e9434b`; the
-  server PR formula and `PersonalRecordsTab`'s "2-10 reps" remain); test-only exports
-  (`planWeekForDisplay` and `isPlanEnded` now have production callers, `6f927785`).
-- Grown: `median` has 5 copies plus a null-returning variant, `clamp` 8, `round1` 10.
-- The unreachable `normalized.exercises ?? rawArray` fallback appears 6 times, not 8.
-- Lint: 0 errors and 18 warnings, 13 of them size or complexity (10 `max-lines`, 2
-  `max-lines-per-function`, 1 `complexity`).
-- Everything else in that list is unchanged.
+- Fixed:
+  - `shared/numeric.ts` holds `median`, `medianOrNull`, `clamp` and `round1`.
+  - Epley: shared rep bounds and an `epleyLoad` inverse; `PersonalRecordsTab` builds its note
+    from the bounds.
+  - `dateRange` returns `[]` for an unparseable bound; a malformed end used to loop forever.
+  - `EMBEDDING_DIMENSIONS` lives in `server/constants.ts`, which breaks the import cycle.
+  - `TrainingStyleStrategy` keeps `id` and `buildPromptContext`; `prescribeNext` is gone, and
+    the checklist is corrected.
+  - Test-only exports removed: `decideMatch`, `persistRacePrediction`,
+    `saveLogWorkoutDraftFromTimelineEntry`, `getContextLogger`, and the unused barrel
+    re-exports.
+  - Unreachable code removed: the `"plan_overlap"` restore reason (it never left the server),
+    the legacy-import allow-list and the `?? rawArray` fallbacks.
+  - `MAX_IMPORT_PLAN_WEEKS`; `main.tsx` reads `featureFlags`; `process.env` is read only in
+    `env.ts`.
+- Partly: `addDaysLocal` delegates to `addDaysToISODate`, `utcMondayOf` serves both server
+  Monday helpers, and `WorkoutHeatmap` uses `getStartOfWeek`. Left: the client
+  `weekDates.mondayOf`, `getWeekRangeForDate` and the nutrition page's `addDays`, which each
+  behave differently on input that can reach them.
+- Lint: 0 errors and 17 warnings, 12 of them size or complexity (9 `max-lines`, 2
+  `max-lines-per-function`, 1 `complexity`) and 5 import order. `planAdjustmentService.ts` is
+  back under 800 lines; `coachService.ts` is at 803.
 
 ---
 

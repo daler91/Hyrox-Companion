@@ -74,10 +74,10 @@ function registeredQueueNames(): Set<string> {
   return names;
 }
 
-/** The keys of the CRON_LOCK_KEYS registry in server/cron.ts. */
+/** The keys of the CRON_LOCK_KEYS registry in server/advisoryLockKeys.ts. */
 function cronLockKeys(): string[] {
-  const block = /export const CRON_LOCK_KEYS = \{([\s\S]*?)\} as const;/.exec(read("server/cron.ts"));
-  if (!block) throw new Error("CRON_LOCK_KEYS registry not found in server/cron.ts");
+  const block = /export const CRON_LOCK_KEYS = \{([\s\S]*?)\} as const;/.exec(read("server/advisoryLockKeys.ts"));
+  if (!block) throw new Error("CRON_LOCK_KEYS registry not found in server/advisoryLockKeys.ts");
   return [...block[1].matchAll(/^\s*([a-zA-Z][a-zA-Z0-9]*)\s*:/gm)].map((m) => m[1]);
 }
 

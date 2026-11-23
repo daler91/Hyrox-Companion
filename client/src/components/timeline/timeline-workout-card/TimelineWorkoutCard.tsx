@@ -1,7 +1,6 @@
 import { useDraggable } from "@dnd-kit/core";
 import { isRestLikePlanDay } from "@shared/planDayKind";
 import type { DistanceUnit } from "@shared/unitConversion";
-import { format } from "date-fns";
 import { BookOpen, CheckCircle2, Circle, Database, FileText, Loader2, Square } from "lucide-react";
 import React, { useMemo, useState } from "react";
 
@@ -20,7 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { getAdherenceToneClassName } from "@/lib/adherenceFormat";
-import { getLatestLoggableDateString } from "@/lib/dateUtils";
+import { getLatestLoggableDateString, getTodayString } from "@/lib/dateUtils";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
 import { featureFlags } from "@/lib/featureFlags";
 import { isPendingTimelineEntry } from "@/lib/pendingWorkouts";
@@ -327,7 +326,7 @@ function isTimelineEntryTargetedByCoach(
   isPlanned: boolean,
   entry: TimelineWorkoutEntry,
 ): boolean {
-  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const todayStr = getTodayString();
   return Boolean(isAutoCoaching && isPlanned && entry.date >= todayStr);
 }
 

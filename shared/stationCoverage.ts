@@ -45,6 +45,9 @@ const STATION_BY_EXERCISE: Readonly<Record<string, HyroxStation>> = {
   wall_balls: "wall_balls",
 };
 
+/** "row" or "rows" on its own: the erg, unless a strength qualifier comes right before it. */
+const BARE_ROW = /\brows?\b/g;
+
 /**
  * Keywords for scanning free text — a day's focus ("Sled push + wall balls") or
  * a custom exercise's label. Needed because `normalizeExerciseName` resolves
@@ -56,32 +59,29 @@ const STATION_BY_EXERCISE: Readonly<Record<string, HyroxStation>> = {
  * push-ups" and "Throwdown" as rowing and "Brunch" as running, which hid real
  * gaps on the coverage card and in the coach's EXERCISE GAPS. Hyphens and
  * underscores read as spaces, so "ski-erg" and "wall-balls" match too, and
- * apostrophes are dropped, so "farmer's carry" does. Ported
- * from the coach's EXERCISE_FOCUS_MAP, which was the only place this ever worked.
+ * apostrophes are dropped, so "farmer's carry" does. Written as literal
+ * patterns rather than built from strings. Ported from the coach's
+ * EXERCISE_FOCUS_MAP, which was the only place this ever worked.
  */
-const STATION_KEYWORDS: Readonly<Record<string, CoverageStation>> = {
-  skierg: "skierg",
-  "ski erg": "skierg",
-  "sled push": "sled_push",
-  "sled pull": "sled_pull",
-  "burpee broad jump": "burpee_broad_jump",
-  burpee: "burpee_broad_jump",
-  rowing: "rowing",
-  row: "rowing",
-  "farmers carry": "farmers_carry",
-  "farmer carry": "farmers_carry",
-  "sandbag lunge": "sandbag_lunges",
-  "wall ball": "wall_balls",
-  running: "running",
-  run: "running",
-};
+const STATION_PATTERNS: readonly (readonly [RegExp, CoverageStation])[] = [
+  [/\bski\s*ergs?\b/g, "skierg"],
+  [/\bsled\s+push(?:es)?\b/g, "sled_push"],
+  [/\bsled\s+pulls?\b/g, "sled_pull"],
+  // Also covers "burpee broad jump(s)".
+  [/\bburpees?\b/g, "burpee_broad_jump"],
+  [/\browing\b/g, "rowing"],
+  [BARE_ROW, "rowing"],
+  [/\bfarmers?\s+carry\b/g, "farmers_carry"],
+  [/\bsandbag\s+lunges?\b/g, "sandbag_lunges"],
+  [/\bwall\s+balls?\b/g, "wall_balls"],
+  [/\b(?:running|runs?)\b/g, "running"],
+];
 
 /**
  * Words that, directly before "row", name a strength exercise rather than the
  * rowing station: "Bent-over rows", "Seated cable row", "DB row". Covers every
  * row in the exercise library (stationCoverage.test.ts checks this) plus the
- * common gym spellings. Only the bare "row" keyword is checked: "rowing" is
- * the erg.
+ * common gym spellings. Only BARE_ROW is checked: "rowing" is the erg.
  */
 const STRENGTH_ROW_QUALIFIER =
   /\b(?:bent over|upright|t ?bar|cable|seated|machine|inverted|pendlay|landmine|chest supported|dumbbell|db|barbell|bb|kettlebell|kb|renegade|trx|ring|band(?:ed)?|gorilla|meadows|yates|high|low|(?:single|one) arm)\s+$/;
@@ -94,21 +94,6 @@ function normalizeFreeText(text: string): string {
     .replace(/[-_]+/g, " ");
 }
 
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** A whole-word pattern for a keyword, allowing a plural ("pushes", "rows"). */
-function keywordPattern(keyword: string): RegExp {
-  const words = keyword.split(" ").map(escapeRegExp).join("\\s+");
-  const plural = keyword.endsWith("sh") ? "(?:es)?" : "s?";
-  return new RegExp(`\\b${words}${plural}\\b`, "g");
-}
-
-const KEYWORD_PATTERNS: readonly (readonly [string, RegExp, CoverageStation])[] = Object.entries(
-  STATION_KEYWORDS,
-).map(([keyword, station]) => [keyword, keywordPattern(keyword), station] as const);
-
 /** The station an exercise trains, or null when it trains none of them. */
 export function stationForExerciseName(exerciseName: string): CoverageStation | null {
   const normalized = normalizeExerciseName(exerciseName);
@@ -118,10 +103,10 @@ export function stationForExerciseName(exerciseName: string): CoverageStation | 
   return isRunningExerciseName(normalized) ? "running" : null;
 }
 
-/** Whether any match of the keyword in the text names the station. */
-function keywordNamesStation(keyword: string, pattern: RegExp, haystack: string): boolean {
+/** Whether any match of the pattern in the text names its station. */
+function patternNamesStation(pattern: RegExp, haystack: string): boolean {
   for (const match of haystack.matchAll(pattern)) {
-    if (keyword !== "row") return true;
+    if (pattern !== BARE_ROW) return true;
     if (!STRENGTH_ROW_QUALIFIER.test(haystack.slice(0, match.index))) return true;
   }
   return false;
@@ -131,8 +116,8 @@ function keywordNamesStation(keyword: string, pattern: RegExp, haystack: string)
 export function stationsForFreeText(text: string): CoverageStation[] {
   const haystack = normalizeFreeText(text);
   const found = new Set<CoverageStation>();
-  for (const [keyword, pattern, station] of KEYWORD_PATTERNS) {
-    if (!found.has(station) && keywordNamesStation(keyword, pattern, haystack)) found.add(station);
+  for (const [pattern, station] of STATION_PATTERNS) {
+    if (!found.has(station) && patternNamesStation(pattern, haystack)) found.add(station);
   }
   return [...found];
 }

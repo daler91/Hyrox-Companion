@@ -157,6 +157,52 @@ export interface AthleteLoadContext {
   bodyweightKg?: number | null;
 }
 
+/** The profile fields `trainingLoadAthlete` and `trainingLoadAthleteOptions` read off a user row. */
+export interface TrainingLoadAthleteProfile {
+  age?: number | null;
+  gender?: string | null;
+  restingHr?: number | null;
+  maxHr?: number | null;
+  ftp?: number | null;
+  bodyweightKg?: number | null;
+  weightUnit?: string | null;
+  distanceUnit?: string | null;
+}
+
+/**
+ * The athlete context `calculateTrainingLoad` reads, from a user row that may
+ * be missing. Each caller used to build this literal by hand; building it
+ * once keeps them reading the same profile fields (C-trainingload,
+ * REFACTORING_REVIEW 2026-09-23).
+ */
+export function trainingLoadAthlete(user: TrainingLoadAthleteProfile | undefined): AthleteLoadContext {
+  return {
+    age: user?.age ?? null,
+    gender: user?.gender ?? null,
+    restingHr: user?.restingHr ?? null,
+    // Scales unweighted-rep tonnage with the body being moved (audit M2).
+    bodyweightKg: user?.bodyweightKg ?? null,
+    maxHr: user?.maxHr ?? null,
+    ftp: user?.ftp ?? null,
+  };
+}
+
+/**
+ * The athlete's units and context for `calculateTrainingLoad`. An unset or
+ * empty unit reads as kg / km (C-trainingload, REFACTORING_REVIEW 2026-09-23).
+ */
+export function trainingLoadAthleteOptions(user: TrainingLoadAthleteProfile | undefined): {
+  weightUnit: string;
+  distanceUnit: string;
+  athlete: AthleteLoadContext;
+} {
+  return {
+    weightUnit: user?.weightUnit || "kg",
+    distanceUnit: user?.distanceUnit || "km",
+    athlete: trainingLoadAthlete(user),
+  };
+}
+
 export const DEFAULT_EXERCISE_LOAD_TAGS: ExerciseLoadTagInput[] = [
   tag("deadlift", [1, 0.2, 0.2, 0.1, 1.5, 1, 1.2, 0]),
   tag("sumo_deadlift", [1, 0.25, 0.2, 0.1, 1.45, 1, 1.15, 0]),

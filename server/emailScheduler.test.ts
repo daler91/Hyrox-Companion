@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -968,7 +967,8 @@ describe('fire-and-forget push rejection containment', () => {
   // of the .catch, so a new email kind copied without it would bring the crash
   // back. The helper is now the only caller.
   it('sends every push through sendPushDetached', () => {
-    const source = readFileSync(path.resolve(process.cwd(), 'server/emailScheduler.ts'), 'utf8');
+    // Relative to the repo root, where vitest runs.
+    const source = readFileSync('server/emailScheduler.ts', 'utf8');
     expect(source.match(/\bsendPushToUser\(/g)).toHaveLength(1);
     expect(source).toMatch(/function sendPushDetached\([^)]*\): void \{\n\s+void sendPushToUser\(userId, payload\)\.catch\(/);
   });

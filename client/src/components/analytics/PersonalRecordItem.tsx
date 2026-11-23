@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { categoryChipColors, categoryLabels, getExerciseLabel } from "@/lib/exerciseUtils";
 import { formatRecordAmount, formatRecordTime } from "@/lib/personalRecordFormat";
 
+import { formatChartDate } from "./chartConstants";
+
 interface PersonalRecordItemProps {
   readonly pr: {
     exerciseName: string;
@@ -20,11 +22,6 @@ interface PersonalRecordItemProps {
   };
   readonly weightLabel: string;
   readonly dLabel: string;
-}
-
-function formatDate(d: string): string {
-  const date = new Date(d + "T00:00:00");
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordItemProps) {
@@ -49,7 +46,7 @@ export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordIt
               <p className="font-bold tabular-nums" data-testid={`text-pr-weight-${pr.exerciseName}`}>
                 {formatRecordAmount(pr.maxWeight)}<span className="text-muted-foreground text-xs font-normal ml-0.5">{weightLabel}</span>
               </p>
-              {pr.maxWeightDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.maxWeightDate)}</p>}
+              {pr.maxWeightDate && <p className="text-[10px] text-muted-foreground">{formatChartDate(pr.maxWeightDate)}</p>}
             </div>
           </div>
         )}
@@ -63,7 +60,7 @@ export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordIt
               <p className="font-bold tabular-nums" data-testid={`text-pr-distance-${pr.exerciseName}`}>
                 {formatRecordAmount(pr.maxDistance)}<span className="text-muted-foreground text-xs font-normal ml-0.5">{dLabel}</span>
               </p>
-              {pr.maxDistanceDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.maxDistanceDate)}</p>}
+              {pr.maxDistanceDate && <p className="text-[10px] text-muted-foreground">{formatChartDate(pr.maxDistanceDate)}</p>}
             </div>
           </div>
         )}
@@ -78,7 +75,7 @@ export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordIt
                 {/* Stored in minutes; read as a clock, not "3.7666667min". CL35 (CODEBASE_ANALYSIS_2026-10-03) */}
                 {formatRecordTime(pr.bestTime)}
               </p>
-              {pr.bestTimeDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.bestTimeDate)}</p>}
+              {pr.bestTimeDate && <p className="text-[10px] text-muted-foreground">{formatChartDate(pr.bestTimeDate)}</p>}
             </div>
           </div>
         )}
@@ -92,7 +89,7 @@ export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordIt
               <p className="font-bold tabular-nums" data-testid={`text-pr-e1rm-${pr.exerciseName}`}>
                 {formatRecordAmount(pr.estimated1RM)}<span className="text-muted-foreground text-xs font-normal ml-0.5">{weightLabel} e1RM</span>
               </p>
-              {pr.estimated1RMDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.estimated1RMDate)}</p>}
+              {pr.estimated1RMDate && <p className="text-[10px] text-muted-foreground">{formatChartDate(pr.estimated1RMDate)}</p>}
             </div>
           </div>
         )}

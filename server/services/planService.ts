@@ -110,8 +110,11 @@ function canonicalizeDayName(raw: string): string {
 // Any plan that claims to span more than a year is almost certainly the
 // result of a typo (someone put "2024" or "52" in the Week column by
 // accident). Capping pre-insert keeps `totalWeeks` sane for downstream
-// analytics like getPlanWeeklyDensity and the plan header.
-const MAX_PLAN_WEEKS = 52;
+// analytics like getPlanWeeklyDensity and the plan header. A limit on CSV
+// import only, separate from the shared MAX_PLAN_WEEKS (24) that caps plan
+// generation; it used to share that name (S-maxPlanWeeks, REFACTORING_REVIEW
+// 2026-09-23).
+const MAX_IMPORT_PLAN_WEEKS = 52;
 
 interface ParsedCSVRows {
   weekNumbers: number[];
@@ -235,10 +238,10 @@ export async function importPlanFromCSV(
   // so non-contiguous imports (e.g. weeks 1, 3, 5) don't under-report duration
   // and make analytics like workouts-per-week over-estimate.
   const rawSpan = maxWeek - minWeek + 1;
-  if (rawSpan > MAX_PLAN_WEEKS) {
+  if (rawSpan > MAX_IMPORT_PLAN_WEEKS) {
     throw new AppError(
       ErrorCode.VALIDATION_ERROR,
-      `Plan span is ${rawSpan} weeks, which exceeds the ${MAX_PLAN_WEEKS}-week maximum. Check the Week column for typos (e.g., years or extra digits).`,
+      `Plan span is ${rawSpan} weeks, which exceeds the ${MAX_IMPORT_PLAN_WEEKS}-week maximum. Check the Week column for typos (e.g., years or extra digits).`,
       400,
     );
   }

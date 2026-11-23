@@ -47,11 +47,12 @@ export interface NextTarget {
     | { readonly field: "deload"; readonly amount: number };
 }
 
-// Same bounds as the estimated-1RM PR metric in
-// server/services/analyticsService.ts: Epley is only trusted for 2–10 rep
-// strength sets, so a suggestion derived from it holds to the same range.
-const EPLEY_MIN_REPS = 2;
-const EPLEY_MAX_REPS = 10;
+// Epley is only trusted for 2–10 rep strength sets, so a suggestion derived
+// from it holds to the same range as the estimated-1RM PR metric
+// (server/services/analyticsService.ts) and the Personal Records tab's note,
+// which read these bounds from here (S-epley, REFACTORING_REVIEW 2026-09-23).
+export const EPLEY_MIN_REPS = 2;
+export const EPLEY_MAX_REPS = 10;
 
 interface WeightSteps {
   /**
@@ -104,6 +105,15 @@ const DELOAD_FRACTION = 0.1;
 
 export function epley(weight: number, reps: number): number {
   return weight * (1 + reps / 30);
+}
+
+/**
+ * `epley` solved for weight: the load a one-rep max implies for `reps`. The
+ * workout engine's two inverse forms used to restate the formula (S-epley,
+ * REFACTORING_REVIEW 2026-09-23).
+ */
+export function epleyLoad(oneRepMax: number, reps: number): number {
+  return oneRepMax / (1 + reps / 30);
 }
 
 function roundWeight(value: number): number {

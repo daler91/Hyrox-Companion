@@ -10,6 +10,8 @@
  * rules of thumb (g/kg anchors scaled by session load) — not prescriptions.
  */
 
+import { clamp } from "./numeric";
+
 export interface SessionFuellingTargetInput {
   /** Session duration in minutes, when known. */
   durationMin: number | null;
@@ -43,10 +45,6 @@ const DEFAULT_POST_CARB_G = 60;
 const DEFAULT_POST_PROTEIN_G = 25;
 
 const DEFAULT_DURATION_MIN = 60;
-
-function clamp(n: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, n));
-}
 
 /** Map RPE to an intensity multiplier; null RPE assumes a moderate session. */
 function intensityFactor(rpe: number | null): { factor: number; label: string; assumed: boolean } {

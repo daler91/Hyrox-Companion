@@ -13,7 +13,6 @@ import {
 
 // Mock dependencies
 vi.mock("../gemini/client", () => ({
-  EMBEDDING_DIMENSIONS: 3072,
   generateEmbedding: vi.fn(),
   generateEmbeddings: vi.fn(),
   trackEmbeddingUsage: vi.fn(),

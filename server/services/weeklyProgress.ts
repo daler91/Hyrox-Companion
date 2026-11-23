@@ -23,26 +23,30 @@ export function getMondayWeekBoundaries(
 ): MondayWeekBoundaries {
   // The athlete's calendar date when we know their zone; UTC otherwise.
   const dateStr = userTimezone ? getLocalDateStrSafe(todayInput, userTimezone) : toIsoDateUtc(todayInput);
+  const thisMondayStr = utcMondayOf(dateStr);
 
-  // Parse it explicitly as a UTC date to prevent local timezone skew
-  // new Date(dateStr) automatically parses "YYYY-MM-DD" as UTC midnight,
-  // but subsequent Date methods like getDay(), getDate() will use the local timezone.
-  // Using getUTCDay(), getUTCDate() ensures we stay in UTC.
-  const today = new Date(dateStr);
-
-  const dayOfWeek = today.getUTCDay(); // 0=Sun
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-
-  const thisMonday = new Date(today);
-  thisMonday.setUTCDate(today.getUTCDate() + mondayOffset);
-
-  const lastMonday = new Date(thisMonday);
-  lastMonday.setUTCDate(thisMonday.getUTCDate() - 7);
+  const lastMonday = new Date(`${thisMondayStr}T00:00:00Z`);
+  lastMonday.setUTCDate(lastMonday.getUTCDate() - 7);
 
   return {
-    thisMondayStr: toIsoDateUtc(thisMonday),
+    thisMondayStr,
     lastMondayStr: toIsoDateUtc(lastMonday),
   };
+}
+
+/**
+ * The Monday on or before `dateStr` (YYYY-MM-DD). Parsed at UTC midnight, and
+ * read and written with the UTC accessors: getDay()/setDate() are local-time
+ * and would shift the week under any server timezone that is not UTC. Shared
+ * by getMondayWeekBoundaries and the training overview's weekly buckets
+ * (`getMonday` in analyticsService.ts), which each computed it
+ * (S-mondayOfWeek, REFACTORING_REVIEW 2026-09-23).
+ */
+export function utcMondayOf(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  const day = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() + (day === 0 ? -6 : 1 - day));
+  return d.toISOString().split("T")[0];
 }
 
 /** An inclusive Monday→Sunday calendar week, both ends as YYYY-MM-DD. */

@@ -5,10 +5,11 @@ import { logger } from "../../logger";
 import { validateAiOutput } from "../../utils/sanitize";
 
 /**
- * Shared Gemini-direct vision plumbing for the nutrition photo parsers
- * (mealParser, labelParser). The provider abstraction has no vision method, so —
- * exactly like exercise image-parsing (server/gemini/exerciseParser/provider.ts)
- * — both parsers talk to the Gemini client directly with the image as
+ * Shared Gemini-direct vision plumbing for every photo parser: the nutrition
+ * meal and label parsers, the chat photo, and the exercise image parse
+ * (server/gemini/exerciseParser/provider.ts, which used to carry its own copy;
+ * C-vision, REFACTORING_REVIEW 2026-09-23). The provider abstraction has no
+ * vision method, so they talk to the Gemini client directly with the image as
  * `inlineData` and a JSON response contract; only the prompts, labels, and
  * error strings differ, so the request/usage/empty-response handling lives here
  * once.
@@ -16,7 +17,8 @@ import { validateAiOutput } from "../../utils/sanitize";
 export async function callGeminiVisionJson(opts: {
   imageBase64: string;
   mimeType: string;
-  userId: string;
+  /** Usage is recorded against this athlete; an exercise parse with none records nothing. */
+  userId: string | undefined;
   systemInstruction: string;
   /** The text part sent alongside the image, e.g. the transcription instruction. */
   userText: string;
@@ -24,6 +26,8 @@ export async function callGeminiVisionJson(opts: {
   retryLabel: string;
   /** AppError message for an empty model response. */
   emptyResponseMessage: string;
+  /** When set, logged with the response before an empty response's AppError. */
+  emptyResponseLog?: string;
 }): Promise<string> {
   const response = await retryWithBackoff(
     (signal) =>
@@ -51,9 +55,11 @@ export async function callGeminiVisionJson(opts: {
   );
 
   // Track usage before the empty check — the call consumed tokens regardless.
-  trackUsageFromResponse(opts.userId, GEMINI_VISION_MODEL, "parse", response);
+  if (opts.userId) trackUsageFromResponse(opts.userId, GEMINI_VISION_MODEL, "parse", response);
 
   if (!response.text || response.text.length === 0) {
+    // bearer:disable javascript_lang_logger_leak
+    if (opts.emptyResponseLog) logger.error({ response }, opts.emptyResponseLog);
     throw new AppError(ErrorCode.AI_ERROR, opts.emptyResponseMessage, 502);
   }
   return validateAiOutput(response.text);

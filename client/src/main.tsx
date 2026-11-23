@@ -19,13 +19,14 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { FallbackErrorBoundary } from "./components/FallbackErrorBoundary";
 import { setupErrorReporting } from "./lib/errorReporting";
+import { featureFlags } from "./lib/featureFlags";
 import { rootErrorHandlers } from "./lib/rootErrorHandlers";
 import { registerServiceWorker } from "./lib/serviceWorkerUpdate";
 import { migrateLegacyKeys } from "./lib/storageMigration";
 
 migrateLegacyKeys();
 
-const emomBuilderEnabled = (import.meta.env.VITE_EMOM_BUILDER_ENABLED as string | undefined) === "true";
+const { emomBuilderEnabled } = featureFlags;
 if (!import.meta.env.PROD) {
   console.warn("[startup-config]", {
     mode: import.meta.env.MODE,

@@ -1,7 +1,7 @@
-import { getAuth } from "@clerk/express";
 import type { NextFunction,Request, Response } from "express";
 import rateLimit, { MemoryStore } from "express-rate-limit";
 
+import { getClerkUserId } from "./clerkUserId";
 import { DEFAULT_RATE_LIMIT_WINDOW_MS } from "./constants";
 import { env } from "./env";
 import { ErrorCode } from "./errors";
@@ -20,17 +20,11 @@ export const DEFAULT_WINDOW_MS = DEFAULT_RATE_LIMIT_WINDOW_MS;
  * were bypassable from a pool of IPs, and users sharing a NAT/CGNAT egress
  * throttled each other. Always resolve through `getAuth()`.
  *
- * `getAuth()` throws when `clerkMiddleware()` has not run (the dev auth-bypass
- * path boots without Clerk keys), so treat that as "no user" and fall back to
- * IP keying rather than failing the request.
+ * `getClerkUserId()` does, and treats a request `clerkMiddleware()` has not run
+ * on (the dev auth-bypass path boots without Clerk keys) as "no user", so the
+ * limiter falls back to IP keying rather than failing the request.
  */
-function resolveAuthUserId(req: Request): string | undefined {
-  try {
-    return getAuth(req)?.userId ?? undefined;
-  } catch {
-    return undefined;
-  }
-}
+const resolveAuthUserId = getClerkUserId;
 
 // One limiter instance per unique (category, maxRequests, windowMs) combination.
 // This preserves the per-category isolation of the previous Map-based design.

@@ -124,6 +124,15 @@ export const DB_STATEMENT_TIMEOUT_MS = 30_000;
  */
 export const PGBOSS_STATEMENT_TIMEOUT_MS = 45 * 60 * 1000;
 
+/**
+ * Dimension count of the embedding model (gemini-embedding-001, in
+ * server/gemini/client.ts), and so of the pgvector columns it fills. It lives
+ * here rather than beside the model so the storage layer can size its vector
+ * queries without importing the Gemini client, which imported back into
+ * storage through aiUsageService (S-importCycle, REFACTORING_REVIEW 2026-09-23).
+ */
+export const EMBEDDING_DIMENSIONS = 3072;
+
 // The station list lives in shared/raceConstants.ts (HYROX_STATION_ORDER), and
 // coverage over it in shared/stationCoverage.ts. The duplicates that used to
 // sit here were one of three copies that had drifted apart.

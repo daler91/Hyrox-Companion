@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   classifyDeviceSport,
   classifyPrescription,
-  decideMatch,
   DEFAULT_MATCH_THRESHOLDS,
   type DeviceActivityInput,
   type MatchCandidate,
+  type MatchDecision,
   MIN_MATCHABLE_MOVING_SEC,
   nameOverlap,
   parsePrescribedDistanceMeters,
@@ -16,6 +16,15 @@ import {
 } from "./deviceActivityMatcher";
 
 const DATE = "2026-09-08";
+
+/**
+ * One activity decided on its own: a sync batch of one. The batch planner is
+ * the only production decision path (S-testOnlyExports, REFACTORING_REVIEW
+ * 2026-09-23 removed a single-activity twin that nothing called).
+ */
+function decideMatch(input: DeviceActivityInput, candidates: readonly MatchCandidate[]): MatchDecision {
+  return planDeviceActivityMatches([input], new Map([[input.localDate, candidates]]))[0].decision;
+}
 
 function activity(overrides: Partial<DeviceActivityInput> = {}): DeviceActivityInput {
   return {
@@ -260,7 +269,7 @@ describe("scoreCandidate", () => {
   });
 });
 
-describe("decideMatch", () => {
+describe("planDeviceActivityMatches for a single activity", () => {
   it("prefers the compatible candidate on a two-session day", () => {
     const run = candidate({ id: "run-day" });
     const strength = candidate({

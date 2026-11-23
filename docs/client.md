@@ -213,7 +213,8 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `ExerciseProgressionCharts` -- Per-exercise progression chart group used by the Trends tab.
 - `FuellingTab` -- Fuelling tab (nutrition flag only): `IntakeVsTrainingChart` and `FuellingCorrelationCard` over the nutrition block view, loaded by `useFuellingAnalytics`.
 - `SessionGradesTab` -- "Session Quality" tab, with `session-grades/WeeklyGradesChart` and `session-grades/BlockGradesTable`.
-- `chartConstants.ts` -- Shared chart configuration.
+- `chartConstants.ts` -- Shared chart configuration, and the `formatChartDate` / `formatChartDateWithYear` date labels (also used by `PersonalRecordItem` and `MafTrendTab`'s test history).
+- `AnalyticsEmptyState` -- Empty states several tabs share: `AnalyticsEmptyCard` (Fuelling, MAF trend), `AnalyticsEmptyPanel` (Overview, exercise progression) and `ChartEmptyNote` (intake vs training, ACWR trend).
 - `training-overview/` -- Overview-tab building blocks: `OverviewStatsGrid`, `OverviewTrendCharts`, `WeeklyWorkoutsChart`, `BodySystemLoadCard`, the load trend charts (`AcwrTrendChart`, `FormMonotonyTrendCharts`, `ObjectiveLoadTrendCharts`), the AI chart analysis (`OverviewAnalysisHeader` with its Generate / Regenerate button, `ChartExplanation` under each chart, and the `useOverviewAnalysis` hook), and the `useTrainingOverviewData` hook.
 
 ### `coach/` -- AI Coach Panel Components
@@ -295,8 +296,9 @@ Workout detail surfaces live in their own top-level directory so Timeline, Log W
 - `SessionPriorityControl` -- Key / supporting / optional chips for a planned or missed session, rendered by `LogSheet` and `PreviewSheet`; hidden for rest days and finished sessions.
 - `SkippedSheet` -- Skipped workout review, undo, and delete surface.
 - `AdhocLogSheet` -- Quick timeline entry surface for logging a new workout.
-- `ReadOnlyWorkoutDetailSheet` -- Shared responsive sheet shell for read-only workout detail surfaces.
+- `ReadOnlyWorkoutDetailSheet` -- Shared responsive sheet shell for read-only workout detail surfaces. Its `ReadOnlyWorkoutActionGrid` (the action buttons, dropping any without a handler) also renders `LogSheet`'s ask-coach and skip actions.
 - `EditableWorkoutTitle` -- Inline sheet-header title editor backed by the existing `focus` field on workout logs or plan days.
+- `WorkoutSheetTitle` / `BadgedWorkoutSheetTitle` -- The title every workout sheet heads with: `EditableWorkoutTitle` on the entry's focus, renameable only with a rename handler and a log or plan day to hold it, with the `workout-title-<id>` test ids. `ReviewSurface` and `SkippedSheet` put a status badge before it.
 - `ExerciseTable` -- Responsive exercise + set table with per-row load/reps/time cells, dense mobile layout, readable exercise names. With `onSaveOrder` (the owner hook's `saveSetOrder`, built by `hooks/useSetOrderSave.ts` inside `useExerciseSetsForOwner`), dragging an exercise shows the new order at once and saves the whole order in one `PATCH .../set-order` (PF5). That save is one of the owner's set writes: it counts towards `isSaving` and the save pill, and `flushPendingSetPatches` waits for it, so "Complete workout" does not copy the plan day in its pre-drag order. A draft table's drag goes through `onUpdateSet` per moved set.
 - `CoachPrescriptionCollapsible` -- Collapsible panel showing the coach's prescribed exercises for the day; integrates free-text parse + photo-parse entry points.
 - `WorkoutCoachPanel`, `EmbeddedWorkoutCoachChat`, and `MobileCoachToggle` -- Embedded AI coach surfaces for asking questions about the open workout.

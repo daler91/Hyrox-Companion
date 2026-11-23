@@ -112,7 +112,7 @@ The OAuth state parameter serves as a CSRF token. It is structured as `userId:ti
 - `nonce` is 8 random bytes (hex)
 - `signature` is a full 256-bit HMAC-SHA256 over the payload
 
-Verification uses timing-safe comparison by hashing both the received and expected signatures with SHA-256, then comparing with `crypto.timingSafeEqual`. This prevents timing attacks and safely handles inputs of different lengths.
+Verification uses timing-safe comparison by hashing both the received and expected signatures with SHA-256, then comparing with `crypto.timingSafeEqual` (`safeEqualDigest()` in `server/utils/safeEqualDigest.ts`, which every secret and signature compare on the server shares). This prevents timing attacks and safely handles inputs of different lengths.
 
 States are additionally **single-use**: once a callback has passed the signature, age and binding checks, and before the code is exchanged, the state is claimed in the `server_runtime_cache` table (TTL = the state max age, swept by the shared-runtime cleanup cron), so replaying a valid state fails even inside the 10-minute window.
 
@@ -769,7 +769,7 @@ Best-effort enqueues are deliberately not awaited and only log a failure, becaus
 
 ### Overview
 
-The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. There are **eighteen recurring** scheduled jobs (the hourly email scan plus seventeen maintenance/telemetry/sync jobs), a one-shot **startup email catch-up** scan 30 seconds after every boot, and a one-shot Strava webhook subscription check on the same delay. Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`), so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
+The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. There are **eighteen recurring** scheduled jobs (the hourly email scan plus seventeen maintenance/telemetry/sync jobs), a one-shot **startup email catch-up** scan 30 seconds after every boot, and a one-shot Strava webhook subscription check on the same delay. Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS` in `server/advisoryLockKeys.ts`), so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
 
 ### Registered Cron Jobs
 
@@ -898,7 +898,7 @@ symbolicated stack trace is lost. The build prints how many files it removed.
 
 Both Sentry inits also pass an explicit `release` field:
 
-- Server (`server/bootstrap/observability.ts`): reads `process.env.SENTRY_RELEASE` first (the value injected by the esbuild plugin at build time), then falls back to `fitai-coach@${npm_package_version}`.
+- Server (`server/bootstrap/observability.ts`): reads `SENTRY_RELEASE` (through `server/env.ts`) first (the value injected by the esbuild plugin at build time), then falls back to `fitai-coach@${npm_package_version}`.
 - Client (`client/src/lib/errorReporting.ts`): reads `import.meta.env.VITE_SENTRY_RELEASE` first (a manual override), then `import.meta.env.SENTRY_RELEASE` (the value injected by the Vite plugin at build time). Resolves to `undefined` in dev/contributor builds; Sentry buckets such events as releaseless, which is acceptable.
 
 **Railway:** the production build runs on Railway (`pnpm install --frozen-lockfile --ignore-scripts && pnpm run build` via `.railway/railway.ts`; dependency install scripts never run there, as in CI). To enable sourcemap upload, set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT_CLIENT`, and `SENTRY_PROJECT_SERVER` as build-time environment variables in the Railway service settings. They are not required at runtime.

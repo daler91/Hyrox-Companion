@@ -124,7 +124,7 @@ Text AI defaults to Gemini for backwards compatibility. Operators can route chat
 | `GEMINI_API_KEY` | Optional | - | Gemini text provider, RAG embeddings, semantic food search embeddings (`gemini-embedding-001`), and image parsing (photo-to-workout, nutrition meal photos and label scans). |
 | `GEMINI_MODEL` | Optional | `gemini-2.5-flash-lite` | Legacy Gemini fast text model. |
 | `GEMINI_SUGGESTIONS_MODEL` | Optional | `gemini-3.1-pro-preview` | Legacy Gemini reasoning text model. |
-| `GEMINI_VISION_MODEL` | Optional | `gemini-2.5-flash` | Photo-to-workout parsing (`POST /api/v1/parse-exercises-from-image`), and nutrition meal-photo parsing (`POST /api/v1/nutrition/parse/photo`) and label scans (`POST /api/v1/nutrition/parse/label`) via `server/services/nutrition/visionParsing.ts`. |
+| `GEMINI_VISION_MODEL` | Optional | `gemini-2.5-flash` | Photo-to-workout parsing (`POST /api/v1/parse-exercises-from-image`), nutrition meal-photo parsing (`POST /api/v1/nutrition/parse/photo`) and label scans (`POST /api/v1/nutrition/parse/label`), all via `server/services/nutrition/visionParsing.ts`. |
 | `RAG_CHUNK_SIZE` | Optional | `600` | Characters per chunk during coaching-material embedding. A positive whole number; anything else is fatal at startup. |
 | `RAG_CHUNK_OVERLAP` | Optional | `100` | Character overlap between adjacent chunks. A whole number from `0` to one less than `RAG_CHUNK_SIZE`; anything else is fatal at startup. |
 | `RAG_MAX_COSINE_DISTANCE` | Optional | `0.6` | Semantic search results further than this cosine distance from the query (0 to 2) are dropped; pinned principles always stay. The default only cuts chunks unrelated to the question. The `[rag] Search returned chunks` log line records the best distance and how many were kept, to tune it against. |
@@ -215,7 +215,7 @@ Sentry is fully optional. A missing DSN disables init without affecting anything
 
 The Sentry `environment` tag is automatically derived from `NODE_ENV` on the server and from Vite's `MODE` on the client — there is no separate env var for it.
 
-The `release` tag is set explicitly in both inits. On the server it is `process.env.SENTRY_RELEASE`, else `fitai-coach@${npm_package_version}` (`server/bootstrap/observability.ts`). On the client it is `VITE_SENTRY_RELEASE` (manual override) if set, else `import.meta.env.SENTRY_RELEASE` (`client/src/lib/errorReporting.ts`). `SENTRY_RELEASE` is meant to be injected at build time by the Sentry plugin when the build-time vars above are set. See [Integrations → Sentry Sourcemap Upload](./integrations.md#sourcemap-upload-and-release-tagging-build-time) for the full flow and Railway setup notes.
+The `release` tag is set explicitly in both inits. On the server it is `SENTRY_RELEASE`, else `fitai-coach@${npm_package_version}` (`server/bootstrap/observability.ts`; both are read through the schema in `server/env.ts`, optional with no default). On the client it is `VITE_SENTRY_RELEASE` (manual override) if set, else `import.meta.env.SENTRY_RELEASE` (`client/src/lib/errorReporting.ts`). `SENTRY_RELEASE` is meant to be injected at build time by the Sentry plugin when the build-time vars above are set. See [Integrations → Sentry Sourcemap Upload](./integrations.md#sourcemap-upload-and-release-tagging-build-time) for the full flow and Railway setup notes.
 
 ---
 

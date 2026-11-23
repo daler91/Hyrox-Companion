@@ -26,7 +26,6 @@ import {
   getWorkoutAnchor,
   persistCoachInsights,
   persistOverviewAnalysis,
-  persistRacePrediction,
   regenerateAndStoreRacePrediction,
 } from "./analyticsPersistence";
 
@@ -88,7 +87,8 @@ describe("getTrainingAnchor", () => {
     mockHistoryEndingInAWalk();
     const generatedAt = "2026-09-03T10:00:00.000Z";
 
-    await persistRacePrediction("u1", { generatedAt } as never);
+    generateRacePrediction.mockResolvedValue({ generatedAt });
+    await regenerateAndStoreRacePrediction("u1");
     await persistOverviewAnalysis("u1", { generatedAt } as never);
     await persistCoachInsights("u1", { generatedAt } as never);
 
@@ -150,13 +150,15 @@ describe("regenerateAndStoreRacePrediction", () => {
       }),
     );
   });
+});
 
-  it("persistRacePrediction still reads its own anchor when the caller has none", async () => {
+describe("persistOverviewAnalysis", () => {
+  it("reads its own anchor when the caller has none", async () => {
     upsert.mockClear();
     listWorkoutLogs.mockResolvedValue([{ date: "2026-09-02" }]);
     countWorkoutLogs.mockResolvedValue(7);
 
-    await persistRacePrediction("u1", { generatedAt: "2026-09-02T10:00:00.000Z" } as never);
+    await persistOverviewAnalysis("u1", { generatedAt: "2026-09-02T10:00:00.000Z" } as never);
 
     expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({ lastWorkoutDateAtGeneration: "2026-09-02", entryCountAtGeneration: 7 }),

@@ -5,10 +5,10 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
+import { MIGRATION_ADVISORY_LOCK_KEY } from "./advisoryLockKeys";
 import { loadPersistedBreakerState } from "./ai/circuitBreaker";
-import { STALE_PLAN_GENERATION_THRESHOLD_MS } from "./constants";
+import { EMBEDDING_DIMENSIONS, STALE_PLAN_GENERATION_THRESHOLD_MS } from "./constants";
 import { pool } from "./db";
-import { EMBEDDING_DIMENSIONS } from "./gemini/client";
 import { logger } from "./logger";
 import {
   assertCriticalTablesExist,
@@ -35,10 +35,6 @@ export async function ensurePgvectorExtension() {
     if (client) client.release();
   }
 }
-
-// Distinct from CRON_LOCK_KEYS and KEY_ROTATION_LOCK_KEY (…009) — the full
-// 42_010_0xx registry is documented above CRON_LOCK_KEYS in server/cron.ts.
-const MIGRATION_ADVISORY_LOCK_KEY = 42_010_010n;
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, "..", "migrations");
 

@@ -11,6 +11,7 @@ import { enqueueStravaSync, isStravaAutoSyncEnabled } from "./services/stravaSyn
 import { deleteRuntimeCache, getRuntimeCache, setRuntimeCache } from "./sharedRuntimeState";
 import { checkSafeOutboundUrl } from "./ssrfGuard";
 import { storage } from "./storage";
+import { safeEqualDigest } from "./utils/safeEqualDigest";
 import { sanitizeForLog } from "./utils/sanitize";
 
 // =============================================================================
@@ -439,13 +440,6 @@ export async function processStravaWebhookEvent(
   return "enqueued";
 }
 
-function safeEqual(a: string, b: string): boolean {
-  // Hash both sides so timingSafeEqual sees equal lengths whatever the input.
-  const aHash = crypto.createHash("sha256").update(a).digest();
-  const bHash = crypto.createHash("sha256").update(b).digest();
-  return crypto.timingSafeEqual(aHash, bHash);
-}
-
 /** The query of Strava's subscription challenge, or null when it is not one. */
 function readHubChallenge(
   query: Request["query"],
@@ -454,7 +448,7 @@ function readHubChallenge(
   const verifyToken = query["hub.verify_token"];
   const challenge = query["hub.challenge"];
   // Shape checks only — the token's value is compared in constant time by
-  // safeEqual, never here.
+  // safeEqualDigest, never here.
   // bearer:disable javascript_lang_observable_timing
   if (typeof verifyToken !== "string" || typeof challenge !== "string") return null;
   return { verifyToken, challenge };
@@ -464,7 +458,7 @@ function readHubChallenge(
 function handleStravaWebhookValidation(req: Request, res: Response) {
   const params = readHubChallenge(req.query);
   const expected = getStravaWebhookVerifyToken();
-  if (!params || !expected || !safeEqual(params.verifyToken, expected)) {
+  if (!params || !expected || !safeEqualDigest(params.verifyToken, expected)) {
     reqLogger(req).warn({ context: LOG_CTX }, "Rejected Strava webhook validation request");
     return res.status(403).json({ error: "Invalid verify token", code: "FORBIDDEN" });
   }

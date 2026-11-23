@@ -637,6 +637,7 @@ Instructions for generating multi-week training plans with day-by-day structure.
 - `buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks, options)` -- Assembles the full system prompt with training stats and coaching materials. When `retrievedChunks` is provided it takes priority over `coachingMaterials`. `options` (`SystemPromptOptions`) carries the per-message parts: the FOCUSED WORKOUT block, RECENT PLAN CHANGES, the earlier-conversation notes, the chat safety signals and whether the coach has tools (`server/prompts.ts`).
 - `buildCoachingMaterialsSection(materials)` -- Formats legacy coaching materials (`server/prompts/materialsBuilder.ts`).
 - `buildRetrievedChunksSection(chunks)` -- Formats RAG-retrieved chunks (`server/prompts/materialsBuilder.ts`).
+- `selectCoachingMaterials(retrievedChunks, coachingMaterials)` -- The one "chunks first, else legacy materials" rule: the rendered section and its source (`rag`, `legacy` or none). The chat prompt, the suggestions prompt (`extractCoachingMaterialsText`) and the auto-coach (`retrieveCoachingText`) all go through it (`server/prompts/materialsBuilder.ts`).
 - `buildOverallStats` / `buildExerciseFocus` / `buildStructuredPerformance` / `buildRecentWorkouts` / `buildUpcomingWorkouts` -- Format the training-data sections of the system prompt (`server/prompts/coachingContext.ts`).
 
 ---
@@ -726,7 +727,7 @@ Tracks the last trained date for each of the 8 Hyrox functional stations plus ru
 
 Detection uses two strategies:
 1. **Exercise sets:** Maps each logged set's `exerciseName` (canonical name or registered alias) to a station. The interval variants `ski_erg_intervals` and `rowing_intervals` count for `skierg` and `rowing`, and every exercise defined with category `running` counts for `running`.
-2. **Focus text:** Scans the workout focus string (and custom exercise labels) for the keywords in `STATION_KEYWORDS`, as case-insensitive whole words with a plural allowed. Hyphens and underscores read as spaces and apostrophes are dropped, so "ski erg" and "ski-erg" both map to `skierg`, "rows" to `rowing`, "farmer's carry" to `farmers_carry` and "runs" to `running`. A substring match used to count "Med ball throws" as rowing and "Brunch" as running. A "row" directly after a strength qualifier ("Bent-over rows", "Seated cable row", "DB row") does not count as `rowing`: those train with weights, not on the erg.
+2. **Focus text:** Scans the workout focus string (and custom exercise labels) for the patterns in `STATION_PATTERNS` (`shared/stationCoverage.ts`), as case-insensitive whole words with a plural allowed. Hyphens and underscores read as spaces and apostrophes are dropped, so "ski erg" and "ski-erg" both map to `skierg`, "rows" to `rowing`, "farmer's carry" to `farmers_carry` and "runs" to `running`. A substring match used to count "Med ball throws" as rowing and "Brunch" as running. A "row" directly after a strength qualifier ("Bent-over rows", "Seated cable row", "DB row") does not count as `rowing`: those train with weights, not on the erg.
 
 Stations the athlete's training constraints rule out are dropped. `stationsRuledOutByConstraints()` matches whole words in the constraint text (the older `trainingConstraints` note and every active fact on the [athlete card](#the-athlete-card), joined by `standingConstraintsText()`), so "no sled at my gym" drops both sled stations and "can't do burpees" drops `burpee_broad_jump`. The drop is coach-side only: the analytics coverage still shows every station.
 
@@ -881,6 +882,9 @@ calls it inline: the auto-coach job, the `…IfAllowed` generators the midnight
 recompute uses (coach insights, overview analysis, nutrition insights), race
 prediction, the planned-session estimate, semantic food search, the structured
 apply of a timeline suggestion and the legacy text parse on workout creation.
+The three `…IfAllowed` generators and race prediction share one gate,
+`resolveAiBlocker()` (`server/services/aiGate.ts`): the kill switch, then
+consent, then the budget, stopping at the first that blocks.
 The food-embedding cron (`embedMissingFoods()`), which embeds cached foods,
 belongs to no athlete: it skips a batch once the application-wide ceiling is
 reached (`isGlobalAiBudgetExhausted()`, which throws, so the batch is skipped,

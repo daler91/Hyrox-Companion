@@ -20,7 +20,7 @@ import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } 
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { analyzeChatSafety, buildChatSafetyNotice, type ChatSafetySignals } from "../services/aiSafety";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
-import { computeStale, getTrainingAnchor, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
+import { getTrainingAnchor, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
 import { type CoachReply, type Conversation, type ConversationTurn, fitHistoryWindow, loadConversation, saveCoachReply, saveUserTurn, type ServerOwnedTurn, serverOwnedTurn, type TurnFocus } from "../services/chatConversation";
 import { decideChatFactProposal, type FactCandidate, settleFactProposal, startFactProposal } from "../services/chatFactProposal";
 import { classifyPlanEditIntent, isPlanEditIntent, mayRequestPlanEdit } from "../services/chatIntentService";
@@ -41,6 +41,7 @@ import { getLocalDateStrSafe } from "../timezone";
 import { getUserId } from "../types";
 import { getChatHistoryUseCase } from "../usecases/ai/chatHistory.usecase";
 import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
+import { readStoredAnalysis } from "./_helpers/storedAnalysis";
 import { serializePlanProposal } from "./planProposals";
 
 const router = Router();
@@ -59,14 +60,14 @@ async function loadParseUserContext(req: ExpressRequest) {
   };
 }
 
-protectedPost(router, "/api/v1/parse-exercises", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/parse-exercises", { limiter: rateLimiter("parse", 5), aiConsent: true, aiBudget: true, validation: [validateBody(parseExercisesRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
     const { userId, unitPreferences, customExerciseNames } = await loadParseUserContext(req);
     const exercises = await parseExercisesFromText(text.trim(), unitPreferences, customExerciseNames, userId);
     res.json(exercises);
   });
 
-protectedPost(router, "/api/v1/parse-workout-structure", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/parse-workout-structure", { limiter: rateLimiter("parse", 5), aiConsent: true, aiBudget: true, validation: [validateBody(parseExercisesRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
     const { userId, unitPreferences, customExerciseNames } = await loadParseUserContext(req);
     const parsed = await parseWorkoutStructureFromText(text.trim(), unitPreferences, customExerciseNames, userId);
@@ -77,7 +78,7 @@ protectedPost(router, "/api/v1/parse-workout-structure", { limiter: rateLimiter(
 // with the text route so total parse-family spend stays capped per user.
 // Body size is enforced by a route-scoped express.json({ limit: "10mb" })
 // mounted in server/index.ts BEFORE the global 100kb parser.
-protectedPost(router, "/api/v1/parse-exercises-from-image", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/parse-exercises-from-image", { limiter: rateLimiter("parse", 5), aiConsent: true, aiBudget: true, validation: [validateBody(parseExercisesFromImageRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const { imageBase64, mimeType } = req.body;
     const { userId, unitPreferences, customExerciseNames } = await loadParseUserContext(req);
     const exercises = await parseExercisesFromImage({
@@ -90,7 +91,7 @@ protectedPost(router, "/api/v1/parse-exercises-from-image", { limiter: rateLimit
     res.json(exercises);
   });
 
-protectedPost(router, "/api/v1/parse-workout-structure-from-image", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/parse-workout-structure-from-image", { limiter: rateLimiter("parse", 5), aiConsent: true, aiBudget: true, validation: [validateBody(parseExercisesFromImageRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const { imageBase64, mimeType } = req.body;
     const { userId, unitPreferences, customExerciseNames } = await loadParseUserContext(req);
     const parsed = await parseWorkoutStructureFromImage({
@@ -178,7 +179,7 @@ function conversationFor(
   return { turns: fitHistoryWindow(body.history), notes: [] };
 }
 
-protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), aiConsent: true, aiBudget: true, validation: [validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const turn = serverOwnedTurn(req.body);
     const conversation = await conversationFor(userId, turn, req.body);
@@ -804,7 +805,7 @@ function abortOnDisconnect(res: Response): AbortController {
   return controller;
 }
 
-protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ChatStreamRequest, res: Response) => {
+protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), aiConsent: true, aiBudget: true, validation: [validateBody(chatRequestSchema)] }, async (req: ChatStreamRequest, res: Response) => {
     // Before the first await (AI10).
     const controller = abortOnDisconnect(res);
 
@@ -998,28 +999,11 @@ protectedDelete(router, "/api/v1/chat/history", { limiter: rateLimiter("chatHist
 // consent/budget middleware) and persists the fresh result.
 router.get("/api/v1/coach-insights", isAuthenticated, rateLimiter("analytics", 60), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    // Fetch the stored row and the staleness anchor concurrently — they read
-    // unrelated tables (analytics_results vs workout_logs), so there's no
-    // ordering dependency between them on this "paint instantly on tab open"
-    // path. Halves the DB latency for the common case (row exists) at the cost
-    // of one harmless unused query when a user has no stored insights yet.
-    const [row, anchor] = await Promise.all([
-      storage.analyticsResults.get(userId, "coach_insights"),
-      getWorkoutAnchor(userId),
-    ]);
-    if (!row) {
-      res.json({ insights: null });
-      return;
-    }
-    const payload = row.payload as CoachInsightsResult;
-    res.json({
-      ...payload,
-      generatedAt: row.generatedAt.toISOString(),
-      stale: computeStale(row, anchor),
-    });
+    const stored = await readStoredAnalysis<CoachInsightsResult>(userId, "coach_insights", getWorkoutAnchor);
+    res.json(stored ?? { insights: null });
   }));
 
-protectedPost(router, "/api/v1/coach-insights", { limiter: rateLimiter("suggestions", 3), middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/coach-insights", { limiter: rateLimiter("suggestions", 3), aiConsent: true, aiBudget: true }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const result = await regenerateAndStoreCoachInsights(userId, reqLogger(req));
     // Freshly generated against the current latest workout, so never stale.
@@ -1040,31 +1024,19 @@ protectedPost(router, "/api/v1/coach-insights", { limiter: rateLimiter("suggesti
 router.get("/api/v1/overview-analysis", isAuthenticated, rateLimiter("analytics", 60), validateQuery(overviewAnalysisQuerySchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const { range } = req.query as OverviewAnalysisQuery;
-    // See the coach-insights GET above: row and staleness anchor read
-    // unrelated tables, so fetch them concurrently instead of paying two
-    // sequential DB round-trips on this instant-paint path.
-    const [row, anchor] = await Promise.all([
-      storage.analyticsResults.get(userId, "overview_analysis"),
-      // Training logs only, as the analysis reads (PF10).
-      getTrainingAnchor(userId),
-    ]);
-    if (!row) {
-      res.json({ sections: null });
-      return;
-    }
-    const payload = row.payload as OverviewAnalysisResult;
+    // Training logs only for the anchor, as the analysis reads (PF10).
+    const stored = await readStoredAnalysis<OverviewAnalysisResult>(userId, "overview_analysis", getTrainingAnchor);
     // Without a range (an older client), whatever is stored, as before.
-    if (range !== undefined && !coversOverviewRange(payload, range)) {
+    if (!stored || (range !== undefined && !coversOverviewRange(stored, range))) {
       res.json({ sections: null });
       return;
     }
-    res.json({
-      ...payload,
-      generatedAt: row.generatedAt.toISOString(),
-      stale: computeStale(row, anchor),
-    });
+    res.json(stored);
   }));
 
+// The AI guards stay in `middleware` here: the builder's `aiConsent`/`aiBudget`
+// would run them before the query validation, so a bad `range` from a
+// non-consenting athlete would answer 403 instead of 400.
 protectedPost(router, "/api/v1/overview-analysis", { limiter: rateLimiter("suggestions", 3), validation: [validateQuery(overviewAnalysisQuerySchema)], middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const { range } = req.query as OverviewAnalysisQuery;
@@ -1073,7 +1045,7 @@ protectedPost(router, "/api/v1/overview-analysis", { limiter: rateLimiter("sugge
     res.json({ ...result, stale: false });
   });
 
-protectedPost(router, "/api/v1/timeline/ai-suggestions", { limiter: rateLimiter("suggestions", 3), middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/timeline/ai-suggestions", { limiter: rateLimiter("suggestions", 3), aiConsent: true, aiBudget: true }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const log = reqLogger(req);
     const startedAt = Date.now();
@@ -1123,7 +1095,7 @@ router.get("/api/v1/timeline/ai-suggestions/debug/:workoutId", isAuthenticated, 
         : null,
     });
   }));
-protectedPost(router, "/api/v1/timeline/ai-suggestions/apply", { limiter: rateLimiter("suggestionApply", 10), middleware: [aiConsentCheck, validateBody(applyTimelineSuggestionSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof applyTimelineSuggestionSchema>>, res: Response) => {
+protectedPost(router, "/api/v1/timeline/ai-suggestions/apply", { limiter: rateLimiter("suggestionApply", 10), aiConsent: true, validation: [validateBody(applyTimelineSuggestionSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof applyTimelineSuggestionSchema>>, res: Response) => {
     const userId = getUserId(req);
     const result = await applyTimelineAiSuggestion(userId, req.body, reqLogger(req));
     if (!result) {

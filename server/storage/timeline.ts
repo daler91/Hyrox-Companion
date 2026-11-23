@@ -18,7 +18,6 @@ import {
   timelineAnnotations,
   type TimelineEntry,
   trainingPlans,
-  users,
   type WorkoutLog,
   workoutLogs,
   type WorkoutStatus,
@@ -43,9 +42,9 @@ import {
 
 import { db } from "../db";
 import { deviceSportTypeOf } from "../services/sessionDerivedFields";
-import { getLocalDateStrSafe } from "../timezone";
 import { planDaysPastRetirement, planDaysWithinLifetimes } from "./planRetirement";
 import { deriveRaceDayOverride, type RaceDayOverride } from "./raceDayView";
+import { resolveUserToday } from "./shared";
 import {
   sortAndWindowTimelineEntries,
   type TimelinePageWindow,
@@ -652,22 +651,6 @@ export class TimelineStorage {
   }
 
   /**
-   * The athlete's own calendar date — NOT the server's. "Today" decides whether
-   * a scheduled plan day reads as `planned` or `missed`
-   * (`calculatePlanDayStatus`), so deriving it in UTC told every athlete west
-   * of UTC that today's session was already missed as soon as UTC rolled over:
-   * from 17:00 for California, 14:00 for Hawaii, every single day. Mirrors the
-   * regime the streak (`routeUtils.ts`) and nutrition logging already use.
-   */
-  private async resolveUserToday(userId: string): Promise<string> {
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-      columns: { userTimezone: true },
-    });
-    return getLocalDateStrSafe(new Date(), user?.userTimezone);
-  }
-
-  /**
    * The athlete's declared absences — just the two date columns, since that is
    * all the status derivation needs. Unbounded by date on purpose: an athlete
    * accumulates a handful of these a year, so a range predicate would cost more
@@ -833,7 +816,7 @@ export class TimelineStorage {
     // fetchAbsences joins the same wave for the same reason: it reads a third
     // unrelated table and is not consumed until buildTimelineEntries either.
     const [today, { scheduledDays, planNameById, retiredDayScope }, absences] = await Promise.all([
-      this.resolveUserToday(userId),
+      resolveUserToday(userId),
       this.fetchScheduledDays(userId, planId, sqlOverFetch, before),
       this.fetchAbsences(userId),
     ]);
@@ -993,7 +976,7 @@ export class TimelineStorage {
    * Avoids loading the full timeline for AI suggestions.
    */
   async getUpcomingPlannedDays(userId: string, limit: number): Promise<UpcomingPlannedDay[]> {
-    const today = await this.resolveUserToday(userId);
+    const today = await resolveUserToday(userId);
     // Relational query: resolve user's plans first, then pull matching days
     // filtered by plan IDs. Same pattern as fetchScheduledDays.
     const userPlans = await db.query.trainingPlans.findMany({

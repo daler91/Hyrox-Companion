@@ -8,6 +8,7 @@ import {
 } from "@shared/unitConversion";
 
 import { VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../../prompts";
+import { ampersandsToAnd } from "../../utils/sanitize";
 import type { ParserExercise } from "./schema";
 import type { ParseUnitInput, ParseUnitPreferences } from "./types";
 
@@ -31,10 +32,6 @@ interface MappedCustomFields {
   customLabel: string | undefined;
   confidence: number;
   missingName: boolean;
-}
-
-export function sanitizeLabel(value: string): string {
-  return value.replaceAll("&", "and");
 }
 
 export function resolveParseUnitPreferences(input: ParseUnitInput): Required<ParseUnitPreferences> {
@@ -66,7 +63,12 @@ function synthesizeCustomLabel(sourceText: string): string {
     .join(" ");
 }
 
-function resolveConfidence(raw: ParserExercise, isKnown: boolean): number {
+/**
+ * A row's confidence: the model's own, clamped to 0-100, else 95 for a known
+ * exercise and 50 for a custom one. Plan generation rates its rows the same
+ * way and used to keep its own copy (C-labels, REFACTORING_REVIEW 2026-09-23).
+ */
+export function resolveConfidence(raw: Pick<ParserExercise, "confidence">, isKnown: boolean): number {
   if (typeof raw.confidence === "number") {
     return Math.min(100, Math.max(0, Math.round(raw.confidence)));
   }
@@ -82,7 +84,7 @@ function resolveCustomFields(
 ): MappedCustomFields {
   if (isKnown) {
     return {
-      customLabel: exercise.customLabel ? sanitizeLabel(exercise.customLabel) : undefined,
+      customLabel: exercise.customLabel ? ampersandsToAnd(exercise.customLabel) : undefined,
       confidence: baseConfidence,
       missingName: false,
     };
@@ -96,7 +98,7 @@ function resolveCustomFields(
   const missingName = !suppliedLabel;
 
   return {
-    customLabel: sanitizeLabel(candidate),
+    customLabel: ampersandsToAnd(candidate),
     confidence: missingName ? Math.min(baseConfidence, 40) : baseConfidence,
     missingName,
   };
@@ -114,14 +116,14 @@ export function mapValidatedExercise(
   const missingFields = Array.isArray(exercise.missingFields)
     ? exercise.missingFields
         .filter((field) => typeof field === "string" && field.length > 0)
-        .map(sanitizeLabel)
+        .map(ampersandsToAnd)
     : [];
 
   if (custom.missingName) missingFields.push("Name");
 
   return {
-    exerciseName: isKnown ? sanitizeLabel(exercise.exerciseName) : "custom",
-    category: validCategory ? sanitizeLabel(exercise.category) : "conditioning",
+    exerciseName: isKnown ? ampersandsToAnd(exercise.exerciseName) : "custom",
+    category: validCategory ? ampersandsToAnd(exercise.category) : "conditioning",
     customLabel: custom.customLabel,
     confidence: custom.confidence,
     missingFields: missingFields.length > 0 ? missingFields : undefined,

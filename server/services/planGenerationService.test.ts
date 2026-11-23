@@ -57,6 +57,9 @@ const mocks = vi.hoisted(() => {
 vi.mock("../db", () => ({
   db: {
     transaction: mocks.transaction,
+    // resolveUserToday (storage/shared.ts) reads the athlete's zone straight
+    // from `users`: answer with the same row the test gave getUser.
+    query: { users: { findFirst: vi.fn(() => mocks.users.getUser()) } },
   },
 }));
 

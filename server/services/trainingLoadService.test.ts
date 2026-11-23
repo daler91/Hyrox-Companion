@@ -1,25 +1,28 @@
 import type { TrainingLoadOverview, WorkoutLog } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
-import { buildLoadGovernorSuggestions } from "./trainingLoadGovernor";
 import {
-  bodyweightRepLoadKg,
-  calculateCardioStressScore,
-  calculateStrengthStressScore,
-  calculateTrainingLoad,
   classifyHrZone,
-  DEFAULT_EXERCISE_LOAD_TAGS,
   estimateHrMax,
   estimateLthr,
-  EWMA_WARMUP_DAYS,
   hrIntensityFactor,
   hrReserveRatio,
   hrTss,
   hrZoneBoundaries,
-  monotonyZone,
   powerIntensityFactor,
   powerTss,
-  resolveAcwrZone,
+} from "./trainingLoad/hrModel";
+import { monotonyZone, resolveAcwrZone } from "./trainingLoad/loadDynamics";
+import {
+  bodyweightRepLoadKg,
+  calculateCardioStressScore,
+  calculateStrengthStressScore,
+} from "./trainingLoad/stressScores";
+import { DEFAULT_EXERCISE_LOAD_TAGS } from "./trainingLoad/types";
+import { buildLoadGovernorSuggestions } from "./trainingLoadGovernor";
+import {
+  calculateTrainingLoad,
+  EWMA_WARMUP_DAYS,
   type TrainingLoadSet,
   type UpcomingWorkoutForLoad,
 } from "./trainingLoadService";

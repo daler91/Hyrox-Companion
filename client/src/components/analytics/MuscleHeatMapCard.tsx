@@ -8,6 +8,8 @@ import {
   type AnalysisMetric,
   buildBalanceAnalysis,
   CoverageAnalysisPanel,
+  describeNextFocus,
+  findLeastLoadedCoverage,
   findPriorityGap,
   findTopCoverage,
   formatCount,
@@ -359,41 +361,6 @@ function findDominantRegion(regionTotals: RegionTotals): [keyof RegionTotals, nu
   return dominantRegion;
 }
 
-function findLeastLoadedMuscle(muscles: readonly MuscleCoverage[]): MuscleCoverage | null {
-  // O(N) linear scan instead of O(N log N) sort()[0] when finding a single minimum.
-  let leastLoaded: MuscleCoverage | null = null;
-  for (const item of muscles) {
-    if (!hasCoverageWork(item)) continue;
-    if (!leastLoaded) {
-      leastLoaded = item;
-      continue;
-    }
-    const cmp =
-      item.totalSets - leastLoaded.totalSets || item.label.localeCompare(leastLoaded.label);
-    if (cmp < 0) {
-      leastLoaded = item;
-    }
-  }
-  return leastLoaded;
-}
-
-function determineNextFocus(
-  priorityGap: ReturnType<typeof findPriorityGap>,
-  nextBalance: ReturnType<typeof buildBalanceAnalysis> | undefined,
-  leastLoaded: MuscleCoverage | null,
-): string {
-  if (priorityGap) {
-    return `Next focus: Add ${priorityGap.item.label}; ${priorityGap.reason}.`;
-  }
-  if (nextBalance?.recommendation) {
-    return `Next focus: ${nextBalance.recommendation}`;
-  }
-  if (leastLoaded) {
-    return `Next focus: Keep ${leastLoaded.label} in rotation; it is the lowest loaded trained muscle group.`;
-  }
-  return "Next focus: Log mapped strength or functional sets so muscle coverage analysis can start.";
-}
-
 function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
   const totalSets = muscles.reduce((sum, muscle) => sum + muscle.totalSets, 0);
   const topMuscle = findTopCoverage(muscles);
@@ -418,7 +385,7 @@ function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
     ),
   ];
   const nextBalance = balances.find((balance) => balance.tone !== "good" && balance.recommendation);
-  const leastLoaded = findLeastLoadedMuscle(muscles);
+  const leastLoaded = findLeastLoadedCoverage(muscles);
 
   const metrics: AnalysisMetric[] = [
     {
@@ -442,13 +409,20 @@ function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
       label: "Cold gap",
       value: priorityGap?.item.label ?? "No stale gaps",
       detail:
-        priorityGap?.reason ?? "Every trained muscle group is inside the 14-day freshness window.",
+        priorityGap?.reason ??
+        `Every trained muscle group is inside the ${STALE_AFTER_DAYS}-day freshness window.`,
       tone: priorityGap ? "gap" : "good",
     },
     buildCoreFreshnessMetric(muscles),
   ];
 
-  const nextFocus = determineNextFocus(priorityGap, nextBalance, leastLoaded);
+  const nextFocus = describeNextFocus({
+    priorityGap,
+    nextBalance,
+    leastLoaded,
+    itemNoun: "muscle group",
+    emptyFocus: "Next focus: Log mapped strength or functional sets so muscle coverage analysis can start.",
+  });
 
   return { metrics, balances, nextFocus, totalSets };
 }

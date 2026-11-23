@@ -16,10 +16,8 @@ export { isRetryableError, retryWithBackoff, withTimeout } from "../ai/retry";
 
 export const GEMINI_VISION_MODEL = env.GEMINI_VISION_MODEL;
 
+// Its dimension count is EMBEDDING_DIMENSIONS in server/constants.ts.
 const EMBEDDING_MODEL = "gemini-embedding-001";
-
-/** Expected dimension count for the current embedding model. */
-export const EMBEDDING_DIMENSIONS = 3072;
 
 // Tiny in-process LRU cache for identical embedding lookups. Prevents the
 // rag-retrieval health probe, repeated chat queries, and re-embed passes from

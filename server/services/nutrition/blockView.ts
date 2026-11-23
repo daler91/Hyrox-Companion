@@ -1,3 +1,4 @@
+import { round1 } from "@shared/numeric";
 import type { BlockViewPoint } from "@shared/schema";
 
 import { groupByLogDate, type LogEntryWithFood, roundMacros, sumNutrition } from "./rollup";
@@ -25,10 +26,6 @@ export function* eachDate(from: string, to: string): Generator<string> {
   for (let t = start; t <= end; t += DAY_MS) {
     yield new Date(t).toISOString().slice(0, 10);
   }
-}
-
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
 }
 
 /** Index per-day UTSS by its `YYYY-MM-DD` date — the shared join key with intake. */

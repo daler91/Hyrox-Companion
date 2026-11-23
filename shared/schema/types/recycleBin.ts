@@ -109,8 +109,7 @@ export interface RecycleBinListResponse {
   counts: Record<RecycleBinEntityType, number> & { total: number };
 }
 
-export type RecycleBinRestoreFailureReason =
-  "not_found" | "id_conflict" | "device_activity_reimported" | "plan_overlap";
+export type RecycleBinRestoreFailureReason = "not_found" | "id_conflict" | "device_activity_reimported";
 
 export type RecycleBinRestoreResult =
   | {
