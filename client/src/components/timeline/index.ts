@@ -1,13 +1,14 @@
-export { AnnotationsDialog } from "./AnnotationsDialog";
+// ⚡ Bolt: the starts-closed Timeline dialogs (Annotations, CombineWorkouts,
+// ImportPreview, SchedulePlan, SkipConfirm) are deliberately NOT re-exported
+// here. The eager Timeline page imports this barrel, and Rolldown puts every
+// module the barrel statically reaches into the eager Timeline chunk, even
+// when only the lazy TimelineWorkoutSurfaces renders it. Import them from
+// their own files.
 export { BulkDeleteControls } from "./BulkDeleteControls";
 export { BulkDeleteToolbar } from "./BulkDeleteToolbar";
 export { CoachReviewingIndicator } from "./CoachReviewingIndicator";
-export { CombineWorkoutsDialog } from "./combine-workouts-dialog";
 export { default as FloatingActionButton } from "./FloatingActionButton";
 export type { CsvPreviewData } from "./ImportPreviewDialog";
-export { default as ImportPreviewDialog } from "./ImportPreviewDialog";
-export { default as SchedulePlanDialog } from "./SchedulePlanDialog";
-export { default as SkipConfirmDialog } from "./SkipConfirmDialog";
 export { default as TimelineFilters } from "./timeline-filters";
 export { default as TimelineWorkoutCard } from "./timeline-workout-card";
 export { TimelineAnnotationCard } from "./TimelineAnnotationCard";

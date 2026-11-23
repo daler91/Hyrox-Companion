@@ -1,14 +1,16 @@
 import type { TimelineEntry } from "@shared/schema";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import {
-  AnnotationsDialog,
-  CombineWorkoutsDialog,
-  ImportPreviewDialog,
-  SchedulePlanDialog,
-  SkipConfirmDialog,
-} from "@/components/timeline";
+// ⚡ Bolt: import the dialogs from their own modules, not the
+// `@/components/timeline` barrel. The eager Timeline page imports that barrel
+// too, so going through it bundled these lazy-only dialogs (~44 kB source)
+// into the eager Timeline chunk instead of this lazy one.
+import { AnnotationsDialog } from "@/components/timeline/AnnotationsDialog";
+import { CombineWorkoutsDialog } from "@/components/timeline/combine-workouts-dialog/CombineWorkoutsDialog";
+import ImportPreviewDialog from "@/components/timeline/ImportPreviewDialog";
 import { MissedRecoveryDialog } from "@/components/timeline/missed-recovery";
+import SchedulePlanDialog from "@/components/timeline/SchedulePlanDialog";
+import SkipConfirmDialog from "@/components/timeline/SkipConfirmDialog";
 import { AdhocLogSheet } from "@/components/workout-detail/AdhocLogSheet";
 import { LogSheet } from "@/components/workout-detail/LogSheet";
 import { PreviewSheet } from "@/components/workout-detail/PreviewSheet";
