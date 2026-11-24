@@ -136,16 +136,16 @@ vi.mock("@/components/timeline", () => ({
   TimelineTodayIndicator: () => <div />,
   TimelineSkeleton: () => <div />,
   TimelineEmptyState: () => <div />,
-  AnnotationsDialog: () => <div />,
   CoachReviewingIndicator: () => <div />,
-  CombineWorkoutsDialog: () => <div />,
   FloatingActionButton: () => <div />,
-  ImportPreviewDialog: () => <div />,
-  SchedulePlanDialog: () => <div />,
-  SkipConfirmDialog: () => <div />,
   BulkDeleteControls: () => <div />,
   WeeklyReviewPrompt: () => <div />,
 }));
+vi.mock("@/components/timeline/AnnotationsDialog", () => ({ AnnotationsDialog: () => <div /> }));
+vi.mock("@/components/timeline/combine-workouts-dialog/CombineWorkoutsDialog", () => ({ CombineWorkoutsDialog: () => <div /> }));
+vi.mock("@/components/timeline/ImportPreviewDialog", () => ({ default: () => <div /> }));
+vi.mock("@/components/timeline/SchedulePlanDialog", () => ({ default: () => <div /> }));
+vi.mock("@/components/timeline/SkipConfirmDialog", () => ({ default: () => <div /> }));
 
 vi.mock("@/components/workout-detail/LogSheet", () => ({
   LogSheet: ({
