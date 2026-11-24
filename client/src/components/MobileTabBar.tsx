@@ -38,7 +38,14 @@ export function MobileTabBar() {
               active ? "text-primary" : "text-muted-foreground",
             )}
           >
-            <item.icon className="h-5 w-5" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
+            <span
+              className={cn(
+                "flex items-center justify-center rounded-full px-4 py-0.5 transition-colors",
+                active && "bg-primary/10",
+              )}
+            >
+              <item.icon className="h-5 w-5" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
+            </span>
             <span className="max-w-full truncate">{item.shortTitle}</span>
           </Link>
         );
