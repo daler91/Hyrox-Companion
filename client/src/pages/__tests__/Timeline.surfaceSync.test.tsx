@@ -122,28 +122,60 @@ vi.mock("@/hooks/useTimelineState", async () => {
   };
 });
 
-vi.mock("@/components/timeline", () => ({
-  TimelineDateGroup: ({
+// The Timeline page and its children import these components by file (not
+// through the `@/components/timeline` barrel), so each one is mocked by path.
+vi.mock("@/components/timeline/TimelineDateGroup", () => ({
+  default: ({
     entries,
     onClick,
   }: {
     entries: TimelineEntry[];
     onClick: (e: TimelineEntry) => void;
   }) => <button onClick={() => onClick(entries[0])}>open</button>,
-  TimelineHeader: () => <div />,
-  TimelineFilters: () => <div />,
+}));
+vi.mock("@/components/timeline/TimelineHeader", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/timeline-filters", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/TimelineSummaryCard", () => ({
   TimelineSummaryCard: () => <div data-testid="timeline-summary-card" />,
+}));
+vi.mock("@/components/timeline/TimelineTodayIndicator", () => ({
   TimelineTodayIndicator: () => <div />,
-  TimelineSkeleton: () => <div />,
-  TimelineEmptyState: () => <div />,
+}));
+vi.mock("@/components/timeline/TimelineSkeleton", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/TimelineEmptyState", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/AnnotationsDialog", () => ({
   AnnotationsDialog: () => <div />,
+}));
+vi.mock("@/components/timeline/CoachReviewingIndicator", () => ({
   CoachReviewingIndicator: () => <div />,
+}));
+vi.mock("@/components/timeline/combine-workouts-dialog/CombineWorkoutsDialog", () => ({
   CombineWorkoutsDialog: () => <div />,
-  FloatingActionButton: () => <div />,
-  ImportPreviewDialog: () => <div />,
-  SchedulePlanDialog: () => <div />,
-  SkipConfirmDialog: () => <div />,
+}));
+vi.mock("@/components/timeline/FloatingActionButton", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/ImportPreviewDialog", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/SchedulePlanDialog", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/SkipConfirmDialog", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/BulkDeleteControls", () => ({
   BulkDeleteControls: () => <div />,
+}));
+vi.mock("@/components/timeline/WeeklyReviewPrompt", () => ({
   WeeklyReviewPrompt: () => <div />,
 }));
 

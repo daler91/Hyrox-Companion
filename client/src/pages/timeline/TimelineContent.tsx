@@ -5,8 +5,11 @@ import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import type { ChangeEvent } from "react";
 
 import { LoadErrorCard } from "@/components/LoadErrorCard";
-import { TimelineDateGroup, TimelineEmptyState, TimelineSkeleton } from "@/components/timeline";
 import type { RecoverEntryHandler } from "@/components/timeline/missed-recovery";
+// Direct imports, not the `@/components/timeline` barrel (see Timeline.tsx).
+import TimelineDateGroup from "@/components/timeline/TimelineDateGroup";
+import TimelineEmptyState from "@/components/timeline/TimelineEmptyState";
+import TimelineSkeleton from "@/components/timeline/TimelineSkeleton";
 import { Button } from "@/components/ui/button";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { getTodayString } from "@/lib/dateUtils";

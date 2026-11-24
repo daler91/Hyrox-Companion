@@ -59,28 +59,60 @@ vi.mock("@tanstack/react-virtual", async () => {
   };
 });
 vi.mock("@/hooks/useTimelineState", () => ({ useTimelineState: () => harnessState.timelineState }));
-vi.mock("@/components/timeline", () => ({
-  TimelineDateGroup: forwardRef<HTMLDivElement, { entries: TimelineEntry[]; onClick: (entry: TimelineEntry) => void }>(
+// The Timeline page and its children import these components by file (not
+// through the `@/components/timeline` barrel), so each one is mocked by path.
+vi.mock("@/components/timeline/TimelineDateGroup", () => ({
+  default: forwardRef<HTMLDivElement, { entries: TimelineEntry[]; onClick: (entry: TimelineEntry) => void }>(
     ({ entries, onClick }, ref) => (
       <div ref={ref}>
         <button data-testid="timeline-entry" onClick={() => onClick(entries[0])}>open</button>
       </div>
     ),
   ),
-  TimelineHeader: () => <div />,
-  TimelineFilters: () => <div />,
+}));
+vi.mock("@/components/timeline/TimelineHeader", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/timeline-filters", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/TimelineSummaryCard", () => ({
   TimelineSummaryCard: () => <div data-testid="timeline-summary-card" />,
-  TimelineSkeleton: () => <div />,
-  TimelineEmptyState: () => <div />,
+}));
+vi.mock("@/components/timeline/TimelineSkeleton", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/TimelineEmptyState", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/TimelineTodayIndicator", () => ({
   TimelineTodayIndicator: () => <div />,
-  FloatingActionButton: () => <div />,
+}));
+vi.mock("@/components/timeline/FloatingActionButton", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/combine-workouts-dialog/CombineWorkoutsDialog", () => ({
   CombineWorkoutsDialog: () => <div />,
-  SkipConfirmDialog: () => <div />,
-  SchedulePlanDialog: () => <div />,
-  ImportPreviewDialog: () => <div />,
+}));
+vi.mock("@/components/timeline/SkipConfirmDialog", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/SchedulePlanDialog", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/ImportPreviewDialog", () => ({
+  default: () => <div />,
+}));
+vi.mock("@/components/timeline/CoachReviewingIndicator", () => ({
   CoachReviewingIndicator: () => <div />,
+}));
+vi.mock("@/components/timeline/AnnotationsDialog", () => ({
   AnnotationsDialog: () => <div />,
+}));
+vi.mock("@/components/timeline/BulkDeleteControls", () => ({
   BulkDeleteControls: () => <div />,
+}));
+vi.mock("@/components/timeline/WeeklyReviewPrompt", () => ({
   WeeklyReviewPrompt: () => <div />,
 }));
 vi.mock("@/components/workout-detail/LogSheet", () => ({ LogSheet: (props: { entry: TimelineEntry | null }) => harnessState.logSheetImpl(props) }));

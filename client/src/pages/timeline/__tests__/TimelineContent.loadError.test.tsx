@@ -5,10 +5,16 @@ import { describe, expect, it, vi } from "vitest";
 
 import { TimelineContent } from "../TimelineContent";
 
-vi.mock("@/components/timeline", () => ({
-  TimelineDateGroup: () => <div data-testid="date-group" />,
-  TimelineEmptyState: () => <div data-testid="timeline-welcome">Welcome to fitai.coach</div>,
-  TimelineSkeleton: () => <div data-testid="timeline-skeleton" />,
+// The Timeline page and its children import these components by file (not
+// through the `@/components/timeline` barrel), so each one is mocked by path.
+vi.mock("@/components/timeline/TimelineDateGroup", () => ({
+  default: () => <div data-testid="date-group" />,
+}));
+vi.mock("@/components/timeline/TimelineEmptyState", () => ({
+  default: () => <div data-testid="timeline-welcome">Welcome to fitai.coach</div>,
+}));
+vi.mock("@/components/timeline/TimelineSkeleton", () => ({
+  default: () => <div data-testid="timeline-skeleton" />,
 }));
 
 type Props = ComponentProps<typeof TimelineContent>;

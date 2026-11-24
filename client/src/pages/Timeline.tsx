@@ -12,16 +12,17 @@ import type { FuellingDayPoint, TimelineEntry } from "@shared/schema";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  BulkDeleteControls,
-  CoachReviewingIndicator,
-  FloatingActionButton,
-  TimelineFilters,
-  TimelineHeader,
-  TimelineSummaryCard,
-  TimelineTodayIndicator,
-  WeeklyReviewPrompt,
-} from "@/components/timeline";
+// Import by file, not through the `@/components/timeline` barrel: the barrel
+// also re-exports the dialogs that only the lazy TimelineWorkoutSurfaces
+// renders, and importing it here kept all of them in this eager route chunk.
+import { BulkDeleteControls } from "@/components/timeline/BulkDeleteControls";
+import { CoachReviewingIndicator } from "@/components/timeline/CoachReviewingIndicator";
+import FloatingActionButton from "@/components/timeline/FloatingActionButton";
+import TimelineFilters from "@/components/timeline/timeline-filters";
+import TimelineHeader from "@/components/timeline/TimelineHeader";
+import { TimelineSummaryCard } from "@/components/timeline/TimelineSummaryCard";
+import { TimelineTodayIndicator } from "@/components/timeline/TimelineTodayIndicator";
+import { WeeklyReviewPrompt } from "@/components/timeline/WeeklyReviewPrompt";
 import { Input } from "@/components/ui/input";
 import { PageContainer } from "@/components/ui/PageContainer";
 import { SCROLL_TO_TODAY_DELAY_MS } from "@/hooks/constants";
@@ -39,8 +40,8 @@ import { useTimelineState } from "@/hooks/useTimelineState";
 import { getTodayString } from "@/lib/dateUtils";
 import { featureFlags } from "@/lib/featureFlags";
 import { canMoveEntryTo, timelineCollisionDetection } from "@/pages/timeline/dropTargets";
-import { LazyTimelineWorkoutSurfaces } from "@/pages/timeline/LazyTimelineWorkoutSurfaces";
 import { renderedFuellingWindow } from "@/pages/timeline/fuellingWindow";
+import { LazyTimelineWorkoutSurfaces } from "@/pages/timeline/LazyTimelineWorkoutSurfaces";
 import { startScrollTodayConvergence } from "@/pages/timeline/scrollTodayConvergence";
 import { TimelineCoachPanels } from "@/pages/timeline/TimelineCoachPanels";
 import { TimelineContent } from "@/pages/timeline/TimelineContent";
