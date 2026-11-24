@@ -9,12 +9,23 @@ import type { WorkoutStep } from "@/hooks/useLogWorkoutDraft";
 import type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-import type { ComposerAutoParseProps, ComposerExerciseProps, ComposerTextProps, ComposerVoiceProps } from "./sharedComposerProps";
+import type {
+  ComposerAutoParseProps,
+  ComposerExerciseProps,
+  ComposerTextProps,
+  ComposerVoiceProps,
+} from "./sharedComposerProps";
 import { CaptureStep } from "./steps/CaptureStep";
 import { ConfirmStep } from "./steps/ConfirmStep";
 import { type ReflectFields, ReflectStep } from "./steps/ReflectStep";
 
-interface LogWorkoutStepperLayoutProps extends ComposerTextProps, ComposerExerciseProps, ComposerAutoParseProps, ComposerVoiceProps, ReflectFields {
+interface LogWorkoutStepperLayoutProps
+  extends
+    ComposerTextProps,
+    ComposerExerciseProps,
+    ComposerAutoParseProps,
+    ComposerVoiceProps,
+    ReflectFields {
   readonly parseNow: (text: string) => void;
   readonly step: WorkoutStep;
   readonly setStep: (step: WorkoutStep) => void;
@@ -44,41 +55,41 @@ const STEP_LABELS: Record<WorkoutStep, string> = {
 
 export function LogWorkoutStepperLayout(props: LogWorkoutStepperLayoutProps) {
   const {
-  step,
-  setStep,
-  title,
-  setTitle,
-  date,
-  setDate,
-  freeText,
-  setFreeText,
-  exerciseBlocks,
-  exerciseData,
-  addExercise,
-  updateBlock,
-  removeBlock,
-  reorderBlocks,
-  weightUnit,
-  distanceUnit,
-  autoParsing,
-  autoParseError,
-  parseDiagnostics,
-  parseNow,
-  cancelAutoParse,
-  structureBlocks,
-  setStructureBlocks,
-  isListening,
-  isSupported,
-  interimTranscript,
-  toggleListening,
-  stopListening,
-  handleCancel,
-  handleDuplicateLast,
-  isDuplicating,
-  defaultPanelOpen,
-  toast,
-  onParseImage,
-  isParsingImage,
+    step,
+    setStep,
+    title,
+    setTitle,
+    date,
+    setDate,
+    freeText,
+    setFreeText,
+    exerciseBlocks,
+    exerciseData,
+    addExercise,
+    updateBlock,
+    removeBlock,
+    reorderBlocks,
+    weightUnit,
+    distanceUnit,
+    autoParsing,
+    autoParseError,
+    parseDiagnostics,
+    parseNow,
+    cancelAutoParse,
+    structureBlocks,
+    setStructureBlocks,
+    isListening,
+    isSupported,
+    interimTranscript,
+    toggleListening,
+    stopListening,
+    handleCancel,
+    handleDuplicateLast,
+    isDuplicating,
+    defaultPanelOpen,
+    toast,
+    onParseImage,
+    isParsingImage,
   } = props;
   // Parse-checkpoint state lives here (above CaptureStep) so it survives
   // CaptureStep unmounting on step transitions. Returning to Capture after
@@ -96,8 +107,7 @@ export function LogWorkoutStepperLayout(props: LogWorkoutStepperLayoutProps) {
   const advanceWithText = (text: string) => {
     const hasText = text.trim().length > 0;
     const hasBlocks = exerciseBlocks.length > 0;
-    const needsParse =
-      hasText && (text !== lastParsedTextRef.current || !hasBlocks);
+    const needsParse = hasText && (text !== lastParsedTextRef.current || !hasBlocks);
     if (needsParse) {
       pendingParseTextRef.current = text;
       parseNow(text);
@@ -206,6 +216,13 @@ interface StepIndicatorProps {
   readonly onJump: (step: WorkoutStep) => void;
 }
 
+function stepAriaLabel(s: WorkoutStep, isDone: boolean, isActive: boolean): string {
+  const label = STEP_LABELS[s];
+  if (isDone) return `Step ${s}: ${label}, completed`;
+  if (isActive) return `Step ${s}: ${label}, current`;
+  return `Step ${s}: ${label}`;
+}
+
 function StepIndicator({ current, onJump }: StepIndicatorProps) {
   const steps: WorkoutStep[] = [1, 2, 3];
   return (
@@ -230,6 +247,7 @@ function StepIndicator({ current, onJump }: StepIndicatorProps) {
               onClick={canJump ? () => onJump(s) : undefined}
               disabled={!canJump && !isActive}
               aria-current={isActive ? "step" : undefined}
+              aria-label={stepAriaLabel(s, isDone, isActive)}
               className={cn(
                 "flex w-full items-center gap-2 justify-start px-2 py-1.5 h-auto rounded-md",
                 isActive && "bg-primary/10 text-primary",
@@ -244,17 +262,17 @@ function StepIndicator({ current, onJump }: StepIndicatorProps) {
                   isDone && "bg-muted text-muted-foreground",
                   !isActive && !isDone && "border border-border text-muted-foreground",
                 )}
+                aria-hidden="true"
               >
-                {isDone ? <Check className="h-3.5 w-3.5" aria-hidden /> : s}
+                {isDone ? <Check className="h-3.5 w-3.5" /> : s}
               </span>
-              <span className="text-sm font-medium">{STEP_LABELS[s]}</span>
+              <span className="text-sm font-medium" aria-hidden="true">
+                {STEP_LABELS[s]}
+              </span>
             </Button>
             {idx < steps.length - 1 && (
               <span
-                className={cn(
-                  "h-px flex-1 bg-border",
-                  isDone && "bg-primary/40",
-                )}
+                className={cn("h-px flex-1 bg-border", isDone && "bg-primary/40")}
                 aria-hidden
               />
             )}
