@@ -168,7 +168,13 @@ describe("missed-session adaptation reads (real Postgres)", () => {
       const plans = new PlanStorage();
       expect(await plans.markMissedPlanDays()).toBe(6);
 
-      expect(await plans.takeAthletesToCoachAfterMiss()).toEqual(["miss-active"]);
+      const awaiting = [{ userId: "miss-active", planIds: [active] }];
+      expect(await plans.takeAthletesToCoachAfterMiss()).toEqual(awaiting);
+      expect(await plans.takeAthletesToCoachAfterMiss()).toEqual([]);
+
+      // The coach could not be queued: handed back, the athlete is asked for again.
+      plans.keepAwaitingCoachAfterMiss([active]);
+      expect(await plans.takeAthletesToCoachAfterMiss()).toEqual(awaiting);
       expect(await plans.takeAthletesToCoachAfterMiss()).toEqual([]);
     });
 

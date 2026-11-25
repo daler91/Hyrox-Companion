@@ -114,6 +114,7 @@ describe('runEmailCronJob', () => {
       plans: {
         markMissedPlanDays: vi.fn().mockResolvedValue(0),
         takeAthletesToCoachAfterMiss: vi.fn().mockResolvedValue([]),
+        keepAwaitingCoachAfterMiss: vi.fn(),
       },
       users: {
         getUsersWithEmailNotifications: vi.fn().mockResolvedValue([
@@ -144,7 +145,10 @@ describe('runEmailCronJob', () => {
     const { queue } = await import('./queue');
     // The sweep marked nothing this tick: these are left from the boot-time
     // sweep, which runs before the queue is up.
-    mockStorage.plans.takeAthletesToCoachAfterMiss = vi.fn().mockResolvedValue(['u1', 'u2']);
+    mockStorage.plans.takeAthletesToCoachAfterMiss = vi.fn().mockResolvedValue([
+      { userId: 'u1', planIds: ['plan-1'] },
+      { userId: 'u2', planIds: ['plan-2'] },
+    ]);
     mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([]);
 
     const result = await runEmailCronJob(mockStorage);
@@ -154,6 +158,31 @@ describe('runEmailCronJob', () => {
       ['auto-coach', { userId: 'u1', trigger: 'plan-day-missed' }],
       ['auto-coach', { userId: 'u2', trigger: 'plan-day-missed' }],
     ]);
+    expect(mockStorage.plans.keepAwaitingCoachAfterMiss).not.toHaveBeenCalled();
+  });
+
+  it('keeps an athlete for the next tick when the queue refuses their coach pass', async () => {
+    const { queue } = await import('./queue');
+    const { logger } = await import('./logger');
+    mockStorage.plans.takeAthletesToCoachAfterMiss = vi.fn().mockResolvedValue([
+      { userId: 'u1', planIds: ['plan-1', 'plan-1b'] },
+      { userId: 'u2', planIds: ['plan-2'] },
+    ]);
+    const refused = new Error('queue unavailable');
+    vi.mocked(queue.sendDebounced).mockRejectedValueOnce(refused);
+
+    const result = await runEmailCronJob(mockStorage);
+
+    // Only u1's plans go back; u2's pass was queued, and the emails still went.
+    expect(vi.mocked(mockStorage.plans.keepAwaitingCoachAfterMiss).mock.calls).toEqual([
+      [['plan-1', 'plan-1b']],
+    ]);
+    expect(queue.sendDebounced).toHaveBeenCalledTimes(2);
+    expect(logger.error).toHaveBeenCalledWith(
+      { err: refused, trigger: 'plan-day-missed' },
+      'Failed to queue auto-coach job',
+    );
+    expect(result.emailsSent).toBe(2);
   });
 
   it('still sends its emails when the coach hand-off fails', async () => {
@@ -896,6 +925,7 @@ describe('runEmailCronJob resilience', () => {
       plans: {
         markMissedPlanDays: vi.fn().mockResolvedValue(0),
         takeAthletesToCoachAfterMiss: vi.fn().mockResolvedValue([]),
+        keepAwaitingCoachAfterMiss: vi.fn(),
       },
       users: {
         getUsersWithEmailNotifications: vi.fn().mockResolvedValue([

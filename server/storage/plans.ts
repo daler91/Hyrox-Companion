@@ -18,12 +18,13 @@ import {
 } from "@shared/schema";
 import { resolveSessionPriority } from "@shared/sessionPriority";
 import type { Minutes } from "@shared/units";
-import { and, asc, eq, exists, gte, inArray, isNotNull, isNull, lt, lte, ne, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notExists, or, sql } from "drizzle-orm";
 
 import { db, type DbExecutor, type Tx } from "../db";
 import { logger } from "../logger";
 import { getLocalDateStrSafe } from "../timezone";
 import { noAbsenceDeclaredForPlanDay } from "./absenceGuard";
+import { type AthleteAwaitingCoach, findAthletesToCoachAfterMiss } from "./coachAfterMiss";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate } from "./planRetirement";
 import { planSlotForMove } from "./planSlot";
@@ -136,6 +137,15 @@ async function getPlanDayIdsWithWorkouts(
   return new Set(rows.flatMap((row) => (row.planDayId ? [row.planDayId] : [])));
 }
 
+/** What the sweep needs of a day it marked: enough to tell whether the plan leaned on it. */
+interface SweptPlanDay {
+  readonly id: string;
+  readonly planId: string;
+  readonly priority: string | null;
+  readonly focus: string | null;
+  readonly mainWorkout: string | null;
+}
+
 /**
  * Mark missed the past planned days of every athlete whose stored timezone is
  * `tz`, judged against `today`, that zone's local date. The local date is
@@ -183,18 +193,6 @@ async function sweepMissedPlanDaysInZone(tz: string, today: string): Promise<Swe
       mainWorkout: planDays.mainWorkout,
     });
 }
-
-/** What the sweep needs of a day it marked: enough to tell whether the plan leaned on it. */
-interface SweptPlanDay {
-  readonly id: string;
-  readonly planId: string;
-  readonly priority: string | null;
-  readonly focus: string | null;
-  readonly mainWorkout: string | null;
-}
-
-/** An athlete with no workout logged in this long has stopped: nothing is reviewed for them overnight. */
-const COACH_AFTER_MISS_ACTIVE_DAYS = 14;
 
 /** `days` with each one's prescribed sets, in sort order. */
 async function withPrescribedSets(
@@ -1058,46 +1056,35 @@ export class PlanStorage {
   /**
    * The athletes whose plan lost a key or supporting session to the sweeps
    * since this was last asked: the ones whose upcoming sessions the coach
-   * should look at again. Only athletes with the AI coach on who are still
-   * training (a workout logged in the last two weeks): a plan somebody walked
-   * away from misses a session every night, and reviewing each one would run
-   * the model for nobody.
+   * should look at again, each with the plans that put them here. Only
+   * athletes with the AI coach on who are still training
+   * (findAthletesToCoachAfterMiss).
    *
    * Answered once: the record is cleared as it is read, and kept if the read
-   * fails. It is held here rather than returned by markMissedPlanDays because
+   * fails. A caller that then cannot queue the coach for an athlete hands
+   * their plans back (keepAwaitingCoachAfterMiss), so the next tick asks
+   * again. It is held here rather than returned by markMissedPlanDays because
    * the sweep also runs at boot, before the job queue is up; the first hourly
    * tick picks those athletes up. Like the swept-zone record it is per
    * instance, so a restart in between loses it and the athlete's next log
    * brings the coach back instead.
    */
-  async takeAthletesToCoachAfterMiss(now = new Date()): Promise<string[]> {
+  async takeAthletesToCoachAfterMiss(now = new Date()): Promise<AthleteAwaitingCoach[]> {
     const planIds = [...this.plansAwaitingCoachAfterMiss];
     if (planIds.length === 0) return [];
-    // A UTC date a day early is the widest any athlete's own calendar can be.
-    const activeSince = addDaysToISODate(
-      getLocalDateStrSafe(now, "Etc/UTC"),
-      -(COACH_AFTER_MISS_ACTIVE_DAYS + 1),
-    );
-    const athletes = await db
-      .selectDistinct({ userId: trainingPlans.userId })
-      .from(trainingPlans)
-      .innerJoin(users, eq(users.id, trainingPlans.userId))
-      .where(
-        and(
-          inArray(trainingPlans.id, planIds),
-          eq(users.aiCoachEnabled, true),
-          exists(
-            db
-              .select({ one: sql`1` })
-              .from(workoutLogs)
-              .where(
-                and(eq(workoutLogs.userId, trainingPlans.userId), gte(workoutLogs.date, activeSince)),
-              ),
-          ),
-        ),
-      );
+    const athletes = await findAthletesToCoachAfterMiss(planIds, now);
     for (const planId of planIds) this.plansAwaitingCoachAfterMiss.delete(planId);
-    return athletes.map(({ userId }) => userId);
+    return athletes;
+  }
+
+  /**
+   * Put plans back on the list takeAthletesToCoachAfterMiss reads: the coach
+   * could not be queued for their athlete, and a miss nobody looked at is the
+   * plan carrying on as if the session had been done. The next tick asks for
+   * them again, with the same checks on the athlete.
+   */
+  keepAwaitingCoachAfterMiss(planIds: readonly string[]): void {
+    for (const planId of planIds) this.plansAwaitingCoachAfterMiss.add(planId);
   }
 
   /**

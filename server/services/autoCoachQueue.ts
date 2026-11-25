@@ -84,14 +84,31 @@ export function enqueueAutoCoachInBackground(userId: string, trigger: AutoCoachT
  * a missed one are looked at overnight rather than whenever the athlete next
  * logs. Returns how many were queued.
  *
+ * Each send is awaited: the storage has already taken those athletes off its
+ * list, so one the queue refuses is handed back for the next tick to try
+ * again. Dropped instead, their plan would carry on as if the missed session
+ * had been done until they next logged a workout.
+ *
  * Never throws: it rides on the hourly email tick, and that tick's emails do
  * not wait on the coach. A failed read keeps the athletes for the next tick.
  */
 export async function coachAthletesAfterMissedSweep(storage: IStorage): Promise<number> {
   try {
-    const athleteIds = await storage.plans.takeAthletesToCoachAfterMiss();
-    for (const userId of athleteIds) enqueueAutoCoachInBackground(userId, "plan-day-missed");
-    return athleteIds.length;
+    const athletes = await storage.plans.takeAthletesToCoachAfterMiss();
+    const queued = await Promise.all(
+      athletes.map(async ({ userId, planIds }) => {
+        try {
+          await enqueueAutoCoach(userId, "plan-day-missed");
+          return true;
+        } catch (err) {
+          storage.plans.keepAwaitingCoachAfterMiss(planIds);
+          // bearer:disable javascript_lang_logger_leak
+          logger.error({ err, trigger: "plan-day-missed" }, "Failed to queue auto-coach job");
+          return false;
+        }
+      }),
+    );
+    return queued.filter(Boolean).length;
   } catch (err) {
     // A failed read of plan and user ids; no row content is logged.
     // bearer:disable javascript_lang_logger_leak
