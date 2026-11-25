@@ -809,7 +809,8 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
     `components/workout-detail/FuellingPlanPanel.tsx`.
   - **Exports used:** `computeSessionFuellingTarget`.
 - **`progression`.** 304 lines. The server uses it in
-  `server/services/workoutEngine/adaptation.ts` and `server/services/workoutEngine/loadMath.ts`.
+  `server/services/workoutEngine/adaptation.ts`, `server/services/workoutEngine/adaptationWorking.ts`
+  and `server/services/workoutEngine/loadMath.ts`.
   - **Client use:** the "Next" chip.
   - **Importing files:** `components/workout-detail/exercise-table/nextTarget.ts`, which
     re-exports `suggestNextTarget` to `LastTimeRow.tsx:80`.
@@ -820,7 +821,7 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
   - **Importing files:** only `components/workout-detail/exercise-table/__tests__/nextTarget.test.ts`.
   - **Exports used:** `loadIncrement` (in that test).
 - **`planPhase`.** 141 lines. The server uses it in 5 files: `server/prompts/workoutEngine.ts`
-  and, under `server/services/`, `ai/coachingInsights.ts`, `workoutEngine/adaptation.ts`,
+  and, under `server/services/`, `ai/coachingInsights.ts`, `workoutEngine/adaptationWorking.ts`,
   `sessionGrades/sessionGradeService.ts` and `planBlueprint.ts`. `ai/index.ts` reaches it through
   `coachingInsights.ts`, which re-exports `computeCurrentWeek` and `computePlanPhase`.
   - **Client use:** "Week N of M · Phase" and the coach note's phase text.

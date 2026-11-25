@@ -149,7 +149,7 @@ describe("planMissedSessionRecovery", () => {
     const { impact } = preview.letGo;
     expect(impact.keptFraction).toBe(0);
     expect(impact.day).toBeNull();
-    expect(impact.summary).toBe("Threshold run stays missed, and the rest of the plan carries on as it is.");
+    expect(impact.summary).toBe("Threshold run stays missed, and no session moves to make up for it.");
     expect(impact.weeks).toEqual([
       {
         weekStart: "2026-09-21",

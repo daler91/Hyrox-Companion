@@ -472,6 +472,8 @@ async function reopenDecision(userId: string, planDayId: string): Promise<PlanDa
   // only set by a move, so it still says it was moved once. Whether it was
   // shortened on the way is lost, and "folded" is the honest remainder — what
   // matters is that the planner doesn't chase it as if it had never moved.
+  // No coach pass: the session is as missed as it was, so nothing the plan
+  // adaptation reads has changed.
   return writeRecovery(userId, planDayId, {
     guard: guardFor(day),
     update: { recovery: day.missedOn ? "folded" : null },
@@ -495,10 +497,16 @@ export async function applyMissedSessionRecovery(
   if (body.action === "let_go") {
     // A past day the sweep has not reached yet is stored `planned`; it is
     // missed all the same, so the decision writes the status with it.
-    return writeRecovery(userId, planDayId, {
+    const letGo = await writeRecovery(userId, planDayId, {
       guard: guardFor(context.day),
       update: { status: "missed", recovery: "let_go" },
     });
+    // Settled as not happening: the coach follows it into the sessions still
+    // ahead (the plan adaptation holds them at its step). The overnight sweep
+    // does this for a day it marks, but a day let go before the sweep reached
+    // it is never one the sweep marks.
+    enqueueAutoCoachInBackground(userId, "missed-session-let-go");
+    return letGo;
   }
   return moveMissedSession(userId, context, body.action, body.targetDate);
 }

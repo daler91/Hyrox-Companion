@@ -1,5 +1,6 @@
 import { logger } from "../logger";
 import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
+import type { IStorage } from "../storage";
 
 /**
  * Single producer-side entry point for the auto-coach job.
@@ -37,7 +38,13 @@ export type AutoCoachTrigger =
   | "workout-date-changed"
   | "logged-sets-edited"
   | "plan-day-completed"
-  | "plan-day-rescheduled";
+  | "plan-day-rescheduled"
+  // A session that is not going to happen: swept to missed overnight, skipped
+  // (or un-skipped) by the athlete, or a missed one they let go. The plan
+  // adaptation holds the sessions after it at the step that was not done.
+  | "plan-day-missed"
+  | "plan-day-skipped"
+  | "missed-session-let-go";
 
 /**
  * Enqueue an auto-coach pass, returning the send promise so callers that hold
@@ -69,4 +76,26 @@ export function enqueueAutoCoachInBackground(userId: string, trigger: AutoCoachT
     // bearer:disable javascript_lang_logger_leak
     logger.error({ err, trigger }, "Failed to queue auto-coach job");
   });
+}
+
+/**
+ * Queue a coach pass for every athlete the missed-session sweep left waiting
+ * for one (storage.plans.takeAthletesToCoachAfterMiss), so the sessions after
+ * a missed one are looked at overnight rather than whenever the athlete next
+ * logs. Returns how many were queued.
+ *
+ * Never throws: it rides on the hourly email tick, and that tick's emails do
+ * not wait on the coach. A failed read keeps the athletes for the next tick.
+ */
+export async function coachAthletesAfterMissedSweep(storage: IStorage): Promise<number> {
+  try {
+    const athleteIds = await storage.plans.takeAthletesToCoachAfterMiss();
+    for (const userId of athleteIds) enqueueAutoCoachInBackground(userId, "plan-day-missed");
+    return athleteIds.length;
+  } catch (err) {
+    // A failed read of plan and user ids; no row content is logged.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err }, "Could not queue coach passes after the missed-session sweep");
+    return 0;
+  }
 }

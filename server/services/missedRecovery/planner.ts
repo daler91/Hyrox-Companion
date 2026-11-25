@@ -586,7 +586,9 @@ function recommend(input: PlannerInput, fold: RecoveryMoveOption, shorten: Recov
 
 function letGoImpact(input: PlannerInput): RecoveryImpact {
   return {
-    summary: `${capitalise(input.missed.focus || "The session")} stays missed, and the rest of the plan carries on as it is.`,
+    // Nothing moves — but the plan does not simply carry on: the adaptation
+    // holds the sessions after it at the missed step (workoutEngine/adaptation.ts).
+    summary: `${capitalise(input.missed.focus || "The session")} stays missed, and no session moves to make up for it.`,
     keptFraction: 0,
     keptMinutes: 0,
     day: null,

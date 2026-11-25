@@ -846,11 +846,23 @@ After a workout is logged, the auto-coach's adaptation stage (`computePlanAdapta
 | Fell short of the same prescription twice in a row | 10% deload, then rebuilds — the rule the "Next" chip applies |
 | Ad-hoc work stronger than the plan (nothing prescribed) | The plan catches up, at most 5%; lighter ad-hoc work never lowers it |
 | A lift not trained for 2+ weeks (and twice its usual spacing) | The next session eases back in below the last load: 2.5% per week off beyond two, at most 10% |
+| A key or supporting session that never happened (missed, skipped, or inside a declared absence) in the last 2 weeks | Each lift in it repeats the missed step instead of climbing past it, then resumes at 2.5% a week, so the plan ends up one step behind. See [Sessions that never happened](#sessions-that-never-happened) |
 | A run that is a new best effort | Every written pace in the remaining plan moves to the new fitness (at most +6% VDOT per pass), zone for zone |
 
 Nothing rises while the load governor reports yellow/danger load or the RPE trend flags fatigue, or inside a taper or race week; holds, deloads and returns only ever lower weights. A pass that adapts several logs at once (the coach turned back on, logs inside the debounce, a backfill) raises a load by at most one session's 5%: each raise is measured from the load the pass started with, not stacked on an earlier one. Each changed day gets `aiSource: "progression"`, a rationale naming the session behind it ("Tuesday's 4x8 @ 82.5 kg beat the planned 4x6 @ 82.5 kg — Front Squat now builds from what you did"), `lastModification.kind: "auto_progression"`, and the exact changes in `aiInputsUsed.progressionChanges`, which the timeline's coach note lists under an "Auto-progression" badge. Loads are rewritten in the day's exercise rows and on the text line naming the lift (the lift itself, never a variant such as "Romanian Deadlift" on a deadlift's day); paces in the text and set notes.
 
-Not adapted: an edit to a log that was already applied (its first version stands), run sessions that went badly (the coach's RPE-trend and review notes handle those), and sessions the athlete skipped.
+Not adapted: an edit to a log that was already applied (its first version stands), run sessions that went badly (the coach's RPE-trend and review notes handle those), and the run distance, paces and station work of a session that never happened (only its lifts are followed).
+
+#### Sessions that never happened
+
+A generated plan climbs week on week on the assumption that every session is done. A missed one used to leave the next session a step ahead of the athlete: miss 5x5 @ 100 kg and next week still read 102.5 kg. The adaptation now reads the plan's own days as well as the logs (`getPlanDaysForMissAdaptation` → `readMissedSessions` → `adaptPlan`'s `missed`):
+
+- **What counts.** A key or supporting session of the active plan from the last 14 days whose day passed without it: stored `missed`, still `planned` with its date gone (the sweep has not reached it), `skipped` (including one skipped in advance), or inside a declared absence. Optional sessions, rest days, days the race date sets, and days from a retired plan's cut-off on are left out. The coach note says "You missed…", "You skipped…" or, for a declared absence, "…didn't happen" — an absence is never called a miss.
+- **What it does.** For each weighted lift in the session, the first later session that climbs past the missed load is held at it, and the ones after follow at 2.5% a week to the nearest plate, inside the same 3-week reach as every other load change. Each miss counts once (`engine_state.adaptedMisses`), like a log.
+- **What it leaves alone.** A lift the athlete has logged since anyway; a session missed in a deload week; a later session that already sits at about the missed load (the lift's second day that week: the plan repeats the step itself); and one more than 10% above it (the week's heavier exposure when the lighter one was missed, a new block).
+- **Taking it back.** What a hold lowered is kept in `engine_state.missHolds`. When the session returns to the plan (folded or moved to a day still ahead, a skip undone, or logged late) the next pass restores those loads, but only where a set still reads what the hold wrote, so an edit by the athlete or a later log's change stands. The same happens when the athlete trains the lift anyway before any held session comes up (the session done as a workout of its own, so its plan day stays missed). Once a held session has been done the hold is settled: the record is dropped and the loads stay.
+
+The pass that does this no longer waits for the next log: see [What Triggers A Pass](ai-coach-auto-regulation-flow.md#what-triggers-a-pass).
 
 ---
 

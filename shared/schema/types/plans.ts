@@ -65,6 +65,26 @@ export const updateTrainingPlanRetirementSchema = z.object({
 });
 
 /**
+ * What one session that never happened changed in the sessions after it: the
+ * loads of one lift, held at the missed step. Kept so the change can be taken
+ * back if the session returns (folded into another day, or logged late), and
+ * only where a set still reads what the hold wrote.
+ */
+export const planMissHoldSchema = z.object({
+  planDayId: z.string().max(255),
+  /** The day the session was scheduled on when it was missed. */
+  missedOn: z.string().max(10),
+  /** The lift, as the engine keys it (a custom lift is `custom:<label>`). */
+  exercise: z.string().max(300),
+  /** The weight unit `from` and `to` are in. */
+  unit: z.string().max(16),
+  sets: z
+    .array(z.object({ setId: z.string().max(255), from: z.number(), to: z.number() }))
+    .max(100),
+});
+export type PlanMissHold = z.infer<typeof planMissHoldSchema>;
+
+/**
  * `training_plans.engine_state`: what the workout engine remembers about a
  * plan between adaptation passes. Server-managed — no client schema accepts it.
  */
@@ -74,6 +94,14 @@ export const planEngineStateSchema = z.object({
   runVdot: z.number().positive().nullable(),
   /** Workout logs already adapted into the plan, oldest first and bounded, so each counts once. */
   adaptedLogIds: z.array(z.string().max(255)).max(200),
+  /**
+   * Sessions that never happened and are already reflected in the plan, as
+   * `<planDayId>|<date>`, oldest first and bounded, so each counts once. Absent
+   * on a state written before the engine read misses.
+   */
+  adaptedMisses: z.array(z.string().max(300)).max(200).optional(),
+  /** The holds those sessions left that can still be taken back. */
+  missHolds: z.array(planMissHoldSchema).max(50).optional(),
   updatedAt: z.string(),
 });
 export type PlanEngineState = z.infer<typeof planEngineStateSchema>;

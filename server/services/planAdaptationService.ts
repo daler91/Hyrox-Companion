@@ -1,6 +1,7 @@
 /**
- * The auto-coach's adaptation stage: after the athlete logs a session, move
- * the active plan's upcoming loads and paces to follow what they actually did
+ * The auto-coach's adaptation stage: move the active plan's upcoming loads and
+ * paces to follow what the athlete actually did, and what they did not do — a
+ * logged session, and a session that was missed or skipped
  * (server/services/workoutEngine/adaptation.ts decides; this reads the inputs
  * and writes the result).
  *
@@ -9,20 +10,28 @@
  * kept out of the model's suggestions so a generic rewrite cannot undo a
  * number that came from the athlete's own training log.
  */
+import { type AbsenceRange, isDateExcused, isExcusedFromMissed } from "@shared/absence";
 import { addDaysToISODate } from "@shared/dateUtils";
 import { inSequence } from "@shared/inSequence";
+import type { TrainingPlan } from "@shared/schema";
+import { resolveSessionPriority } from "@shared/sessionPriority";
 import { standardizeWeightUnit, type UnitPreferences } from "@shared/unitConversion";
 
 import type { DbExecutor } from "../db";
 import type { TrainingContext } from "../gemini/index";
 import { logger } from "../logger";
 import { storage } from "../storage";
+import { deriveRaceDayOverride } from "../storage/raceDayView";
 import { getLocalDateStrSafe } from "../timezone";
 import { fingerprintStoredPlanDay } from "./autoCoachWriteGuard";
 import {
   type AdaptablePlanDay,
+  type AdaptablePlanSet,
   type AdaptationResult,
   adaptPlan,
+  LOAD_HORIZON_DAYS,
+  MISSED_SESSION_WINDOW_DAYS,
+  type MissedPlanSession,
 } from "./workoutEngine/adaptation";
 
 /** History the adaptation reads: the same ~10-week window generation calibrates from. */
@@ -53,6 +62,21 @@ type AdaptationPlanDayRow = Awaited<
   ReturnType<typeof storage.plans.getPlanDaysForAdaptation>
 >[number];
 
+function toAdaptableSets(row: AdaptationPlanDayRow): AdaptablePlanSet[] {
+  return row.sets.map((set) => ({
+    id: set.id,
+    exerciseName: set.exerciseName,
+    // A custom lift is keyed by its label (liftKey), so without it no logged
+    // custom lift finds its planned sets. D14 (CODEBASE_ANALYSIS_2026-10-03)
+    customLabel: set.customLabel,
+    category: set.category,
+    reps: set.reps,
+    weight: set.weight,
+    weightUnit: set.weightUnit,
+    notes: set.notes,
+  }));
+}
+
 function toAdaptableDay(row: AdaptationPlanDayRow): AdaptablePlanDay | null {
   if (!row.scheduledDate) return null;
   return {
@@ -63,18 +87,75 @@ function toAdaptableDay(row: AdaptationPlanDayRow): AdaptablePlanDay | null {
     accessory: row.accessory,
     notes: row.notes,
     aiInputsUsed: row.aiInputsUsed,
-    sets: row.sets.map((set) => ({
-      id: set.id,
-      exerciseName: set.exerciseName,
-      // A custom lift is keyed by its label (liftKey), so without it no logged
-      // custom lift finds its planned sets. D14 (CODEBASE_ANALYSIS_2026-10-03)
-      customLabel: set.customLabel,
-      reps: set.reps,
-      weight: set.weight,
-      weightUnit: set.weightUnit,
-      notes: set.notes,
-    })),
+    sets: toAdaptableSets(row),
   };
+}
+
+interface MissedSessions {
+  readonly missed: MissedPlanSession[];
+  /** Days the engine holds a change for that are sessions again. */
+  readonly returnedPlanDayIds: Set<string>;
+}
+
+/**
+ * How a plan day that is not happening on its day reads, or null when it is a
+ * session still (ahead and planned, or done). The timeline's own reading
+ * (server/storage/timeline.ts): skipped is the athlete's choice; missed is
+ * stored, or a planned day whose date has gone; and a declared absence holds
+ * either out of missed.
+ */
+function missedKind(
+  row: AdaptationPlanDayRow,
+  date: string,
+  today: string,
+  absences: readonly AbsenceRange[],
+): MissedPlanSession["kind"] | null {
+  if (row.status === "skipped") return "skipped";
+  const gone = row.status === "missed" || (row.status === "planned" && date < today);
+  if (!gone) return null;
+  return isExcusedFromMissed(row.status, date, today, isDateExcused(date, absences))
+    ? "excused"
+    : "missed";
+}
+
+/**
+ * The plan's sessions the engine should follow as not done, and the ones it
+ * was following that are back. Only sessions the plan leans on: key and
+ * supporting ones, as the coach's own list of misses (collectRecentMisses).
+ * An optional session, a rest day, a day the race date sets (its stored
+ * session is not what the athlete saw), and a day from a retired plan's
+ * cut-off on are nobody's missed step.
+ */
+function readMissedSessions(
+  rows: readonly AdaptationPlanDayRow[],
+  plan: Pick<TrainingPlan, "raceDate" | "retiredOn" | "engineState">,
+  today: string,
+  absences: readonly AbsenceRange[],
+): MissedSessions {
+  const held = new Set((plan.engineState?.missHolds ?? []).map((hold) => hold.planDayId));
+  const missed: MissedPlanSession[] = [];
+  const returnedPlanDayIds = new Set<string>();
+  for (const row of rows) {
+    const date = row.scheduledDate;
+    if (!date) continue;
+    const kind = missedKind(row, date, today, absences);
+    if (kind === null) {
+      if (held.has(row.id)) returnedPlanDayIds.add(row.id);
+      continue;
+    }
+    if (plan.retiredOn && date >= plan.retiredOn) continue;
+    if (deriveRaceDayOverride(date, plan.raceDate) !== null) continue;
+    const priority = resolveSessionPriority(row);
+    if (priority !== "key" && priority !== "supporting") continue;
+    missed.push({
+      planDayId: row.id,
+      date,
+      weekNumber: row.weekNumber,
+      kind,
+      sets: toAdaptableSets(row),
+    });
+  }
+  return { missed, returnedPlanDayIds };
 }
 
 /**
@@ -93,11 +174,25 @@ export async function computePlanAdaptation(
     if (!plan) return null;
     const today = trainingContext.currentDate ?? getLocalDateStrSafe(new Date(), null);
     const from = addDaysToISODate(today, -HISTORY_DAYS);
-    const [logs, sets, days] = await Promise.all([
+    const [logs, sets, days, notHappening, annotations] = await Promise.all([
       storage.analytics.getWorkoutLogsByDateRange(userId, from, today),
       storage.analytics.getAllExerciseSetsWithDates(userId, from, today),
       storage.plans.getPlanDaysForAdaptation(plan.id, today),
+      storage.plans.getPlanDaysForMissAdaptation(plan.id, {
+        from: addDaysToISODate(today, -MISSED_SESSION_WINDOW_DAYS),
+        today,
+        // A session skipped in advance holds the ones after it too.
+        until: addDaysToISODate(today, LOAD_HORIZON_DAYS),
+        alsoIds: [...new Set((plan.engineState?.missHolds ?? []).map((hold) => hold.planDayId))],
+      }),
+      storage.timelineAnnotations.list(userId),
     ]);
+    const { missed, returnedPlanDayIds } = readMissedSessions(
+      notHappening,
+      plan,
+      today,
+      annotations.map(({ startDate, endDate }) => ({ startDate, endDate })),
+    );
     const result = adaptPlan({
       today,
       now: new Date().toISOString(),
@@ -113,6 +208,8 @@ export async function computePlanAdaptation(
       upcoming: days.flatMap((day) => toAdaptableDay(day) ?? []),
       fatigued: isFatigued(trainingContext),
       excludedDayIds,
+      missed,
+      returnedPlanDayIds,
     });
     const changed = new Set(result.days.map((day) => day.planDayId));
     const dayFingerprints = new Map(

@@ -344,8 +344,26 @@ describe("applyMissedSessionRecovery", () => {
       guard: { statuses: ["planned"], scheduledDate: "2026-09-22", recovery: null },
       update: { status: "missed", recovery: "let_go" },
     });
-    expect(enqueueAutoCoachInBackground).not.toHaveBeenCalled();
     expect(recordPlanDayMove).not.toHaveBeenCalled();
+  });
+
+  it("sends the coach over the sessions ahead once a session is let go", async () => {
+    // The sweep never marks a day that was let go before it got there, so
+    // this is the pass that holds the next sessions at the missed step.
+    await applyMissedSessionRecovery(USER, "pd-missed", { action: "let_go" });
+    expect(enqueueAutoCoachInBackground).toHaveBeenCalledExactlyOnceWith(USER, "missed-session-let-go");
+  });
+
+  it("does not send the coach when a let-go is refused or taken back", async () => {
+    mocks.applyPlanDayRecovery.mockResolvedValueOnce({ outcome: "conflict" });
+    await expect(applyMissedSessionRecovery(USER, "pd-missed", { action: "let_go" })).rejects.toMatchObject({
+      status: 409,
+    });
+
+    mocks.getPlanDay.mockResolvedValue({ ...missedDay, recovery: "let_go" });
+    await applyMissedSessionRecovery(USER, "pd-missed", { action: "reopen" });
+
+    expect(enqueueAutoCoachInBackground).not.toHaveBeenCalled();
   });
 
   it("reopens only a decision the timeline shows", async () => {

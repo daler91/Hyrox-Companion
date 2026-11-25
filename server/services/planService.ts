@@ -1,5 +1,6 @@
 import type { ExerciseSet, InsertPlanDay, PlanDay, PlanDaySkipReason, TrainingPlanWithDays, UpdatePlanDay, WorkoutLog } from "@shared/schema";
 import { exerciseSets, isRunningExerciseName, planDays, trainingPlans, workoutLogs } from "@shared/schema";
+import { resolveSessionPriority } from "@shared/sessionPriority";
 import type { DistanceUnit } from "@shared/unitConversion";
 import { parse } from "csv-parse/sync";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
@@ -12,7 +13,7 @@ import { storage } from "../storage";
 import { planSlotForMove } from "../storage/planSlot";
 import { getLocalDateStrSafe } from "../timezone";
 import { invalidateAnalyticsCachesForUser } from "./analyticsRouteCache";
-import { enqueueAutoCoachInBackground } from "./autoCoachQueue";
+import { type AutoCoachTrigger, enqueueAutoCoachInBackground } from "./autoCoachQueue";
 import {
   isCorrectedRecordingSet,
   isUncorrectedRecordingSet,
@@ -832,7 +833,7 @@ export async function updatePlanDayStatus(
   // Transition path: do the read, transition check, optional log cleanup,
   // and write inside a single transaction so a concurrent cron or workout
   // mutation can't race the check and sneak through a forbidden from-state.
-  const { updatedDay, dateChanged, previousDate, reopened } = await db.transaction(async (tx) => {
+  const { updatedDay, dateChanged, previousDate, reopened, skipChanged } = await db.transaction(async (tx) => {
     const [current] = await tx
       .select({
         planId: planDays.planId,
@@ -895,7 +896,14 @@ export async function updatePlanDayStatus(
     const dateChanged =
       scheduledDate !== undefined && (scheduledDate ?? null) !== (current.scheduledDate ?? null);
 
-    return { updatedDay: row, dateChanged, previousDate: current.scheduledDate, reopened: leavesCompleted };
+    return {
+      updatedDay: row,
+      dateChanged,
+      previousDate: current.scheduledDate,
+      reopened: leavesCompleted,
+      // Into a skip or back out of one: the session stopped, or started, counting.
+      skipChanged: (from === "skipped") !== (status === "skipped"),
+    };
   });
 
   // Reopening deletes the linked log, unlinks any others and gives a Strava
@@ -913,12 +921,28 @@ export async function updatePlanDayStatus(
     });
   }
 
-  if (updatedDay && (status === "completed" || dateChanged)) {
-    enqueueAutoCoachInBackground(
-      userId,
-      status === "completed" ? "plan-day-completed" : "plan-day-rescheduled",
-    );
-  }
+  const trigger = updatedDay
+    ? statusChangeCoachTrigger(updatedDay, { status, dateChanged, skipChanged })
+    : null;
+  if (trigger) enqueueAutoCoachInBackground(userId, trigger);
 
   return updatedDay;
+}
+
+/**
+ * Why a status change sends the coach back over the plan, or null when it
+ * need not look. A skip, and taking one back, changes what the sessions after
+ * it should build from (the plan adaptation holds them at the skipped step) —
+ * but only for a session the plan leans on: skipping an optional one, or a
+ * rest day, leaves everything after it as it was.
+ */
+function statusChangeCoachTrigger(
+  day: PlanDay,
+  change: { status: PlanDayStatus; dateChanged: boolean; skipChanged: boolean },
+): AutoCoachTrigger | null {
+  if (change.status === "completed") return "plan-day-completed";
+  if (change.dateChanged) return "plan-day-rescheduled";
+  if (!change.skipChanged) return null;
+  const priority = resolveSessionPriority(day);
+  return priority === "key" || priority === "supporting" ? "plan-day-skipped" : null;
 }

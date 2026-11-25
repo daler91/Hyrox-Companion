@@ -912,6 +912,75 @@ describe("planService — moving a missed session", () => {
   });
 });
 
+describe("updatePlanDayStatus — coach pass after a skip", () => {
+  const dayId = "test-day-id";
+  const userId = "test-user-id";
+
+  /** The two statements a status change runs: the locked read of the day, then the write. */
+  function statusChange(from: string, written: ReturnType<typeof createMockPlanDay>) {
+    const tx = {
+      select: vi.fn().mockReturnValue({
+        from: () => ({
+          innerJoin: () => ({
+            where: () => ({ for: vi.fn().mockResolvedValue([{ status: from }]) }),
+          }),
+        }),
+      }),
+      update: vi.fn().mockReturnValue({
+        set: () => ({ where: () => ({ returning: vi.fn().mockResolvedValue([written]) }) }),
+      }),
+    };
+    transactionMock.mockImplementation(async (callback) =>
+      callback(tx as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0]),
+    );
+  }
+
+  async function coachTriggers(): Promise<unknown[]> {
+    const { queue } = await import("../queue");
+    return vi
+      .mocked(queue.sendDebounced)
+      .mock.calls.map(([, data]) => (data as { trigger?: string }).trigger);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("sends the coach back over the plan when a session it leans on is skipped", async () => {
+    // The sessions after it should build from the skipped step, not past it.
+    statusChange("planned", createMockPlanDay({ id: dayId, status: "skipped" }));
+
+    await updatePlanDayStatus(dayId, { status: "skipped" }, userId);
+
+    expect(await coachTriggers()).toEqual(["plan-day-skipped"]);
+  });
+
+  it("sends it again when the skip is taken back", async () => {
+    statusChange("skipped", createMockPlanDay({ id: dayId, status: "planned" }));
+
+    await updatePlanDayStatus(dayId, { status: "planned" }, userId);
+
+    expect(await coachTriggers()).toEqual(["plan-day-skipped"]);
+  });
+
+  it("does not for an optional session, a rest day, or a skip that was already one", async () => {
+    statusChange("planned", createMockPlanDay({ id: dayId, status: "skipped", priority: "optional" }));
+    await updatePlanDayStatus(dayId, { status: "skipped" }, userId);
+
+    statusChange(
+      "planned",
+      createMockPlanDay({ id: dayId, status: "skipped", focus: "Rest", mainWorkout: "Rest day" }),
+    );
+    await updatePlanDayStatus(dayId, { status: "skipped" }, userId);
+
+    // Only the reason changed: the session was not counting before either.
+    statusChange("skipped", createMockPlanDay({ id: dayId, status: "skipped" }));
+    await updatePlanDayStatus(dayId, { status: "skipped", skipReason: "ill" }, userId);
+
+    expect(await coachTriggers()).toEqual([]);
+  });
+});
+
 describe("updatePlanDayRecordingMove", () => {
   const dayId = "test-day-id";
   const userId = "test-user-id";

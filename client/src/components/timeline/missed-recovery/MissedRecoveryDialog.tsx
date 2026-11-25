@@ -65,7 +65,7 @@ const OPTIONS: readonly OptionCopy[] = [
     value: "let_go",
     title: "Let it go",
     icon: Feather,
-    describe: () => "Leave it missed. The rest of the plan carries on as it is.",
+    describe: () => "Leave it missed. No session moves to make up for it.",
   },
 ];
 

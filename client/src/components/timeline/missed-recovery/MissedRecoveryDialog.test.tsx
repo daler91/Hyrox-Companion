@@ -109,7 +109,7 @@ const preview: MissedSessionRecoveryPreview = {
   },
   letGo: {
     impact: {
-      summary: "Threshold run stays missed, and the rest of the plan carries on as it is.",
+      summary: "Threshold run stays missed, and no session moves to make up for it.",
       keptFraction: 0,
       keptMinutes: 0,
       day: null,
@@ -208,7 +208,7 @@ describe("MissedRecoveryDialog", () => {
     renderDialog("let_go");
 
     expect(await screen.findByTestId("missed-recovery-impact")).toHaveTextContent(
-      "Threshold run stays missed, and the rest of the plan carries on as it is.",
+      "Threshold run stays missed, and no session moves to make up for it.",
     );
     expect(screen.getByTestId("missed-recovery-week-2026-09-21")).toHaveTextContent("3h 20m → 2h 30m · load −24%");
     expect(screen.getByTestId("missed-recovery-key-sessions")).toHaveTextContent("2 → 1 of 2");
