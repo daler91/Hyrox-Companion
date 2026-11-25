@@ -485,93 +485,6 @@ function coachExerciseSelectionField(params: {
   }
 }
 
-/** The active plan as the coach sees it: its name, length, goal, and the week the athlete is in. */
-function activePlanForContext(
-  plan: Awaited<ReturnType<typeof storage.plans.getActivePlan>>,
-  today: string,
-): TrainingContext["activePlan"] {
-  if (!plan) return undefined;
-  return {
-    name: plan.name,
-    totalWeeks: plan.totalWeeks,
-    currentWeek: computeCurrentWeek(plan.startDate, plan.totalWeeks, today),
-    goal: plan.goal ?? undefined,
-  };
-}
-
-/**
- * The decision engine's verdict, for the health-metrics log.
- *
- * W6: no userId on these info-level health lines. The logger's requestId
- * mixin already carries correlation, so we don't put a user identifier next
- * to health-derived phase/intensity status (matches the logger.ts S2 rule).
- */
-function logPhaseDecision(decision: ReturnType<typeof decideTrainingState>): void {
-  logger.info(
-    {
-      context: "health-metrics",
-      event: "phase_state_evaluated",
-      phase: decision.phase,
-      intensityPermitted: decision.intensityPermitted,
-      rationaleCodes: decision.rationaleCodes,
-    },
-    "Training phase decision evaluated",
-  );
-
-  if (!decision.intensityPermitted && decision.phase === "performance") {
-    logger.info(
-      {
-        context: "health-metrics",
-        event: "strict_phase_intensity_blocked",
-        phase: decision.phase,
-      },
-      "Intensity recommendation blocked in strict phase",
-    );
-  }
-}
-
-/**
- * MAF athletes get a compact test-trend summary so the coach can validate
- * aerobic progress and nudge test cadence. The reads are scoped to this style
- * and skipped entirely for everyone else.
- */
-async function loadMafTrend(
-  userId: string,
-  user: { trainingStyleId?: string | null } | undefined,
-): Promise<TrainingContext["mafTrend"]> {
-  if (user?.trainingStyleId !== "maf_method") return undefined;
-  // Explicit limits, and a separate COUNT. The default was a silent 20, so the
-  // summary reported "20 tests" to anyone with more and computed its trend from
-  // whatever twenty rows happened to be newest (audit M14).
-  const [mafTestRows, mafAnalysisRows, mafTestTotal] = await Promise.all([
-    storage.mafTests.listTestResults(userId, MAF_HISTORY_LIMIT),
-    storage.mafTests.listWorkoutAnalysis(userId, MAF_HISTORY_LIMIT),
-    storage.mafTests.countTestResults(userId),
-  ]);
-  return summarizeMafTrend(mafTestRows, mafAnalysisRows, new Date(), {
-    totalTestCount: mafTestTotal,
-  });
-}
-
-/**
- * Phase 3b: when the athlete engages with nutrition (slice present) and has an
- * upcoming planned session, tell the coach what to fuel for it. Fills the
- * slice in place.
- */
-function addNextSessionFuelling(
-  nutrition: Awaited<ReturnType<typeof buildNutritionTrainingContext>>,
-  upcomingDays: readonly UpcomingPlannedDay[],
-  user: { bodyweightKg?: number | null; distanceUnit?: string | null } | undefined,
-): void {
-  const [nextDay] = upcomingDays;
-  if (!nutrition || !nextDay) return;
-  nutrition.nextSessionFuelling = buildNextSessionFuelling(
-    nextDay,
-    user?.bodyweightKg ?? null,
-    user?.distanceUnit ?? "km",
-  );
-}
-
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
   // Resolve the athlete before anything that needs a date. "Today" is theirs,
   // not the server's, and it must be ONE value: the coach's narrative date was
@@ -644,7 +557,16 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   const recentWorkouts = collectRecentWorkouts(timeline);
   const structuredExerciseStats = getStructuredExerciseStats(timeline, { weightUnit, distanceUnit });
 
-  const activePlan = activePlanForContext(activePlanRecord, today);
+  let activePlan: TrainingContext["activePlan"];
+  if (activePlanRecord) {
+    const currentWeek = computeCurrentWeek(activePlanRecord.startDate, activePlanRecord.totalWeeks, today);
+    activePlan = {
+      name: activePlanRecord.name,
+      totalWeeks: activePlanRecord.totalWeeks,
+      currentWeek,
+      goal: activePlanRecord.goal ?? undefined,
+    };
+  }
 
   const rpeTrend = computeRpeTrend(recentWorkouts);
   const stationGaps = computeExerciseGaps(timeline, today, standingConstraints);
@@ -775,12 +697,59 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     ...supplementaryInsights,
   };
 
-  logPhaseDecision(decisionTree);
+  // W6: omit userId from these info-level health lines. The logger's requestId
+  // mixin already carries correlation, so we don't put a user identifier next
+  // to health-derived phase/intensity status (matches the logger.ts S2 rule).
+  logger.info(
+    {
+      context: "health-metrics",
+      event: "phase_state_evaluated",
+      phase: decisionTree.phase,
+      intensityPermitted: decisionTree.intensityPermitted,
+      rationaleCodes: decisionTree.rationaleCodes,
+    },
+    "Training phase decision evaluated",
+  );
 
-  const mafTrend = await loadMafTrend(userId, user);
+  if (!decisionTree.intensityPermitted && decisionTree.phase === "performance") {
+    logger.info(
+      {
+        context: "health-metrics",
+        event: "strict_phase_intensity_blocked",
+        phase: decisionTree.phase,
+      },
+      "Intensity recommendation blocked in strict phase",
+    );
+  }
+
+  // MAF athletes get a compact test-trend summary so the coach can validate
+  // aerobic progress and nudge test cadence. The two reads are scoped to this
+  // style and skipped entirely for everyone else.
+  let mafTrend: TrainingContext["mafTrend"];
+  if (user?.trainingStyleId === "maf_method") {
+    // Explicit limits, and a separate COUNT. The default was a silent 20, so the
+    // summary reported "20 tests" to anyone with more and computed its trend from
+    // whatever twenty rows happened to be newest (audit M14).
+    const [mafTestRows, mafAnalysisRows, mafTestTotal] = await Promise.all([
+      storage.mafTests.listTestResults(userId, MAF_HISTORY_LIMIT),
+      storage.mafTests.listWorkoutAnalysis(userId, MAF_HISTORY_LIMIT),
+      storage.mafTests.countTestResults(userId),
+    ]);
+    mafTrend = summarizeMafTrend(mafTestRows, mafAnalysisRows, new Date(), {
+      totalTestCount: mafTestTotal,
+    });
+  }
 
   const nutrition = await nutritionPromise;
-  addNextSessionFuelling(nutrition, upcomingDays, user);
+  // Phase 3b: when the athlete engages with nutrition (slice present) and has an
+  // upcoming planned session, tell the coach what to fuel for it.
+  if (nutrition && upcomingDays.length > 0) {
+    nutrition.nextSessionFuelling = buildNextSessionFuelling(
+      upcomingDays[0],
+      user?.bodyweightKg ?? null,
+      user?.distanceUnit ?? "km",
+    );
+  }
 
   return {
     totalWorkouts,
