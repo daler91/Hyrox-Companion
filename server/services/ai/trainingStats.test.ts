@@ -551,8 +551,51 @@ describe("collectRecentMisses", () => {
     ]);
 
     expect(misses).toEqual([
-      { date: "2026-01-12", focus: "Strength B", priority: "supporting", decision: "undecided" },
-      { date: "2026-01-10", focus: "Threshold run", priority: "key", decision: "let_go" },
+      { date: "2026-01-12", focus: "Strength B", priority: "supporting", decision: "undecided", movable: false, mainWorkout: "Squats" },
+      { date: "2026-01-10", focus: "Threshold run", priority: "key", decision: "let_go", movable: false, mainWorkout: "Squats" },
     ]);
+  });
+
+  it("says what each session was, how long ago, and whether the athlete can still move it", () => {
+    const misses = collectRecentMisses(
+      [
+        makeEntry({
+          status: MISSED,
+          date: "2026-01-12",
+          focus: "Threshold run",
+          mainWorkout: "5x1 km @ 4:10/km, 90 s jog",
+          priority: "key",
+          recoverable: true,
+        }),
+        // Let go: settled, so no longer the athlete's to move.
+        makeEntry({ status: MISSED, date: "2026-01-09", focus: "Long run", mainWorkout: "", priority: "key", recovery: "let_go" }),
+      ],
+      "2026-01-14",
+    );
+
+    expect(misses).toEqual([
+      {
+        date: "2026-01-12",
+        focus: "Threshold run",
+        priority: "key",
+        decision: "undecided",
+        movable: true,
+        daysAgo: 2,
+        mainWorkout: "5x1 km @ 4:10/km, 90 s jog",
+      },
+      { date: "2026-01-09", focus: "Long run", priority: "key", decision: "let_go", movable: false, daysAgo: 5 },
+    ]);
+  });
+
+  it("leaves out a miss from more than two weeks before the athlete's today", () => {
+    const entries = [
+      makeEntry({ status: MISSED, date: "2026-01-01", focus: "Threshold run", priority: "key" }),
+      makeEntry({ status: MISSED, date: "2025-12-31", focus: "Long run", priority: "key" }),
+    ];
+
+    // The window the plan adaptation follows a miss over: 14 days, inclusive.
+    expect(collectRecentMisses(entries, "2026-01-15")?.map((miss) => miss.date)).toEqual(["2026-01-01"]);
+    // No date to measure from: nothing is too old.
+    expect(collectRecentMisses(entries)).toHaveLength(2);
   });
 });

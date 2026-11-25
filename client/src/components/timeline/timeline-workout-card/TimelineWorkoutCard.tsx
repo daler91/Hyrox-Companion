@@ -30,6 +30,7 @@ import { DeviceLinkSuggestion, StravaLinkBadge } from "./DeviceLinkControls";
 import { ExerciseChips } from "./ExerciseChips";
 import { FuellingTargetChip } from "./FuellingTargetChip";
 import { MafCeilingChip } from "./MafCeilingChip";
+import { MissedSessionHoldNote } from "./MissedSessionHoldNote";
 import { MoveEntryMenu } from "./MoveEntryMenu";
 import { RecoveryOriginBadge, SessionPriorityBadge } from "./SessionTierBadges";
 import type { TimelineWorkoutCardProps } from "./types";
@@ -711,6 +712,7 @@ function TimelineCardWorkoutBody({
       {isPlannedTimelineEntry(entry) && <MafCeilingChip entry={entry} />}
       <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
       <DeviceLinkSuggestion entry={entry} dayEntries={dayEntries} />
+      <MissedSessionHoldNote entry={entry} />
       {entry.aiRationale && (
         <CoachNote
           entryId={entry.id}

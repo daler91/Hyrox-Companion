@@ -18,18 +18,26 @@ import { storedWeightToDisplay, type WeightUnit } from "@shared/unitConversion";
 
 import { shortDate } from "../missedRecovery/planner";
 import { planDeloadWeeks } from "../planBlueprint";
-import type { AdaptablePlanSet, AdaptationInput, MissedPlanSession } from "./adaptationTypes";
+import type {
+  AdaptablePlanDay,
+  AdaptablePlanSet,
+  AdaptationInput,
+  MissedPlanSession,
+  ProgressionChange,
+} from "./adaptationTypes";
 import {
   applyDecision,
   equivalentLoad,
   exerciseLabel,
   isAdaptableSet,
+  LOAD_HORIZON_DAYS,
   loggedLift,
   MAX_STEP_ABOVE_MISS,
   recordChange,
   repsOf,
   setsOf,
   topWeight,
+  toWorkingDay,
   weekdayName,
   type WorkingDay,
 } from "./adaptationWorking";
@@ -47,10 +55,13 @@ const MISS_HOLD_MAX_AGE_DAYS = 28;
 const MAX_ADAPTED_MISSES = 200;
 const MAX_MISS_HOLDS = 50;
 const MAX_HOLD_SETS = 100;
+/** What a coach note's list of changes may hold (coachMissedSessionHoldSchema). */
+const MAX_NOTE_CHANGES = 10;
 /** Two loads in the same unit closer than this are the same load. */
 const SAME_LOAD_TOLERANCE = 0.01;
 
-function missKey(miss: { readonly planDayId: string; readonly date: string }): string {
+/** How the engine state names a miss: the plan day, on the day it was missed. */
+export function missKey(miss: { readonly planDayId: string; readonly date: string }): string {
   return `${miss.planDayId}|${miss.date}`;
 }
 
@@ -132,6 +143,24 @@ function firstClimbPast(later: readonly WorkingDay[], lift: MissedLift): number 
 }
 
 /**
+ * Leave on a day the record of what a missed session held on it, for its card
+ * (CoachNoteInputs.missedSessionHold). A day two misses reach keeps the first
+ * one's name and gains the second's loads.
+ */
+function markHeld(
+  day: WorkingDay,
+  miss: MissedPlanSession,
+  held: readonly ProgressionChange[],
+): void {
+  if (held.length === 0) return;
+  const record = day.missedSessionHold ?? { kind: miss.kind, date: miss.date, changes: [] };
+  day.missedSessionHold = {
+    ...record,
+    changes: [...record.changes, ...held.map((change) => ({ ...change }))].slice(0, MAX_NOTE_CHANGES),
+  };
+}
+
+/**
  * Hold one lift at the step a session never did: its next session repeats the
  * missed load instead of climbing past it, and the ones after resume from
  * there (applyCap). Returns what it lowered, or null when nothing was.
@@ -156,6 +185,7 @@ function holdMissedLift(
   for (const day of targets) {
     for (const set of setsOf(day, lift.exercise)) before.set(set.id, day.weights.get(set.id) ?? 0);
   }
+  const changesBefore = targets.map((day) => day.changes.length);
   applyDecision(
     { log: { id: missKey(miss), date: miss.date }, exercise: lift.exercise, sets: [] },
     {
@@ -171,12 +201,13 @@ function holdMissedLift(
     { unit: input.weightUnit, fatigued: input.fatigued },
   );
   const sets: PlanMissHold["sets"] = [];
-  for (const day of targets) {
+  for (const [index, day] of targets.entries()) {
     for (const set of setsOf(day, lift.exercise)) {
       const from = before.get(set.id);
       const to = day.weights.get(set.id);
       if (from != null && to != null && to !== from) sets.push({ setId: set.id, from, to });
     }
+    markHeld(day, miss, day.changes.slice(changesBefore.at(index) ?? 0));
   }
   if (sets.length === 0) return null;
   return {
@@ -228,17 +259,36 @@ export interface MissRecord {
 }
 
 /**
+ * The day of the first session a hold reached, or null when one of the sets
+ * it lowered is no longer ahead: that session has been done (or its day has
+ * gone), and the plan has moved on from the held load.
+ */
+function firstHeldDate(hold: PlanMissHold, aheadDates: ReadonlyMap<string, string>): string | null {
+  let first: string | null = null;
+  for (const record of hold.sets) {
+    const date = aheadDates.get(record.setId);
+    if (date === undefined) return null;
+    if (first === null || date < first) first = date;
+  }
+  return first;
+}
+
+/**
  * Open the pass's record of missed sessions, or null when the caller gave
  * none to look at. Each hold kept from an earlier pass is settled here,
  * before any log is read, so a raise this pass builds on a restored load:
  *
- *   - its session is back in the plan (moved to a day ahead, logged late)
- *     → taken back, and the session counts afresh if it is missed again;
+ *   - its session is back in the plan ahead of the sessions held for it
+ *     (moved to an earlier day, or logged late) → taken back;
+ *   - its session is back, but after a session held for it → the loads
+ *     stand: that session still comes before the missed step is done;
  *   - its day was deleted → dropped, nothing to take back;
  *   - the lift was trained anyway before any held session came up (the
  *     session done as a workout of its own) → taken back: the step was made up;
  *   - the lift was trained in a held session, or the miss is long ago → dropped
  *     and the loads stand: the plan has moved on from the held load.
+ *
+ * A session that is back counts afresh if it is missed again.
  */
 export function openMissRecord(
   working: readonly WorkingDay[],
@@ -247,25 +297,28 @@ export function openMissRecord(
 ): MissRecord | null {
   if (!input.missed) return null;
   const stillMissed = new Set(input.missed.map(missKey));
-  const returned = input.returnedPlanDayIds ?? new Set<string>();
+  const returned = input.returnedPlanDays ?? new Map<string, string>();
   const adapted = new Set(state.adaptedMisses ?? []);
   const holds: PlanMissHold[] = [];
-  // Every session still ahead, a day another stage rewrote this pass included:
-  // a held set missing from here belongs to a session that has been and gone.
-  const stillAhead = new Set(
+  // Every set still ahead and its day, a day another stage rewrote this pass
+  // included: a held set missing from here belongs to a session gone by.
+  const aheadDates = new Map(
     input.upcoming
       .filter((day) => day.date >= input.today)
-      .flatMap((day) => day.sets.map((set) => set.id)),
+      .flatMap((day) => day.sets.map((set) => [set.id, day.date] as const)),
   );
   for (const hold of state.missHolds ?? []) {
     const key = missKey({ planDayId: hold.planDayId, date: hold.missedOn });
     const when = nearDayName(hold.missedOn, input.today);
     const label = exerciseLabel(hold.exercise);
+    const firstHeld = firstHeldDate(hold, aheadDates);
     if (!stillMissed.has(key)) {
-      if (returned.has(hold.planDayId)) {
+      const backOn = returned.get(hold.planDayId);
+      if (backOn === undefined) continue;
+      adapted.delete(key);
+      if (firstHeld !== null && backOn < firstHeld) {
         const reason = `${when}'s session is no longer missed, so ${label} returns to its planned load`;
         releaseHold(working, hold, input, reason);
-        adapted.delete(key);
       }
       continue;
     }
@@ -274,7 +327,7 @@ export function openMissRecord(
       holds.push(hold);
       continue;
     }
-    if (hold.sets.every((record) => stillAhead.has(record.setId))) {
+    if (firstHeld !== null) {
       const reason = `you have trained ${label} since ${when}'s session, so it returns to its planned load`;
       releaseHold(working, hold, input, reason);
     }
@@ -283,15 +336,29 @@ export function openMissRecord(
 }
 
 /**
+ * What one missed session holds: each of its lifts, in the next session that
+ * climbs past it. Nothing for a lift the athlete has trained since anyway, or
+ * for a deload week (no step of the progression was lost).
+ */
+function holdsFor(
+  working: readonly WorkingDay[],
+  miss: MissedPlanSession,
+  input: AdaptationInput,
+  horizonEnd: string,
+): PlanMissHold[] {
+  if (planDeloadWeeks(input.plan.totalWeeks).includes(miss.weekNumber)) return [];
+  return missedLifts(miss, input.weightUnit).flatMap((lift) => {
+    if (trainedSince(input, lift.exercise, miss.date)) return [];
+    return holdMissedLift(working, miss, lift, input, horizonEnd) ?? [];
+  });
+}
+
+/**
  * Follow the sessions that never happened. A generated plan climbs week on
  * week on the assumption that every session is done; a missed one leaves the
  * next session a step ahead of the athlete. So each lift of a missed session
  * is held at the missed load — once per miss, like a log — and the hold is
  * remembered so it can be taken back if the session returns.
- *
- * Nothing is held for a lift the athlete has trained since anyway, for a
- * deload week (no step of the progression was lost), or on a session well
- * above the missed load (the week's heavier exposure, a new block).
  */
 export function holdMissedSessions(
   working: readonly WorkingDay[],
@@ -304,20 +371,79 @@ export function holdMissedSessions(
     (a, b) => a.date.localeCompare(b.date) || a.planDayId.localeCompare(b.planDayId),
   );
   const windowStart = addDaysToISODate(input.today, -MISSED_SESSION_WINDOW_DAYS);
-  const deloadWeeks = new Set(planDeloadWeeks(input.plan.totalWeeks));
   for (const miss of missed) {
     const key = missKey(miss);
     if (adapted.has(key) || miss.date < windowStart) continue;
     adapted.add(key);
-    if (deloadWeeks.has(miss.weekNumber)) continue;
-    for (const lift of missedLifts(miss, input.weightUnit)) {
-      if (trainedSince(input, lift.exercise, miss.date)) continue;
-      const hold = holdMissedLift(working, miss, lift, input, horizonEnd);
-      if (hold) holds.push(hold);
-    }
+    holds.push(...holdsFor(working, miss, input, horizonEnd));
   }
   return {
     adaptedMisses: [...adapted].slice(-MAX_ADAPTED_MISSES),
     missHolds: holds.slice(-MAX_MISS_HOLDS),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Saying what a miss changes, for the recovery sheet
+// ---------------------------------------------------------------------------
+
+/**
+ * What following `miss` would hold, without changing anything: the decision
+ * holdMissedSessions makes, on a copy of the upcoming days. The recovery
+ * sheet uses it to say what letting a session go does to the sessions after
+ * it, before any coach pass has run.
+ */
+export function previewMissHolds(input: AdaptationInput, miss: MissedPlanSession): PlanMissHold[] {
+  const working = input.upcoming
+    .filter((day) => day.date >= input.today)
+    .map((day) => toWorkingDay(day, input));
+  return holdsFor(working, miss, input, addDaysToISODate(input.today, LOAD_HORIZON_DAYS));
+}
+
+/** What one hold does to the first session it reaches. */
+export interface MissFollowOn {
+  /** The lift, as the coach note names it. */
+  readonly exercise: string;
+  /** The first session the hold reaches. */
+  readonly date: string;
+  /** The lift's sets and reps in that session: "4x6". */
+  readonly scheme: string;
+  /** Its top load there without the hold and with it, in `unit`. */
+  readonly from: number;
+  readonly to: number;
+  readonly unit: string;
+}
+
+/**
+ * Each hold as the first session it reaches and the load it leaves there,
+ * soonest first. A hold none of whose sets is still ahead says nothing.
+ */
+export function describeMissHolds(
+  holds: readonly PlanMissHold[],
+  upcoming: readonly AdaptablePlanDay[],
+): MissFollowOn[] {
+  const days = [...upcoming].sort((a, b) => a.date.localeCompare(b.date));
+  return holds
+    .flatMap((hold): MissFollowOn[] => {
+      const records = new Map(hold.sets.map((record) => [record.setId, record]));
+      const day = days.find((candidate) => candidate.sets.some((set) => records.has(set.id)));
+      if (!day) return [];
+      const lowered = day.sets.flatMap((set) => {
+        const record = records.get(set.id);
+        return record ? [{ set, record }] : [];
+      });
+      const top = lowered.reduce((best, each) => (each.record.to > best.record.to ? each : best));
+      const count = day.sets.filter((set) => liftKey(set) === hold.exercise).length;
+      return [
+        {
+          exercise: exerciseLabel(hold.exercise),
+          date: day.date,
+          scheme: top.set.reps == null ? `${count} sets` : `${count}x${top.set.reps}`,
+          from: Math.max(...lowered.map((each) => each.record.from)),
+          to: top.record.to,
+          unit: hold.unit,
+        },
+      ];
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
 }

@@ -100,10 +100,12 @@ export interface AdaptationInput {
    */
   readonly missed?: readonly MissedPlanSession[];
   /**
-   * Plan days the engine state keeps a hold for that are sessions again:
-   * moved to a day still ahead, or logged after all. Their holds are taken back.
+   * Plan days the engine state keeps a hold for that are sessions again, each
+   * with the day it is now on: the day it was moved to, or its own day when it
+   * was logged after all. A hold is taken back when its session returns ahead
+   * of the sessions that were held for it.
    */
-  readonly returnedPlanDayIds?: ReadonlySet<string>;
+  readonly returnedPlanDays?: ReadonlyMap<string, string>;
 }
 
 export type ProgressionChangeKind = "raise" | "hold" | "deload" | "pace";

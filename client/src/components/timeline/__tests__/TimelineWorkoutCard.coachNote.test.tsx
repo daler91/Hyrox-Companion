@@ -61,6 +61,30 @@ describe("TimelineWorkoutCard — Coach's note integration", () => {
     expect(toggle).toHaveTextContent(/Coach's note/);
   });
 
+  it("says a session was adjusted after a missed one without the note being opened", () => {
+    // The note that explains a held load is collapsed by default, and a later
+    // review note replaces its text: the card has to say it on its own.
+    renderCard({
+      ...baseEntry,
+      focus: "Lower Strength",
+      aiSource: "review",
+      aiRationale: "Left as-is — this keeps your squat moving.",
+      aiNoteUpdatedAt: new Date(),
+      aiInputsUsed: {
+        missedSessionHold: {
+          kind: "missed",
+          date: "2026-04-14",
+          changes: [{ exercise: "back_squat", kind: "hold", from: 102.5, to: 100, unit: "kg" }],
+        },
+      },
+    } as unknown as TimelineEntry);
+
+    expect(screen.getByTestId("coach-note-toggle-entry-1")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByTestId("missed-session-hold-entry-1")).toHaveTextContent(
+      "Adjusted after the session you missed on Tue 14 Apr · Back Squat: 102.5 → 100 kg",
+    );
+  });
+
   it("toggling the note does not trigger the card's onClick", () => {
     const onClick = vi.fn();
     const entry = {

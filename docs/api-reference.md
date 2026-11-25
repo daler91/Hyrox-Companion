@@ -904,7 +904,13 @@ across the missed session's week and the weeks of the days it could move to.
     `long_day`, `week_jump`, `race_close` cautions; `optional_on_day`,
     `blocks_not_trimmed`, `not_trimmable` tips). `shorten` also carries the
     shortened `durationMin`, `keptFraction` and the per-exercise `changes`.
-  - `letGo.impact` — the same impact for leaving the session where it is
+  - `letGo.impact` — the same impact for leaving the session where it is.
+    When the athlete has the AI coach on it also carries `followOn`: what
+    staying missed changes in the sessions after it, one plain sentence per
+    weighted lift ("Tuesday's Back Squat will repeat 5x5 @ 100 kg instead of
+    climbing to 102.5 kg."), from the plan adaptation's own rule
+    (`previewMissedSessionFollowOn`). "Will repeat" before a coach pass has
+    followed the miss, "stays at" once one has. Absent when nothing is held
   - `recommendation` — `{ action, targetDate, reason }`, chosen by tier: an
     optional session is let go; a key one is folded into a day with no
     cautions, else shortened onto a day without a severe one (`race_close`,

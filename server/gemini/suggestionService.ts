@@ -454,6 +454,8 @@ const REVIEW_NOTES_SYSTEM_PROMPT = `You are an elite functional fitness coach wi
 
 Your job is to write one note per upcoming workout ID, explaining in 1-2 sentences why the current plan still fits them given their data. Reference at least one specific signal you were given (RPE trend, plan phase, station gaps, training state, load governor / Form / monotony, race readiness, recent personal records, plan compliance, coverage gaps, the exercise selection brief, recent workouts, plan goal, or coaching materials). When the session already serves one of the brief's needs or progresses one of the athlete's familiar lifts, say which — "this keeps your back squat moving from last week's 100 kg" beats "this session builds strength". Do not prescribe a new workout — these are review notes only.
 
+When a RECENT MISSED SESSIONS section is present, the athlete should be able to tell the coach noticed: on the next session or two after a miss, say that it stays as planned and why in terms of the miss — "You missed Tuesday's intervals; Thursday's easy run stays as it is so the week keeps one hard day" — rather than reassuring as if nothing had happened. Never scold, and do not mention a miss on sessions further out.
+
 Return a JSON array of objects: [{ "workoutId": string, "note": string }, ...]. One entry per upcoming workout ID supplied. Keep each note under 280 characters. Do not include any other fields.`;
 
 export function parseAndValidateReviewNotes(text: string): ReviewNote[] {

@@ -205,6 +205,23 @@ export const progressionChangeSchema = z.object({
 });
 export type ProgressionChangeRecord = z.infer<typeof progressionChangeSchema>;
 
+/**
+ * The workout engine held this day's loads because a session before it never
+ * happened (server/services/workoutEngine/missedSessions.ts). Kept across the
+ * review notes written on the day afterwards, so its card can go on saying
+ * why it reads lighter than the plan first had it, until the engine next
+ * changes the day (a later log, or the hold taken back).
+ */
+export const coachMissedSessionHoldSchema = z.object({
+  /** How that session reads: missed, skipped by choice, or inside a declared absence. */
+  kind: z.enum(["missed", "skipped", "excused"]),
+  /** The day it was scheduled on (YYYY-MM-DD). */
+  date: z.string().max(10),
+  /** The loads held on this day because of it. */
+  changes: z.array(progressionChangeSchema).max(10),
+});
+export type CoachMissedSessionHold = z.infer<typeof coachMissedSessionHoldSchema>;
+
 const loadGovernorAcwrZoneSchema = z.enum([
   "insufficient_data",
   "undertraining",
@@ -266,6 +283,8 @@ export const coachNoteInputsSchema = z.object({
   lastModification: coachModificationMetadataSchema.optional(),
   // What an auto-progression changed on this day, when that is what the note is.
   progressionChanges: z.array(progressionChangeSchema).max(10).optional(),
+  // The session that never happened which this day's loads are held for.
+  missedSessionHold: coachMissedSessionHoldSchema.optional(),
   lastFatigueReduction: coachFatigueReductionMetadataSchema.optional(),
   // Snapshot of the prescription that was swapped out when the coach converted
   // this day to a different session (e.g. a strength day downshifted to a

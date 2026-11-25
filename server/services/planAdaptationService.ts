@@ -15,7 +15,11 @@ import { addDaysToISODate } from "@shared/dateUtils";
 import { inSequence } from "@shared/inSequence";
 import type { TrainingPlan } from "@shared/schema";
 import { resolveSessionPriority } from "@shared/sessionPriority";
-import { standardizeWeightUnit, type UnitPreferences } from "@shared/unitConversion";
+import {
+  standardizeWeightUnit,
+  storedWeightToDisplay,
+  type UnitPreferences,
+} from "@shared/unitConversion";
 
 import type { DbExecutor } from "../db";
 import type { TrainingContext } from "../gemini/index";
@@ -29,9 +33,13 @@ import {
   type AdaptablePlanSet,
   type AdaptationResult,
   adaptPlan,
+  describeMissHolds,
   LOAD_HORIZON_DAYS,
   MISSED_SESSION_WINDOW_DAYS,
   type MissedPlanSession,
+  type MissFollowOn,
+  missKey,
+  previewMissHolds,
 } from "./workoutEngine/adaptation";
 
 /** History the adaptation reads: the same ~10-week window generation calibrates from. */
@@ -93,8 +101,8 @@ function toAdaptableDay(row: AdaptationPlanDayRow): AdaptablePlanDay | null {
 
 interface MissedSessions {
   readonly missed: MissedPlanSession[];
-  /** Days the engine holds a change for that are sessions again. */
-  readonly returnedPlanDayIds: Set<string>;
+  /** Days the engine holds a change for that are sessions again, and the day each is now on. */
+  readonly returnedPlanDays: Map<string, string>;
 }
 
 /**
@@ -134,13 +142,14 @@ function readMissedSessions(
 ): MissedSessions {
   const held = new Set((plan.engineState?.missHolds ?? []).map((hold) => hold.planDayId));
   const missed: MissedPlanSession[] = [];
-  const returnedPlanDayIds = new Set<string>();
+  const returnedPlanDays = new Map<string, string>();
   for (const row of rows) {
     const date = row.scheduledDate;
     if (!date) continue;
     const kind = missedKind(row, date, today, absences);
     if (kind === null) {
-      if (held.has(row.id)) returnedPlanDayIds.add(row.id);
+      // Moved, it is on its new day; logged after all, on the day it was missed.
+      if (held.has(row.id)) returnedPlanDays.set(row.id, date);
       continue;
     }
     if (plan.retiredOn && date >= plan.retiredOn) continue;
@@ -155,7 +164,7 @@ function readMissedSessions(
       sets: toAdaptableSets(row),
     });
   }
-  return { missed, returnedPlanDayIds };
+  return { missed, returnedPlanDays };
 }
 
 /**
@@ -187,7 +196,7 @@ export async function computePlanAdaptation(
       }),
       storage.timelineAnnotations.list(userId),
     ]);
-    const { missed, returnedPlanDayIds } = readMissedSessions(
+    const { missed, returnedPlanDays } = readMissedSessions(
       notHappening,
       plan,
       today,
@@ -209,7 +218,7 @@ export async function computePlanAdaptation(
       fatigued: isFatigued(trainingContext),
       excludedDayIds,
       missed,
-      returnedPlanDayIds,
+      returnedPlanDays,
     });
     const changed = new Set(result.days.map((day) => day.planDayId));
     const dayFingerprints = new Map(
@@ -228,6 +237,112 @@ export async function computePlanAdaptation(
     // bearer:disable javascript_lang_logger_leak
     logger.warn({ err }, "[coach] Plan adaptation unavailable; coaching without it.");
     return null;
+  }
+}
+
+/** What a missed session changes in the sessions after it, for the recovery sheet. */
+export interface MissedSessionFollowOn {
+  /** A coach pass has already followed the miss: the changes are in the plan now. */
+  readonly applied: boolean;
+  /** Each lift it holds: the first session reached and the load left there. */
+  readonly changes: readonly MissFollowOn[];
+}
+
+const NO_FOLLOW_ON: MissedSessionFollowOn = { applied: false, changes: [] };
+/** Two loads in the same unit closer than this are the same load. */
+const SAME_LOAD_TOLERANCE = 0.01;
+
+/**
+ * What following a missed session holds in the sessions after it — the plan
+ * adaptation's own answer, so the sheet and the plan cannot disagree. Once a
+ * coach pass has followed the miss, the holds it recorded that still stand;
+ * before that, what the next pass would hold. Empty when nothing is held: no
+ * weighted lift in the session, the plan already repeats the step, the lift
+ * trained since, or a session the adaptation does not follow.
+ *
+ * Never throws: a failure here costs the sheet one line, not the sheet.
+ */
+export async function previewMissedSessionFollowOn(
+  userId: string,
+  planDayId: string,
+  today: string,
+  unitPreferences: UnitPreferences,
+): Promise<MissedSessionFollowOn> {
+  try {
+    const plan = await storage.plans.getActivePlan(userId);
+    if (!plan) return NO_FOLLOW_ON;
+    const weightUnit = standardizeWeightUnit(unitPreferences.weightUnit);
+    const [upcomingRows, rows, annotations] = await Promise.all([
+      storage.plans.getPlanDaysForAdaptation(plan.id, today),
+      storage.plans.getPlanDaysForMissAdaptation(plan.id, {
+        from: addDaysToISODate(today, -MISSED_SESSION_WINDOW_DAYS),
+        today,
+        until: today,
+        alsoIds: [planDayId],
+      }),
+      storage.timelineAnnotations.list(userId),
+    ]);
+    const row = rows.find((candidate) => candidate.id === planDayId);
+    if (!row?.scheduledDate) return NO_FOLLOW_ON;
+    const upcoming = upcomingRows.flatMap((day) => toAdaptableDay(day) ?? []);
+
+    const key = missKey({ planDayId, date: row.scheduledDate });
+    if (plan.engineState?.adaptedMisses?.includes(key)) {
+      // Already followed: say what still stands of it, not what it once wrote.
+      const current = new Map(
+        upcoming.flatMap((day) =>
+          day.sets.map(
+            (set) =>
+              [
+                set.id,
+                storedWeightToDisplay(set.weight ?? 0, { weightUnit: set.weightUnit }, { weightUnit }),
+              ] as const,
+          ),
+        ),
+      );
+      const standing = (plan.engineState.missHolds ?? [])
+        .filter((hold) => missKey({ planDayId: hold.planDayId, date: hold.missedOn }) === key)
+        .filter((hold) => hold.unit === weightUnit)
+        .map((hold) => ({
+          ...hold,
+          sets: hold.sets.filter(
+            (record) =>
+              Math.abs((current.get(record.setId) ?? Number.NaN) - record.to) <= SAME_LOAD_TOLERANCE,
+          ),
+        }));
+      return { applied: true, changes: describeMissHolds(standing, upcoming) };
+    }
+
+    const { missed } = readMissedSessions(
+      [row],
+      plan,
+      today,
+      annotations.map(({ startDate, endDate }) => ({ startDate, endDate })),
+    );
+    const miss = missed.at(0);
+    if (!miss) return NO_FOLLOW_ON;
+    // Only what was logged since the miss matters: a lift trained anyway is not held.
+    const sets = await storage.analytics.getAllExerciseSetsWithDates(userId, miss.date, today);
+    const holds = previewMissHolds(
+      {
+        today,
+        now: new Date().toISOString(),
+        weightUnit,
+        distanceUnit: unitPreferences.distanceUnit ?? "km",
+        plan: { startDate: plan.startDate, totalWeeks: plan.totalWeeks, engineState: plan.engineState },
+        logs: [],
+        sets,
+        upcoming,
+        fatigued: false,
+      },
+      miss,
+    );
+    return { applied: false, changes: describeMissHolds(holds, upcoming) };
+  } catch (err) {
+    // Reads and a pure computation; no row content is logged (logger S2).
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err }, "[recovery] Could not work out what a missed session changes next.");
+    return NO_FOLLOW_ON;
   }
 }
 

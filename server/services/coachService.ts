@@ -91,6 +91,7 @@ function buildUpdateValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout)
  *     reads. A suppressed repeat cut gets a review note, so the guard erased
  *     its own record and the pass after that cut the day again.
  *     AI15 (CODEBASE_ANALYSIS_2026-10-03)
+ *   - missedSessionHold, the card's "adjusted after a missed session" line.
  * Each is carried forward only when the fresh inputs don't set one — a genuine
  * new conversion or modification always wins. The plan adaptation's
  * buildInputs carries the same state.
@@ -110,6 +111,12 @@ function carryPriorCoachState(
       : {}),
     ...(!next.lastFatigueReduction && prior.lastFatigueReduction
       ? { lastFatigueReduction: prior.lastFatigueReduction }
+      : {}),
+    // Why the day's loads are held (a session before it never happened): the
+    // card says so until the engine next changes the day, and a review note
+    // written in between must not make it forget.
+    ...(!next.missedSessionHold && prior.missedSessionHold
+      ? { missedSessionHold: prior.missedSessionHold }
       : {}),
   };
 }

@@ -218,6 +218,33 @@ describe("MissedRecoveryDialog", () => {
     await waitFor(() => expect(apiMocks.applyMissedRecovery).toHaveBeenCalledWith("pd-1", { action: "let_go" }));
   });
 
+  it("says what staying missed changes in the sessions after it", async () => {
+    apiMocks.getMissedRecovery.mockResolvedValue({
+      ...preview,
+      letGo: {
+        impact: {
+          ...preview.letGo.impact,
+          followOn: [
+            "Tuesday's Back Squat will repeat 5x5 @ 100 kg instead of climbing to 102.5 kg.",
+            "The sessions after that follow one step behind.",
+          ],
+        },
+      },
+    });
+    renderDialog("let_go");
+
+    const followOn = await screen.findByTestId("missed-recovery-follow-on");
+    expect(followOn).toHaveTextContent("Tuesday's Back Squat will repeat 5x5 @ 100 kg instead of climbing to 102.5 kg.");
+    expect(followOn).toHaveTextContent("The sessions after that follow one step behind.");
+  });
+
+  it("shows no such list when nothing is held", async () => {
+    renderDialog("let_go");
+
+    await screen.findByTestId("missed-recovery-impact");
+    expect(screen.queryByTestId("missed-recovery-follow-on")).toBeNull();
+  });
+
   it("explains an option that is not available", async () => {
     apiMocks.getMissedRecovery.mockResolvedValue({
       ...preview,

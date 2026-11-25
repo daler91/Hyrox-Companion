@@ -102,6 +102,19 @@
             "unit": "sample text"
           }
         ],
+        "missedSessionHold": {
+          "kind": "excused",
+          "date": "sample text",
+          "changes": [
+            {
+              "exercise": "sample text",
+              "kind": "pace",
+              "from": 1.5,
+              "to": 1.5,
+              "unit": "sample text"
+            }
+          ]
+        },
         "lastFatigueReduction": {
           "kind": "fatigue_volume_reduction",
           "reason": "sample text",
@@ -202,6 +215,25 @@
             }
           }
         ],
+        "missedSessionHold": {
+          "kind": "zz_value_from_a_newer_server",
+          "date": "sample text",
+          "changes": [
+            {
+              "exercise": "sample text",
+              "kind": "zz_value_from_a_newer_server",
+              "from": 1.5,
+              "to": 1.5,
+              "unit": "sample text",
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            }
+          ],
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
         "lastFatigueReduction": {
           "kind": "fatigue_volume_reduction",
           "reason": "sample text",

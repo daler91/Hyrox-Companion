@@ -102,6 +102,63 @@ describe("coachService triggerAutoCoach fatigue suppression and review notes", (
     );
   });
 
+  // A review note is written on a held day by the very next pass (any log),
+  // and it rebuilt aiInputsUsed from the run's inputs — so the card's
+  // "adjusted after a missed session" line would last one pass, while the load
+  // it explains stays held for weeks.
+  it("keeps the record of a missed-session hold when the day gets a review note", async () => {
+    const missedSessionHold = {
+      kind: "missed" as const,
+      date: "2026-01-13",
+      changes: [{ exercise: "back_squat", kind: "hold" as const, from: 102.5, to: 100, unit: "kg" }],
+    };
+    const priorInputs = {
+      lastModification: { kind: "auto_progression" as const, reason: "Auto-progression: You missed Tuesday's Back Squat." },
+      missedSessionHold,
+    };
+    mockBaseAutoCoachDeps(storage, buildTrainingContext, [
+      makeTimelineEntry({ aiInputsUsed: priorInputs }),
+    ]);
+    vi.mocked(buildTrainingContext).mockResolvedValue({
+      totalWorkouts: 12,
+      completedWorkouts: 12,
+      plannedWorkouts: 1,
+      missedWorkouts: 1,
+      skippedWorkouts: 0,
+      completionRate: 92,
+      currentStreak: 0,
+      recentWorkouts: [],
+      upcomingWorkouts: [
+        {
+          planDayId: "day-1",
+          date: "2026-01-16",
+          focus: "Strength",
+          mainWorkout: "Back Squat 5x5 @ 100 kg",
+          aiInputsUsed: priorInputs,
+        },
+      ],
+      exerciseBreakdown: {},
+      coachingInsights: {
+        rpeTrend: "stable",
+        fatigueFlag: false,
+        undertrainingFlag: false,
+        stationGaps: [],
+        progressionFlags: [],
+      },
+    });
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([]);
+    vi.mocked(generateReviewNotes).mockResolvedValue([
+      { workoutId: "day-1", note: "You missed Tuesday's squats; this session repeats that load." },
+    ]);
+    vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
+
+    await triggerAutoCoach("user-1");
+
+    const [, reviewWrite] = vi.mocked(storage.plans).updatePlanDay.mock.calls[0];
+    expect(reviewWrite.aiSource).toBe("review");
+    expect(reviewWrite.aiInputsUsed).toEqual(expect.objectContaining({ missedSessionHold }));
+  });
+
   // AI15 (CODEBASE_ANALYSIS_2026-10-03): the suppressed day gets a review note,
   // and that write used to rebuild aiInputsUsed from the run's inputs — so the
   // record the guard reads was gone, and the next pass cut the day again.

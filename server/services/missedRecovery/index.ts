@@ -24,6 +24,7 @@ import type { PlanDayRecoveryWrite } from "../../storage/plans";
 import { deriveRaceDayOverride } from "../../storage/raceDayView";
 import { getLocalDateStrSafe } from "../../timezone";
 import { enqueueAutoCoachInBackground } from "../autoCoachQueue";
+import { previewMissedSessionFollowOn } from "../planAdaptationService";
 import { recordPlanDayMove } from "../planDayMoves";
 import {
   planMissedSessionRecovery,
@@ -65,6 +66,13 @@ interface RecoveryContext {
   readonly sets: readonly ExerciseSet[];
   readonly input: PlannerInput;
   readonly shortenPlan: ShortenPlan;
+  /** What the preview needs of the athlete to say what a let-go changes next. */
+  readonly athlete: {
+    /** Off, nothing adapts the plan, so a miss changes nothing after it. */
+    readonly coachEnabled: boolean;
+    readonly weightUnit: string;
+    readonly distanceUnit: string;
+  };
 }
 
 function notMissed(message: string): AppError {
@@ -296,6 +304,11 @@ async function loadRecoveryContext(userId: string, planDayId: string): Promise<R
     day,
     sets: daySets,
     shortenPlan,
+    athlete: {
+      coachEnabled: user?.aiCoachEnabled === true,
+      weightUnit: user?.weightUnit || "kg",
+      distanceUnit,
+    },
     input: {
       today,
       missed: {
@@ -329,7 +342,18 @@ export async function getMissedSessionRecoveryPreview(
   planDayId: string,
 ): Promise<MissedSessionRecoveryPreview> {
   const context = await loadRecoveryContext(userId, planDayId);
-  return planMissedSessionRecovery(context.input);
+  // Only the preview says what staying missed changes next; applying a
+  // decision re-plans without it, since none of the choices depend on it.
+  const followOn = context.athlete.coachEnabled
+    ? await previewMissedSessionFollowOn(userId, planDayId, context.input.today, {
+        weightUnit: context.athlete.weightUnit,
+        distanceUnit: context.athlete.distanceUnit,
+      })
+    : undefined;
+  return planMissedSessionRecovery({
+    ...context.input,
+    missed: { ...context.input.missed, ...(followOn ? { followOn } : {}) },
+  });
 }
 
 async function writeRecovery(userId: string, planDayId: string, write: PlanDayRecoveryWrite): Promise<PlanDay> {

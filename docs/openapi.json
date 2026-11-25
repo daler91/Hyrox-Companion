@@ -1067,6 +1067,67 @@
             },
             "maxItems": 10
           },
+          "missedSessionHold": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "missed",
+                  "skipped",
+                  "excused"
+                ]
+              },
+              "date": {
+                "type": "string",
+                "maxLength": 10
+              },
+              "changes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "exercise": {
+                      "type": "string",
+                      "maxLength": 100
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "raise",
+                        "hold",
+                        "deload",
+                        "pace"
+                      ]
+                    },
+                    "from": {
+                      "type": "number"
+                    },
+                    "to": {
+                      "type": "number"
+                    },
+                    "unit": {
+                      "type": "string",
+                      "maxLength": 16
+                    }
+                  },
+                  "required": [
+                    "exercise",
+                    "kind",
+                    "from",
+                    "to",
+                    "unit"
+                  ]
+                },
+                "maxItems": 10
+              }
+            },
+            "required": [
+              "kind",
+              "date",
+              "changes"
+            ]
+          },
           "lastFatigueReduction": {
             "type": "object",
             "properties": {
@@ -8987,6 +9048,13 @@
                 "message"
               ]
             }
+          },
+          "followOn": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What the option leaves changed in later sessions (loads held at the missed step), one plain sentence each; only letting go has any"
           }
         },
         "required": [

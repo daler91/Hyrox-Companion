@@ -30,6 +30,10 @@ public data class PlanDayRecoveryImpact(
      */
     public val weeks: List<PlanDayRecoveryImpact.WeeksItem>,
     public val notes: List<PlanDayRecoveryImpact.NotesItem>,
+    /**
+     * What the option leaves changed in later sessions (loads held at the missed step), one plain sentence each; only letting go has any
+     */
+    public val followOn: List<String>? = null,
 ) {
     /**
      * Where the session lands and that day's training minutes with it; null when it does not move

@@ -57,6 +57,7 @@ import {
   exerciseLabel,
   inUnit,
   isAdaptableSet,
+  LOAD_HORIZON_DAYS,
   loggedLift,
   type LoggedSession,
   MAX_RAISE,
@@ -84,7 +85,14 @@ export type {
   ProgressionChangeKind,
   SetLoadUpdate,
 } from "./adaptationTypes";
-export { MISSED_SESSION_WINDOW_DAYS } from "./missedSessions";
+export { LOAD_HORIZON_DAYS } from "./adaptationWorking";
+export {
+  describeMissHolds,
+  MISSED_SESSION_WINDOW_DAYS,
+  type MissFollowOn,
+  missKey,
+  previewMissHolds,
+} from "./missedSessions";
 
 // ---------------------------------------------------------------------------
 // Tunables
@@ -92,8 +100,6 @@ export { MISSED_SESSION_WINDOW_DAYS } from "./missedSessions";
 
 /** Only logs this recent are adapted: an old session says little about next week. */
 export const ADAPTATION_WINDOW_DAYS = 10;
-/** Load changes reach this far ahead; later sessions follow as later logs arrive. */
-export const LOAD_HORIZON_DAYS = 21;
 /** Surplus below this is noise, not a reason to move the plan. */
 const MIN_SURPLUS = 0.02;
 const EASY_SESSION_RAISE = 0.025;
@@ -491,6 +497,9 @@ function buildInputs(day: WorkingDay, input: AdaptationInput, reason: string): C
     ...(prior?.lastFatigueReduction ? { lastFatigueReduction: prior.lastFatigueReduction } : {}),
     lastModification: { kind: "auto_progression", reason: reason.slice(0, 400), at: input.now },
     progressionChanges: day.changes.slice(0, 10).map((change) => ({ ...change })),
+    // Only a hold made this pass: an earlier one is over once the engine
+    // changes the day again (a later log, or the hold taken back).
+    ...(day.missedSessionHold ? { missedSessionHold: day.missedSessionHold } : {}),
   };
 }
 

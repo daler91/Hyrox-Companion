@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockPlanDay, createMockTrainingPlan } from "../../../test/factories";
 import type { storage } from "../../storage";
 import { enqueueAutoCoachInBackground } from "../autoCoachQueue";
+import { previewMissedSessionFollowOn } from "../planAdaptationService";
 import { recordPlanDayMove } from "../planDayMoves";
 import { applyMissedSessionRecovery, getMissedSessionRecoveryPreview } from "./index";
 
@@ -37,6 +38,7 @@ vi.mock("../../storage", () => ({
   },
 }));
 vi.mock("../autoCoachQueue", () => ({ enqueueAutoCoachInBackground: vi.fn() }));
+vi.mock("../planAdaptationService", () => ({ previewMissedSessionFollowOn: vi.fn() }));
 vi.mock("../planDayMoves", () => ({ recordPlanDayMove: vi.fn() }));
 
 /** The write the service last handed to storage. */
@@ -132,6 +134,44 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+describe("getMissedSessionRecoveryPreview — what staying missed changes next", () => {
+  const followOn = {
+    applied: false,
+    changes: [{ exercise: "Back Squat", date: "2026-09-29", scheme: "5x5", from: 102.5, to: 100, unit: "kg" }],
+  };
+
+  it("asks the plan adaptation what it would hold, in the athlete's units and on their date", async () => {
+    mocks.getUser.mockResolvedValue({ userTimezone: "UTC", distanceUnit: "miles", weightUnit: "lbs", aiCoachEnabled: true } as never);
+    vi.mocked(previewMissedSessionFollowOn).mockResolvedValue(followOn);
+
+    const preview = await getMissedSessionRecoveryPreview(USER, "pd-missed");
+
+    expect(previewMissedSessionFollowOn).toHaveBeenCalledExactlyOnceWith(USER, "pd-missed", "2026-09-24", {
+      weightUnit: "lbs",
+      distanceUnit: "miles",
+    });
+    expect(preview.letGo.impact.followOn).toEqual([
+      "Tuesday's Back Squat will repeat 5x5 @ 100 kg instead of climbing to 102.5 kg.",
+      "The sessions after that follow one step behind.",
+    ]);
+  });
+
+  it("does not ask for an athlete whose plan nothing adapts (the AI coach is off)", async () => {
+    const preview = await getMissedSessionRecoveryPreview(USER, "pd-missed");
+
+    expect(previewMissedSessionFollowOn).not.toHaveBeenCalled();
+    expect(preview.letGo.impact).not.toHaveProperty("followOn");
+  });
+
+  it("is not worked out when a decision is applied", async () => {
+    mocks.getUser.mockResolvedValue({ userTimezone: "UTC", distanceUnit: "km", aiCoachEnabled: true } as never);
+
+    await applyMissedSessionRecovery(USER, "pd-missed", { action: "let_go" });
+
+    expect(previewMissedSessionFollowOn).not.toHaveBeenCalled();
+  });
 });
 
 describe("getMissedSessionRecoveryPreview", () => {

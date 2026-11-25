@@ -7,7 +7,11 @@ import { db } from "../../db";
 import type { TrainingContext } from "../../gemini/index";
 import { resetIntegrationDb, seedUser } from "../../storage/__tests__/integrationDb";
 import { getLocalDateStrSafe } from "../../timezone";
-import { applyPlanAdaptation, computePlanAdaptation } from "../planAdaptationService";
+import {
+  applyPlanAdaptation,
+  computePlanAdaptation,
+  previewMissedSessionFollowOn,
+} from "../planAdaptationService";
 
 /**
  * The plan following a session that never happened, end to end against the
@@ -125,6 +129,12 @@ describe("plan adaptation after a missed session (real Postgres)", () => {
     expect(day?.aiInputsUsed?.progressionChanges).toEqual([
       { exercise: "back_squat", kind: "hold", from: 102.5, to: 100, unit: "kg" },
     ]);
+    // What the card's always-visible line reads from.
+    expect(day?.aiInputsUsed?.missedSessionHold).toEqual({
+      kind: "missed",
+      date: missedOn,
+      changes: [{ exercise: "back_squat", kind: "hold", from: 102.5, to: 100, unit: "kg" }],
+    });
     // The missed session itself is untouched.
     expect(await storedWeights(missed.id)).toEqual([100, 100, 100]);
 
@@ -171,6 +181,40 @@ describe("plan adaptation after a missed session (real Postgres)", () => {
     const state = await engineState(plan.id);
     expect(state?.missHolds).toEqual([]);
     expect(state?.adaptedMisses).toEqual([]);
+  });
+
+  it("lets the load stand when the session is folded to a day after the held one", async () => {
+    const { plan, missed, next } = await seedPlan();
+    await runPass();
+
+    // The held session still comes first: the missed step is not done by then.
+    await db
+      .update(planDays)
+      .set({ status: "planned", scheduledDate: addDaysToISODate(nextSession, 1), recovery: "folded", missedOn })
+      .where(eq(planDays.id, missed.id));
+
+    expect(await runPass()).toBe(0);
+
+    expect(await storedWeights(next.id)).toEqual([100, 100, 100]);
+    expect((await engineState(plan.id))?.missHolds).toEqual([]);
+  });
+
+  it("tells the recovery sheet what staying missed changes, before and after the pass", async () => {
+    const { missed, next } = await seedPlan();
+    const followOn = () => previewMissedSessionFollowOn(USER, missed.id, today, units);
+    const change = { exercise: "Back Squat", date: nextSession, scheme: "3x5", from: 102.5, to: 100, unit: "kg" };
+
+    // No pass yet: what the next one would hold, and nothing is written.
+    expect(await followOn()).toEqual({ applied: false, changes: [change] });
+    expect(await storedWeights(next.id)).toEqual([102.5, 102.5, 102.5]);
+
+    // The pass has run: the same change, now already in the plan.
+    await runPass();
+    expect(await followOn()).toEqual({ applied: true, changes: [change] });
+
+    // The athlete puts the load back: nothing of the hold stands to report.
+    await db.update(exerciseSets).set({ weight: 102.5 }).where(eq(exerciseSets.planDayId, next.id));
+    expect(await followOn()).toEqual({ applied: true, changes: [] });
   });
 
   it("leaves a load the athlete edited alone when the session comes back", async () => {

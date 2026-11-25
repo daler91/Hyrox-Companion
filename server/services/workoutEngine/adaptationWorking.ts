@@ -9,6 +9,7 @@ import { dayDiff, PLAN_WEEKDAYS, weekdayIndex } from "@shared/dateUtils";
 import type { TrainingPhase } from "@shared/nutritionTargets";
 import { computePlanPhase } from "@shared/planPhase";
 import { epley, epleyLoad } from "@shared/progression";
+import type { CoachMissedSessionHold } from "@shared/schema";
 import { knownExerciseLabel } from "@shared/schema/exercises";
 import { storedWeightToDisplay, type WeightUnit } from "@shared/unitConversion";
 
@@ -24,6 +25,8 @@ import type {
 import { ASSUMED_RIR, customLiftLabel, liftKey, roundLoad } from "./loadMath";
 import { rewriteLiftLoad } from "./planRepair";
 
+/** Load changes reach this far ahead; later sessions follow as later logs arrive. */
+export const LOAD_HORIZON_DAYS = 21;
 /** One session may lift the plan by at most this much. */
 export const MAX_RAISE = 0.05;
 /** After a hold or deload, progression resumes at this rate per week. */
@@ -60,6 +63,11 @@ export interface WorkingDay {
   readonly setNotes: Map<string, string>;
   readonly changes: ProgressionChange[];
   readonly reasons: string[];
+  /**
+   * The session that never happened which this pass held the day for, with
+   * the loads it held (./missedSessions.ts): what the day's card shows.
+   */
+  missedSessionHold: CoachMissedSessionHold | null;
 }
 
 export function toWorkingDay(day: AdaptablePlanDay, input: AdaptationInput): WorkingDay {
@@ -87,6 +95,7 @@ export function toWorkingDay(day: AdaptablePlanDay, input: AdaptationInput): Wor
     setNotes: new Map(),
     changes: [],
     reasons: [],
+    missedSessionHold: null,
   };
 }
 

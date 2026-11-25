@@ -76,6 +76,30 @@ describe("CoachNote", () => {
     expect(screen.getByText("Your logged sessions")).toBeInTheDocument();
   });
 
+  it("says a held load came from a session that was not done, not from the athlete's logs", () => {
+    const hold = {
+      date: "2026-10-13",
+      changes: [{ exercise: "back_squat", kind: "hold" as const, from: 102.5, to: 100, unit: "kg" }],
+    };
+    const inputsFor = (kind: "missed" | "skipped" | "excused") => ({
+      lastModification: { kind: "auto_progression" as const },
+      missedSessionHold: { kind, ...hold },
+    });
+    const { rerender } = render(<CoachNote {...baseProps} source="progression" inputsUsed={inputsFor("missed")} />);
+    fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
+
+    expect(screen.getByText("A missed session")).toBeInTheDocument();
+    expect(screen.queryByText("Your logged sessions")).toBeNull();
+
+    rerender(<CoachNote {...baseProps} source="progression" inputsUsed={inputsFor("skipped")} />);
+    expect(screen.getByText("A skipped session")).toBeInTheDocument();
+
+    // A declared absence is never called a miss.
+    rerender(<CoachNote {...baseProps} source="progression" inputsUsed={inputsFor("excused")} />);
+    expect(screen.getByText("A session not done")).toBeInTheDocument();
+    expect(screen.queryByText(/missed/i)).toBeNull();
+  });
+
   it("lists every change, even the same lift moving the same way twice", () => {
     // Spied, not silenced: if React does warn, the warning prints beside the failure.
     const consoleError = vi.spyOn(console, "error");

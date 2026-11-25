@@ -29,6 +29,7 @@ public data class CoachNoteInputs(
     public val recommendationTrace: CoachNoteInputs.RecommendationTrace? = null,
     public val lastModification: CoachNoteInputs.LastModification? = null,
     public val progressionChanges: List<CoachNoteInputs.ProgressionChangesItem>? = null,
+    public val missedSessionHold: CoachNoteInputs.MissedSessionHold? = null,
     public val lastFatigueReduction: CoachNoteInputs.LastFatigueReduction? = null,
     public val replacedPrescription: CoachNoteInputs.ReplacedPrescription? = null,
 ) {
@@ -162,6 +163,47 @@ public data class CoachNoteInputs(
             ;
 
             internal object Serializer : WireEnumSerializer<Kind>("Kind", Kind.entries, Unknown)
+        }
+    }
+
+    @Serializable
+    public data class MissedSessionHold(
+        public val kind: CoachNoteInputs.MissedSessionHold.Kind,
+        public val date: String,
+        public val changes: List<CoachNoteInputs.MissedSessionHold.ChangesItem>,
+    ) {
+        @Serializable(with = Kind.Serializer::class)
+        public enum class Kind(override val wireValue: String) : WireEnum {
+            Missed("missed"),
+            Skipped("skipped"),
+            Excused("excused"),
+            /** A value this build does not know; never sent. */
+            Unknown(""),
+            ;
+
+            internal object Serializer : WireEnumSerializer<Kind>("Kind", Kind.entries, Unknown)
+        }
+
+        @Serializable
+        public data class ChangesItem(
+            public val exercise: String,
+            public val kind: CoachNoteInputs.MissedSessionHold.ChangesItem.Kind,
+            public val from: Double,
+            public val to: Double,
+            public val unit: String,
+        ) {
+            @Serializable(with = Kind.Serializer::class)
+            public enum class Kind(override val wireValue: String) : WireEnum {
+                Raise("raise"),
+                Hold("hold"),
+                Deload("deload"),
+                Pace("pace"),
+                /** A value this build does not know; never sent. */
+                Unknown(""),
+                ;
+
+                internal object Serializer : WireEnumSerializer<Kind>("Kind", Kind.entries, Unknown)
+            }
         }
     }
 

@@ -98,6 +98,12 @@ export interface RecoveryImpact {
   /** Every week whose numbers the option changes, oldest first. */
   weeks: RecoveryWeekImpact[];
   notes: RecoveryNote[];
+  /**
+   * What the option leaves changed in the sessions after it, one plain
+   * sentence each: the loads the plan holds at the missed step. Only letting
+   * go has any; absent when nothing is held.
+   */
+  followOn?: string[];
 }
 
 /** A day the session could move to, and what moving it there does. */

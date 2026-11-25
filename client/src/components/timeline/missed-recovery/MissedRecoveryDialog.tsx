@@ -6,7 +6,16 @@ import type {
   RecoveryMoveOption,
   TimelineEntry,
 } from "@shared/schema";
-import { CalendarPlus, Feather, Info, Lightbulb, Loader2, Scissors, TriangleAlert } from "lucide-react";
+import {
+  CalendarPlus,
+  CornerDownRight,
+  Feather,
+  Info,
+  Lightbulb,
+  Loader2,
+  Scissors,
+  TriangleAlert,
+} from "lucide-react";
 import { type ComponentType, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -386,6 +395,16 @@ function ImpactPanel({ impact, preview }: ImpactPanelProps) {
         What this does to your plan
       </h3>
       <p className="text-sm">{impact.summary}</p>
+      {impact.followOn && impact.followOn.length > 0 ? (
+        <ul className="space-y-1 text-sm" data-testid="missed-recovery-follow-on">
+          {impact.followOn.map((line) => (
+            <li key={line} className="flex gap-2">
+              <CornerDownRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <p className="text-sm text-muted-foreground" data-testid="missed-recovery-kept">
         {describeKept(impact.keptFraction, impact.keptMinutes, preview.session.durationMin)}
         {preview.session.estimated ? " — an estimate: nothing in the session says how long it is" : ""}
