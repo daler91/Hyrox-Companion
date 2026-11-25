@@ -246,6 +246,18 @@ async function loadTimelinePages(userId: string, from: string, before: string, p
   return [...result.entries, ...(await loadTimelinePages(userId, from, next, page + 1))];
 }
 
+/** What the preview needs of the athlete; a missing row reads as the coach off, in kilograms. */
+function recoveryAthlete(
+  user: { aiCoachEnabled?: boolean | null; weightUnit?: string | null } | undefined,
+  distanceUnit: string,
+): RecoveryContext["athlete"] {
+  return {
+    coachEnabled: user?.aiCoachEnabled === true,
+    weightUnit: user?.weightUnit || "kg",
+    distanceUnit,
+  };
+}
+
 async function loadRecoveryContext(userId: string, planDayId: string): Promise<RecoveryContext> {
   const [day, user] = await Promise.all([
     storage.plans.getPlanDay(planDayId, userId),
@@ -304,11 +316,7 @@ async function loadRecoveryContext(userId: string, planDayId: string): Promise<R
     day,
     sets: daySets,
     shortenPlan,
-    athlete: {
-      coachEnabled: user?.aiCoachEnabled === true,
-      weightUnit: user?.weightUnit || "kg",
-      distanceUnit,
-    },
+    athlete: recoveryAthlete(user, distanceUnit),
     input: {
       today,
       missed: {
