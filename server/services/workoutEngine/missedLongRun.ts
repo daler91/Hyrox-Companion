@@ -50,6 +50,25 @@ const MIN_LONG_RUN_METERS = 1000;
 export const SAME_DISTANCE_METERS = 50;
 const MAX_HOLD_SETS = 100;
 
+/**
+ * A missed step no session in range answers yet: none ahead climbs past it and
+ * none repeats it. Not the same as nothing to hold. The session that would
+ * climb past it may be further out than the adaptation reads (a session
+ * skipped three weeks ahead, whose next exposure is the week after), so the
+ * miss is looked at again on a later pass (missedSessions.ts,
+ * holdMissedSessions).
+ */
+export const NOT_YET_IN_RANGE = "not-yet-in-range";
+
+/** What a pass makes of one missed step: the hold it wrote, null when nothing needs holding, or not yet. */
+export type StepHold = PlanMissHold | typeof NOT_YET_IN_RANGE | null;
+
+/**
+ * Where the sessions after a missed step stand: the index a hold starts at,
+ * "repeats" when the plan repeats the step itself, or NOT_YET_IN_RANGE.
+ */
+export type ClimbPast = number | "repeats" | typeof NOT_YET_IN_RANGE;
+
 /** A missed session's long run in metres, or 0 when it had none with a distance. */
 export function missedLongRunMeters(miss: MissedPlanSession, athleteUnit: string): number {
   let total = 0;
@@ -69,17 +88,18 @@ export function ranSince(input: AdaptationInput, date: string, meters: number): 
 
 /**
  * Where a hold starts: the first later long run that climbs past the missed
- * one, or -1. A shorter one before it (a deload, a taper) is passed over; one
- * of about the missed distance means the plan repeats the step itself.
+ * one. A shorter one before it (a deload, a taper) is passed over; one of
+ * about the missed distance means the plan repeats the step itself. With
+ * neither in range, the answer is not in yet.
  */
-function firstClimbPast(later: readonly WorkingDay[], missedMeters: number): number {
+function firstClimbPast(later: readonly WorkingDay[], missedMeters: number): ClimbPast {
   for (const [index, day] of later.entries()) {
     const planned = longRunMeters(day);
     if (planned > missedMeters * (1 + MAX_STEP_ABOVE_MISS)) continue;
     if (planned > missedMeters + SAME_DISTANCE_METERS) return index;
-    if (planned >= missedMeters * REPEATS_STEP_FROM) return -1;
+    if (planned >= missedMeters * REPEATS_STEP_FROM) return "repeats";
   }
-  return -1;
+  return NOT_YET_IN_RANGE;
 }
 
 /** Bring a day's long run down to `capMeters`, each row by the same share. */
@@ -107,15 +127,16 @@ function missReason(miss: MissedPlanSession, missedMeters: number, input: Adapta
 
 /**
  * Hold the long run at the distance a session never did. Returns what it
- * shortened, or null: no long run in the missed session, one run since anyway,
- * or nothing ahead that climbs past it.
+ * shortened; null when there is nothing to hold (no long run in the missed
+ * session, one run since anyway, or the plan repeats the distance itself);
+ * NOT_YET_IN_RANGE when no long run in range answers it yet.
  */
 export function holdMissedLongRun(
   working: readonly WorkingDay[],
   miss: MissedPlanSession,
   input: AdaptationInput,
   horizonEnd: string,
-): PlanMissHold | null {
+): StepHold {
   const missedMeters = missedLongRunMeters(miss, input.distanceUnit);
   if (missedMeters < MIN_LONG_RUN_METERS) return null;
   if (ranSince(input, miss.date, missedMeters)) return null;
@@ -123,8 +144,9 @@ export function holdMissedLongRun(
     (day) => day.day.date > miss.date && day.day.date <= horizonEnd && day.runMeters.size > 0,
   );
   const start = firstClimbPast(later, missedMeters);
-  const first = later.at(start);
-  if (start < 0 || !first) return null;
+  if (start === NOT_YET_IN_RANGE) return NOT_YET_IN_RANGE;
+  const first = start === "repeats" ? undefined : later.at(start);
+  if (start === "repeats" || !first) return null;
 
   const sets: PlanMissHold["sets"] = [];
   let held = 0;

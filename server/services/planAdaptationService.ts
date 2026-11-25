@@ -312,11 +312,13 @@ export async function previewMissedSessionFollowOn(
     });
 
     const key = missKey({ planDayId, date: row.scheduledDate });
-    if (plan.engineState?.adaptedMisses?.includes(key)) {
+    const recorded = (plan.engineState?.missHolds ?? []).filter(
+      (hold) => missKey({ planDayId: hold.planDayId, date: hold.missedOn }) === key,
+    );
+    // Counted, or holding already while one of its steps waits for a session
+    // to come into range (holdMissedSessions).
+    if (plan.engineState?.adaptedMisses?.includes(key) || recorded.length > 0) {
       // Already followed: say what still stands of it, not what it once wrote.
-      const recorded = (plan.engineState.missHolds ?? []).filter(
-        (hold) => missKey({ planDayId: hold.planDayId, date: hold.missedOn }) === key,
-      );
       const standing = standingMissHolds(inputWith({ logs: [], sets: [] }), recorded);
       return { applied: true, changes: describeMissHolds(standing, upcoming, distanceUnit) };
     }

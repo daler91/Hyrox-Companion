@@ -46,12 +46,15 @@ import {
 } from "./adaptationWorking";
 import { implementFor, liftKey } from "./loadMath";
 import {
+  type ClimbPast,
   heldLongRun,
   holdMissedLongRun,
   LONG_RUN_HOLD_UNIT,
+  NOT_YET_IN_RANGE,
   ranSince,
   releaseLongRunHold,
   SAME_DISTANCE_METERS,
+  type StepHold,
 } from "./missedLongRun";
 
 /** Sessions missed longer ago than this are the return-from-break rule's to handle. */
@@ -129,27 +132,29 @@ function missReason(miss: MissedPlanSession, lift: MissedLift, today: string): s
 
 /**
  * Where a hold starts: the first later session of the lift that climbs past
- * the missed step, or -1 when none does. The lighter exposures before it are
- * passed over, and so is one far above the step (MAX_STEP_ABOVE_MISS). A
- * session at about the missed load comes first when the plan repeats the step
- * itself (the lift's second day that week, a lighter week), and then nothing
- * needs holding.
+ * the missed step. The lighter exposures before it are passed over, and so is
+ * one far above the step (MAX_STEP_ABOVE_MISS). A session at about the missed
+ * load comes first when the plan repeats the step itself (the lift's second
+ * day that week, a lighter week), and then nothing needs holding. With
+ * neither in range, the answer is not in yet.
  */
-function firstClimbPast(later: readonly WorkingDay[], lift: MissedLift): number {
+function firstClimbPast(later: readonly WorkingDay[], lift: MissedLift): ClimbPast {
   for (const [index, day] of later.entries()) {
     const step = equivalentLoad(lift.load, lift.reps, repsOf(day, lift.exercise));
     const top = topWeight(day, lift.exercise);
     if (top > step * (1 + MAX_STEP_ABOVE_MISS)) continue;
     if (top > step + SAME_LOAD_TOLERANCE) return index;
-    if (top >= step * REPEATS_STEP_FROM) return -1;
+    if (top >= step * REPEATS_STEP_FROM) return "repeats";
   }
-  return -1;
+  return NOT_YET_IN_RANGE;
 }
 
 /**
  * Hold one lift at the step a session never did: its next session repeats the
  * missed load instead of climbing past it, and the ones after resume from
- * there (applyCap). Returns what it lowered, or null when nothing was.
+ * there (applyCap). Returns what it lowered; null when nothing needed
+ * lowering; NOT_YET_IN_RANGE when no session of the lift in range answers the
+ * miss yet.
  */
 function holdMissedLift(
   working: readonly WorkingDay[],
@@ -157,7 +162,7 @@ function holdMissedLift(
   lift: MissedLift,
   input: AdaptationInput,
   horizonEnd: string,
-): PlanMissHold | null {
+): StepHold {
   const later = working.filter(
     (day) =>
       day.day.date > miss.date &&
@@ -165,7 +170,8 @@ function holdMissedLift(
       setsOf(day, lift.exercise).length > 0,
   );
   const start = firstClimbPast(later, lift);
-  if (start < 0) return null;
+  if (start === NOT_YET_IN_RANGE) return NOT_YET_IN_RANGE;
+  if (start === "repeats") return null;
   const targets = later.slice(start);
   const before = new Map<string, number>();
   for (const day of targets) {
@@ -211,6 +217,17 @@ function isLongRunHold(hold: PlanMissHold): boolean {
 }
 
 /**
+ * A load a hold recorded, as the athlete reads loads now. The record is in
+ * the unit it was written in. An athlete who has switched between kg and lbs
+ * since reads the plan's sets converted (toWorkingDay), so the record is read
+ * the same way and the two still compare: the hold can be taken back, and
+ * what it left standing can be told, in either unit.
+ */
+function recordedLoad(value: number, hold: PlanMissHold, unit: WeightUnit): number {
+  return storedWeightToDisplay(value, { weightUnit: hold.unit }, { weightUnit: unit });
+}
+
+/**
  * Take a hold back: the step it stood for is being done after all, so the
  * loads it lowered return — but only where a set still reads what the hold
  * wrote. A load the athlete edited, or a later log moved, is theirs. `reason`
@@ -226,17 +243,17 @@ function releaseHold(
     releaseLongRunHold(working, hold, input, reason);
     return;
   }
-  // Written in another unit: the loads cannot be compared, so they stand.
-  if (hold.unit !== input.weightUnit) return;
   const topBefore = new Map<WorkingDay, number>();
   for (const record of hold.sets) {
     const day = working.find((candidate) => candidate.weights.has(record.setId));
     const current = day?.weights.get(record.setId);
-    if (!day || current == null || Math.abs(current - record.to) > SAME_LOAD_TOLERANCE) continue;
+    const wrote = recordedLoad(record.to, hold, input.weightUnit);
+    if (!day || current == null || Math.abs(current - wrote) > SAME_LOAD_TOLERANCE) continue;
     if (!topBefore.has(day)) topBefore.set(day, topWeight(day, hold.exercise));
-    day.weights.set(record.setId, record.from);
+    const planned = recordedLoad(record.from, hold, input.weightUnit);
+    day.weights.set(record.setId, planned);
     // The restored load is the plan's own, so a raise this pass builds on it.
-    day.startWeights.set(record.setId, record.from);
+    day.startWeights.set(record.setId, planned);
     day.touchedSets.add(record.setId);
   }
   for (const [day, before] of topBefore) {
@@ -402,6 +419,15 @@ interface HoldScope {
   readonly horizonEnd: string;
   /** Only these (lifts, LONG_RUN) when given; every step of the session otherwise. */
   readonly only?: ReadonlySet<string>;
+  /** Never these: steps the miss already holds. */
+  readonly except?: ReadonlySet<string>;
+}
+
+/** What one missed session holds this pass, and whether it has to be looked at again. */
+interface MissHolds {
+  readonly holds: PlanMissHold[];
+  /** A step no session in range answers yet (NOT_YET_IN_RANGE). */
+  readonly waiting: boolean;
 }
 
 /**
@@ -410,19 +436,33 @@ interface HoldScope {
  * trained since anyway (or a long run they ran), or for a deload week (no
  * step of the progression was lost).
  */
-function holdsFor(miss: MissedPlanSession, scope: HoldScope): PlanMissHold[] {
-  const { working, input, horizonEnd, only } = scope;
-  if (planDeloadWeeks(input.plan.totalWeeks).includes(miss.weekNumber)) return [];
-  const wanted = (exercise: string): boolean => only === undefined || only.has(exercise);
-  const holds: PlanMissHold[] = [];
+function holdsFor(miss: MissedPlanSession, scope: HoldScope): MissHolds {
+  const { working, input, horizonEnd, only, except } = scope;
+  if (planDeloadWeeks(input.plan.totalWeeks).includes(miss.weekNumber)) {
+    return { holds: [], waiting: false };
+  }
+  const wanted = (exercise: string): boolean =>
+    (only === undefined || only.has(exercise)) && except?.has(exercise) !== true;
+  const steps: StepHold[] = [];
   for (const lift of missedLifts(miss, input.weightUnit)) {
     if (!wanted(lift.exercise) || trainedSince(input, lift.exercise, miss.date)) continue;
-    const hold = holdMissedLift(working, miss, lift, input, horizonEnd);
-    if (hold) holds.push(hold);
+    steps.push(holdMissedLift(working, miss, lift, input, horizonEnd));
   }
-  const longRun = wanted(LONG_RUN) ? holdMissedLongRun(working, miss, input, horizonEnd) : null;
-  if (longRun) holds.push(longRun);
-  return holds;
+  if (wanted(LONG_RUN)) steps.push(holdMissedLongRun(working, miss, input, horizonEnd));
+  return {
+    holds: steps.flatMap((step) => (step === null || step === NOT_YET_IN_RANGE ? [] : [step])),
+    waiting: steps.includes(NOT_YET_IN_RANGE),
+  };
+}
+
+/** The steps (lifts, LONG_RUN) a miss holds in this pass's record. */
+function heldSteps(miss: MissedPlanSession, record: MissRecord): Set<string> {
+  const key = missKey(miss);
+  return new Set(
+    record.holds
+      .filter((hold) => missKey({ planDayId: hold.planDayId, date: hold.missedOn }) === key)
+      .map((hold) => hold.exercise),
+  );
 }
 
 /**
@@ -435,12 +475,7 @@ function holdsFor(miss: MissedPlanSession, scope: HoldScope): PlanMissHold[] {
  * step the second session still has not done.
  */
 function stepsToHoldAgain(miss: MissedPlanSession, record: MissRecord): Set<string> {
-  const key = missKey(miss);
-  const held = new Set(
-    record.holds
-      .filter((hold) => missKey({ planDayId: hold.planDayId, date: hold.missedOn }) === key)
-      .map((hold) => hold.exercise),
-  );
+  const held = heldSteps(miss, record);
   return new Set([...record.released].filter((exercise) => !held.has(exercise)));
 }
 
@@ -450,6 +485,13 @@ function stepsToHoldAgain(miss: MissedPlanSession, record: MissRecord): Set<stri
  * next session a step ahead of the athlete. So each lift of a missed session
  * is held at the missed load — once per miss, like a log — and the hold is
  * remembered so it can be taken back if the session returns.
+ *
+ * A miss counts once every one of its steps has an answer. One with a step no
+ * session in range answers yet (a session skipped near the far edge of the
+ * horizon: its next exposure is past it) stays uncounted, and each pass asks
+ * again until that session comes into range or the miss is two weeks old.
+ * The steps it already holds are not held a second time, so a load the
+ * athlete put back stays put.
  */
 export function holdMissedSessions(
   working: readonly WorkingDay[],
@@ -465,13 +507,14 @@ export function holdMissedSessions(
   for (const miss of missed) {
     if (miss.date < windowStart) continue;
     const scope: HoldScope = { working, input, horizonEnd };
-    if (!adapted.has(missKey(miss))) {
-      adapted.add(missKey(miss));
-      holds.push(...holdsFor(miss, scope));
+    if (adapted.has(missKey(miss))) {
+      const again = stepsToHoldAgain(miss, record);
+      if (again.size > 0) holds.push(...holdsFor(miss, { ...scope, only: again }).holds);
       continue;
     }
-    const again = stepsToHoldAgain(miss, record);
-    if (again.size > 0) holds.push(...holdsFor(miss, { ...scope, only: again }));
+    const answer = holdsFor(miss, { ...scope, except: heldSteps(miss, record) });
+    holds.push(...answer.holds);
+    if (!answer.waiting) adapted.add(missKey(miss));
   }
   return {
     adaptedMisses: [...adapted].slice(-MAX_ADAPTED_MISSES),
@@ -497,7 +540,7 @@ export function previewMissHolds(input: AdaptationInput, miss: MissedPlanSession
     working,
     input,
     horizonEnd: addDaysToISODate(input.today, LOAD_HORIZON_DAYS),
-  });
+  }).holds;
 }
 
 /** What one hold does to the first session it reaches. */
@@ -570,9 +613,27 @@ export function describeMissHolds(
 }
 
 /**
+ * A hold as the athlete reads loads now: a lift's loads in their current
+ * unit (recordedLoad). A long run's distances are metres whatever the unit.
+ */
+function inCurrentUnit(hold: PlanMissHold, unit: WeightUnit): PlanMissHold {
+  if (isLongRunHold(hold) || hold.unit === unit) return hold;
+  return {
+    ...hold,
+    unit,
+    sets: hold.sets.map((record) => ({
+      setId: record.setId,
+      from: recordedLoad(record.from, hold, unit),
+      to: recordedLoad(record.to, hold, unit),
+    })),
+  };
+}
+
+/**
  * The recorded holds as they stand in the plan now: each with only the sets
- * that still read what the hold wrote. A load or distance the athlete has
- * since changed is theirs, and no longer the hold's to report.
+ * that still read what the hold wrote, in the unit the athlete reads loads in
+ * today. A load or distance the athlete has since changed is theirs, and no
+ * longer the hold's to report.
  */
 export function standingMissHolds(
   input: AdaptationInput,
@@ -587,11 +648,13 @@ export function standingMissHolds(
       const meters = day?.runMeters.get(setId);
       return meters != null && Math.abs(meters - to) <= SAME_DISTANCE_METERS;
     }
-    const weight = hold.unit === input.weightUnit ? day?.weights.get(setId) : undefined;
+    const weight = day?.weights.get(setId);
     return weight != null && Math.abs(weight - to) <= SAME_LOAD_TOLERANCE;
   };
-  return holds.map((hold) => ({
-    ...hold,
-    sets: hold.sets.filter((record) => reads(hold, record.setId, record.to)),
-  }));
+  return holds
+    .map((hold) => inCurrentUnit(hold, input.weightUnit))
+    .map((hold) => ({
+      ...hold,
+      sets: hold.sets.filter((record) => reads(hold, record.setId, record.to)),
+    }));
 }

@@ -1,62 +1,23 @@
 import type { PlanEngineState } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
+import { adaptPlan, describeMissHolds, previewMissHolds } from "./adaptation";
 import {
-  type AdaptablePlanDay,
-  type AdaptationInput,
-  adaptPlan,
-  describeMissHolds,
-  type MissedPlanSession,
-  previewMissHolds,
-} from "./adaptation";
-import { input, log, squatDay, squatSets, weights } from "./adaptation.testFixtures";
+  afterPass as after,
+  input,
+  log,
+  missedSquatDay as missedDay,
+  missInput,
+  NEXT_SQUATS as NEXT,
+  squatDay,
+  squatSets,
+  weights,
+  withState,
+} from "./adaptation.testFixtures";
 
+// Tuesday's squat was missed; the next three Tuesdays climb past it
+// (adaptation.testFixtures: NEXT_SQUATS, missedSquatDay, missInput).
 describe("adaptPlan — sessions that never happened", () => {
-  // Tuesday's squat was missed; the next three Tuesdays climb past it.
-  const NEXT = [
-    squatDay("n1", "2026-10-20", 6, 87.5),
-    squatDay("n2", "2026-10-27", 7, 90),
-    squatDay("n3", "2026-11-03", 8, 92.5),
-  ];
-
-  function missedDay(
-    overrides: Partial<MissedPlanSession> & { weight?: number } = {},
-  ): MissedPlanSession {
-    const { weight = 85, ...rest } = overrides;
-    const date = rest.date ?? "2026-10-13";
-    return {
-      planDayId: "m",
-      date,
-      weekNumber: 5,
-      kind: "missed",
-      sets: squatDay("m", date, 5, weight).sets,
-      ...rest,
-    };
-  }
-
-  /** A pass with no new logs: only the missed sessions speak. */
-  function missInput(overrides: Partial<AdaptationInput> = {}): AdaptationInput {
-    return input({ logs: [], sets: [], upcoming: NEXT, missed: [missedDay()], ...overrides });
-  }
-
-  /** The upcoming days as a pass left them. */
-  function after(result: ReturnType<typeof adaptPlan>, days = NEXT): AdaptablePlanDay[] {
-    return days.map((day) => {
-      const adapted = result.days.find((entry) => entry.planDayId === day.id);
-      if (!adapted) return day;
-      const byId = new Map(adapted.setUpdates.map((update) => [update.setId, update.weight]));
-      return {
-        ...day,
-        mainWorkout: adapted.mainWorkout ?? day.mainWorkout,
-        sets: day.sets.map((set) => ({ ...set, weight: byId.get(set.id) ?? set.weight })),
-      };
-    });
-  }
-
-  function withState(engineState: PlanEngineState): AdaptationInput["plan"] {
-    return { startDate: "2026-09-14", totalWeeks: 12, engineState };
-  }
-
   it("repeats the missed step instead of climbing past it, then builds from there", () => {
     const result = adaptPlan(missInput());
 

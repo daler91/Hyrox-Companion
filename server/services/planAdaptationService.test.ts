@@ -440,6 +440,20 @@ describe("computePlanAdaptation", () => {
           ],
         });
 
+        // Holding already, though not counted yet: another of the session's
+        // steps is waiting for a session to come into range.
+        plans.getActivePlan.mockResolvedValueOnce({
+          ...plan,
+          engineState: { ...state, adaptedMisses: [] },
+        });
+        plans.getPlanDaysForAdaptation.mockResolvedValueOnce([heldDay]);
+        expect(await preview()).toEqual({
+          applied: true,
+          changes: [
+            { exercise: "Front Squat", date: "2026-10-16", scheme: "4x6", from: 85, to: 82.5, unit: "kg" },
+          ],
+        });
+
         // The athlete has since put the load back: nothing of the hold stands.
         plans.getActivePlan.mockResolvedValueOnce(plan);
         expect(await preview()).toEqual({ applied: true, changes: [] });

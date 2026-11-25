@@ -137,6 +137,29 @@ describe("adaptPlan — a missed long run", () => {
     expect(edited.days).toEqual([]);
   });
 
+  it("looks again at a miss whose next long run is past what a pass reads", () => {
+    // Skipped in advance, near the far edge of the three weeks a pass reads
+    // (to 4 November): the long run after it is a week further out.
+    const skipped = missedRun({ date: "2026-11-01", kind: "skipped" });
+    const beyond = [longRunDay("far", "2026-11-08", 10)];
+
+    const first = adaptPlan(runInput({ missed: [skipped], upcoming: beyond }));
+    expect(first.days).toEqual([]);
+    // Left uncounted, so the next pass asks again.
+    expect(first.engineState.adaptedMisses).toEqual([]);
+
+    const later = adaptPlan(
+      runInput({
+        today: "2026-10-21",
+        plan: withState(first.engineState),
+        missed: [skipped],
+        upcoming: beyond,
+      }),
+    );
+    expect(distances(later, "far")).toEqual([9000]);
+    expect(later.engineState.adaptedMisses).toEqual(["m|2026-11-01"]);
+  });
+
   it("holds nothing when the plan repeats the distance itself", () => {
     const result = adaptPlan(runInput({ upcoming: [longRunDay("same", "2026-10-18", 9), ...NEXT.slice(1)] }));
     expect(result.days).toEqual([]);
