@@ -304,6 +304,9 @@ flowchart TD
     BR --> W2
     MS["Key or supporting sessions that never happened<br/>(missed, skipped) in the last 14 days,<br/>not in engine_state.adaptedMisses"] --> MH["Per lift: hold the next session that climbs<br/>past the missed load at that load;<br/>later ones follow at 2.5%/week"]
     MH --> W
+    MS --> ML["Long run: the next one that builds past the<br/>missed distance repeats it;<br/>later ones follow at 8%/week"]
+    ML --> LR["Rewrite the long-run row's distance<br/>and the day's text where it states it once"]
+    LR --> Z
     MB["A held session is back in the plan<br/>(folded, un-skipped, logged late)"] --> MR["Restore the loads the hold lowered,<br/>where a set still reads what it wrote"]
     MR --> W
     A --> RUN{"New best run effort?"}
@@ -331,7 +334,7 @@ flowchart TD
 | Deterministic load math + ACWR/restrictions | `server/services/trainingLoadService.ts` (daily loads, restrictions), `server/services/trainingLoad/stressScores.ts` (SSS, CSS), `server/services/trainingLoad/loadDynamics.ts` (EWMAs, ACWR and its zones) |
 | Load-governor suggestion builder (`buildLoadGovernorSuggestions`) | `server/services/trainingLoadGovernor.ts` |
 | Plan adaptation stage (reads, writes) | `server/services/planAdaptationService.ts` |
-| Plan adaptation rules (pure) | `server/services/workoutEngine/adaptation.ts` (logs, breaks, runs), `server/services/workoutEngine/missedSessions.ts` (sessions that never happened), `server/services/workoutEngine/adaptationWorking.ts` (applying a decision), `server/services/workoutEngine/paceRewrite.ts`, `shared/progression.ts` |
+| Plan adaptation rules (pure) | `server/services/workoutEngine/adaptation.ts` (logs, breaks, runs), `server/services/workoutEngine/missedSessions.ts` and `missedLongRun.ts` (sessions that never happened: lifts, and the long run), `server/services/workoutEngine/adaptationWorking.ts` (applying a decision), `server/services/workoutEngine/paceRewrite.ts`, `shared/progression.ts` |
 | Coach pass after the missed-session sweep | `server/storage/plans.ts` (`markMissedPlanDays`, `takeAthletesToCoachAfterMiss`), `server/services/autoCoachQueue.ts` (`coachAthletesAfterMissedSweep`), `server/emailScheduler.ts` |
 | Plan engine state (`training_plans.engine_state`) | `shared/schema/tables.ts`, `shared/schema/types/plans.ts`, `migrations/0103_training_plans_engine_state.sql` |
 | Exercise load tag schema | `shared/schema/tables.ts`, `migrations/0049_exercise_load_tags.sql` |

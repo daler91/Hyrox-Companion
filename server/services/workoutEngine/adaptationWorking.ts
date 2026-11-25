@@ -11,16 +11,30 @@ import { computePlanPhase } from "@shared/planPhase";
 import { epley, epleyLoad } from "@shared/progression";
 import type { CoachMissedSessionHold } from "@shared/schema";
 import { knownExerciseLabel } from "@shared/schema/exercises";
-import { storedWeightToDisplay, type WeightUnit } from "@shared/unitConversion";
+import {
+  getStoredDistanceUnit,
+  metersToStoredDistance,
+  metersToUserDistance,
+  standardizeDistanceUnit,
+  standardizeParsedDistanceUnit,
+  storedDistanceToMeters,
+  type StoredDistanceUnit,
+  storedWeightToDisplay,
+  userDistanceToMeters,
+  type WeightUnit,
+} from "@shared/unitConversion";
 
+import { shortDate } from "../missedRecovery/planner";
 import type {
   AdaptablePlanDay,
   AdaptablePlanSet,
   AdaptationInput,
   AdaptationLog,
   AdaptationSet,
+  MissedPlanSession,
   ProgressionChange,
   ProgressionChangeKind,
+  SetLoadUpdate,
 } from "./adaptationTypes";
 import { ASSUMED_RIR, customLiftLabel, liftKey, roundLoad } from "./loadMath";
 import { rewriteLiftLoad } from "./planRepair";
@@ -41,6 +55,10 @@ const MAX_ADAPT_REPS = 12;
 export const MAX_STEP_ABOVE_MISS = 0.1;
 /** What a progression change's exercise name may hold (progressionChangeSchema). */
 const MAX_CHANGE_NAME = 100;
+/** What a coach note's list of changes may hold (coachMissedSessionHoldSchema). */
+const MAX_NOTE_CHANGES = 10;
+/** The run the plan grows week on week, and so the one a miss can hold. */
+export const LONG_RUN = "long_run";
 
 // ---------------------------------------------------------------------------
 // Working state
@@ -57,6 +75,9 @@ export interface WorkingDay {
    */
   readonly startWeights: Map<string, number>;
   readonly touchedSets: Set<string>;
+  /** Each long-run row's distance in metres, as adapted so far. */
+  readonly runMeters: Map<string, number>;
+  readonly touchedRuns: Set<string>;
   mainWorkout: string;
   accessory: string | null;
   notes: string | null;
@@ -83,12 +104,19 @@ export function toWorkingDay(day: AdaptablePlanDay, input: AdaptationInput): Wor
       ),
     );
   }
+  const runMeters = new Map<string, number>();
+  for (const set of day.sets) {
+    const meters = set.exerciseName === LONG_RUN ? plannedRunMeters(set, input.distanceUnit) : null;
+    if (meters != null) runMeters.set(set.id, meters);
+  }
   return {
     day,
     phase: computePlanPhase(input.plan.totalWeeks, day.weekNumber)?.phaseLabel,
     weights,
     startWeights: new Map(weights),
     touchedSets: new Set(),
+    runMeters,
+    touchedRuns: new Set(),
     mainWorkout: day.mainWorkout,
     accessory: day.accessory ?? null,
     notes: day.notes ?? null,
@@ -115,6 +143,146 @@ export function loggedLift(set: AdaptationSet): string | null {
 
 export function weekdayName(date: string): string {
   return PLAN_WEEKDAYS[weekdayIndex(date)] ?? date;
+}
+
+/** "Tuesday" within a week of today, "Tue 22 Sep" beyond it. */
+export function nearDayName(date: string, today: string): string {
+  return Math.abs(dayDiff(today, date)) < 7 ? weekdayName(date) : shortDate(date);
+}
+
+/**
+ * Leave on a day the record of what a missed session held on it, for its card
+ * (CoachNoteInputs.missedSessionHold). A day two misses reach keeps the first
+ * one's name and gains the second's changes.
+ */
+export function markHeld(
+  day: WorkingDay,
+  miss: MissedPlanSession,
+  held: readonly ProgressionChange[],
+): void {
+  if (held.length === 0) return;
+  const record = day.missedSessionHold ?? { kind: miss.kind, date: miss.date, changes: [] };
+  day.missedSessionHold = {
+    ...record,
+    changes: [...record.changes, ...held.map((change) => ({ ...change }))].slice(0, MAX_NOTE_CHANGES),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Run distances
+// ---------------------------------------------------------------------------
+
+/** The unit a row's distance is stored in: its own stamp, or the athlete's for a row written before stamps. */
+function rowDistanceUnit(set: AdaptablePlanSet, athleteUnit: string): StoredDistanceUnit {
+  const stamped = standardizeParsedDistanceUnit(set.distanceUnit);
+  if (stamped === "ft" || stamped === "m") return stamped;
+  return getStoredDistanceUnit(athleteUnit);
+}
+
+function positive(value: number | null | undefined): value is number {
+  return value != null && Number.isFinite(value) && value > 0;
+}
+
+/** A plan row's prescribed distance in metres, or null when it prescribes none. */
+export function plannedRunMeters(set: AdaptablePlanSet, athleteUnit: string): number | null {
+  const stored = positive(set.plannedDistance) ? set.plannedDistance : set.distance;
+  if (!positive(stored)) return null;
+  // storedDistanceToMeters reads feet for a miles athlete and metres otherwise.
+  return storedDistanceToMeters(stored, rowDistanceUnit(set, athleteUnit) === "ft" ? "miles" : "km");
+}
+
+/** `meters` as the update to a row's distance, in the unit and the column(s) the row already uses. */
+export function storedRunDistance(
+  set: AdaptablePlanSet,
+  meters: number,
+  athleteUnit: string,
+): Pick<SetLoadUpdate, "distance" | "plannedDistance"> {
+  const stored = Math.round(metersToStoredDistance(meters, rowDistanceUnit(set, athleteUnit)));
+  return {
+    ...(positive(set.distance) ? { distance: stored } : {}),
+    ...(positive(set.plannedDistance) ? { plannedDistance: stored } : {}),
+  };
+}
+
+/** The long run a day prescribes, in metres: every long-run row together. */
+export function longRunMeters(day: WorkingDay): number {
+  let total = 0;
+  for (const meters of day.runMeters.values()) total += meters;
+  return total;
+}
+
+/** "km" or "mi": how the athlete's plan writes a distance. */
+export function runUnitLabel(athleteUnit: string): "km" | "mi" {
+  return standardizeDistanceUnit(athleteUnit) === "miles" ? "mi" : "km";
+}
+
+/** Metres as the athlete reads a run: kilometres or miles, to one decimal. */
+export function displayRunDistance(meters: number, athleteUnit: string): number {
+  return Math.round(metersToUserDistance(meters, athleteUnit) * 10) / 10;
+}
+
+/** A run distance rounded the way the plan writes one: to the half kilometre or half mile. */
+export function roundRunMeters(meters: number, athleteUnit: string): number {
+  const halves = Math.round(metersToUserDistance(meters, athleteUnit) * 2) / 2;
+  return userDistanceToMeters(halves, athleteUnit);
+}
+
+function isDigitOrDot(char: string | undefined): boolean {
+  return char !== undefined && ((char >= "0" && char <= "9") || char === ".");
+}
+
+function isLetter(char: string | undefined): boolean {
+  return char !== undefined && char.toLowerCase() !== char.toUpperCase();
+}
+
+/** Where `value unit` is written in `text` as a whole distance ("9 km", "9km"), every occurrence. */
+function distanceMentions(text: string, value: string, unit: string): { start: number; end: number }[] {
+  const mentions: { start: number; end: number }[] = [];
+  let from = text.indexOf(value);
+  while (from >= 0) {
+    const afterValue = from + value.length;
+    const unitAt = text.charAt(afterValue) === " " ? afterValue + 1 : afterValue;
+    const end = unitAt + unit.length;
+    const whole =
+      !isDigitOrDot(text[from - 1]) &&
+      text.slice(unitAt, end).toLowerCase() === unit &&
+      !isLetter(text[end]);
+    if (whole) mentions.push({ start: from, end: afterValue });
+    from = text.indexOf(value, afterValue);
+  }
+  return mentions;
+}
+
+/**
+ * The day's text with its long-run distance changed, when the text states
+ * that distance exactly once ("14.5 km easy"). Written any other way, or more
+ * than once, the text is left alone: the exercise table is what the card
+ * shows, and a guess at which number to change is worse than a stale line.
+ */
+export function rewriteRunDistance(text: string, from: number, to: number, unit: "km" | "mi"): string {
+  const mentions = distanceMentions(text, String(from), unit);
+  const only = mentions.length === 1 ? mentions.at(0) : undefined;
+  if (!only) return text;
+  return `${text.slice(0, only.start)}${to}${text.slice(only.end)}`;
+}
+
+/**
+ * Record a change to the day's long run after its rows moved: the distance
+ * before and after as the athlete reads it, and the text to match.
+ */
+export function recordRunChange(
+  day: WorkingDay,
+  kind: ProgressionChangeKind,
+  beforeMeters: number,
+  athleteUnit: string,
+): void {
+  const from = displayRunDistance(beforeMeters, athleteUnit);
+  const to = displayRunDistance(longRunMeters(day), athleteUnit);
+  if (to === from) return;
+  const unit = runUnitLabel(athleteUnit);
+  day.changes.push({ exercise: LONG_RUN, kind, from, to, unit });
+  day.mainWorkout = rewriteRunDistance(day.mainWorkout, from, to, unit);
+  if (day.notes) day.notes = rewriteRunDistance(day.notes, from, to, unit);
 }
 
 // ---------------------------------------------------------------------------

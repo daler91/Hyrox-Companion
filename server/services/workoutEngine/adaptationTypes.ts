@@ -41,6 +41,14 @@ export interface AdaptablePlanSet {
   readonly weight?: number | null;
   readonly weightUnit?: string | null;
   readonly notes?: string | null;
+  /**
+   * A run's prescribed distance, in the unit the row stores (`distanceUnit`:
+   * metres, or feet for a miles athlete). A plan row keeps it in `distance`;
+   * one carried over from a parsed prescription may have `plannedDistance`.
+   */
+  readonly distance?: number | null;
+  readonly plannedDistance?: number | null;
+  readonly distanceUnit?: string | null;
 }
 
 export interface AdaptablePlanDay {
@@ -123,6 +131,9 @@ export interface SetLoadUpdate {
   readonly weight?: number;
   readonly weightUnit?: string;
   readonly notes?: string;
+  /** A run's new distance, in the unit the row already stores it in. */
+  readonly distance?: number;
+  readonly plannedDistance?: number;
 }
 
 export interface DayAdaptation {

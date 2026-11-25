@@ -8,6 +8,7 @@ import React, { useMemo, useState } from "react";
 // re-exports `MissedRecoveryDialog` (~17 kB source), which would pull the
 // dialog into the eager Timeline route chunk. Only the lazy
 // `TimelineWorkoutSurfaces` renders the dialog.
+import { MissedAftermathNote } from "@/components/timeline/missed-recovery/MissedAftermathNote";
 import {
   isRecoverableEntry,
   MissedRecoveryPrompt,
@@ -723,6 +724,7 @@ function TimelineCardWorkoutBody({
         />
       )}
       <MissedRecoveryPrompt entry={entry} onRecover={onRecover} />
+      <MissedAftermathNote entry={entry} />
     </>
   );
 }

@@ -230,6 +230,76 @@ describe("plan adaptation after a missed session (real Postgres)", () => {
     expect(await storedWeights(next.id)).toEqual([95, 95, 95]);
   });
 
+  describe("a missed long run", () => {
+    async function seedLongRun(planId: string, scheduledDate: string, km: number, status = "planned") {
+      const [day] = await db
+        .insert(planDays)
+        .values({
+          planId,
+          weekNumber: 2,
+          dayName: "Sunday",
+          focus: "Long Run",
+          mainWorkout: `${km} km easy @ 6:05-6:42/km`,
+          status,
+          scheduledDate,
+        })
+        .returning();
+      await db.insert(exerciseSets).values({
+        planDayId: day.id,
+        exerciseName: "long_run",
+        category: "running",
+        setNumber: 1,
+        distance: km * 1000,
+        distanceUnit: "m",
+        sortOrder: 0,
+      });
+      return day;
+    }
+
+    async function storedDistances(planDayId: string): Promise<(number | null)[]> {
+      const rows = await db
+        .select({ distance: exerciseSets.distance })
+        .from(exerciseSets)
+        .where(eq(exerciseSets.planDayId, planDayId));
+      return rows.map((row) => row.distance);
+    }
+
+    it("repeats the missed distance in the next long run, and gives it back on a fold", async () => {
+      const { plan } = await seedPlan();
+      const missedRun = await seedLongRun(plan.id, addDaysToISODate(today, -3), 9, "missed");
+      const nextRun = await seedLongRun(plan.id, addDaysToISODate(today, 4), 10);
+
+      // Before any pass, the recovery sheet can already say what staying missed does.
+      expect(await previewMissedSessionFollowOn(USER, missedRun.id, today, units)).toEqual({
+        applied: false,
+        changes: [
+          { exercise: "Long Run", date: addDaysToISODate(today, 4), scheme: "", from: 10, to: 9, unit: "km" },
+        ],
+      });
+
+      await runPass();
+
+      expect(await storedDistances(nextRun.id)).toEqual([9000]);
+      const held = await storedDay(nextRun.id);
+      expect(held?.mainWorkout).toBe("9 km easy @ 6:05-6:42/km");
+      expect(held?.aiRationale).toContain("Long Run (9 km), so it repeats that distance rather than jumping ahead");
+      expect(held?.aiInputsUsed?.missedSessionHold?.changes).toEqual([
+        { exercise: "long_run", kind: "hold", from: 10, to: 9, unit: "km" },
+      ]);
+      expect((await previewMissedSessionFollowOn(USER, missedRun.id, today, units)).applied).toBe(true);
+
+      // Folded into tomorrow, ahead of the held run: its distance returns.
+      await db
+        .update(planDays)
+        .set({ status: "planned", scheduledDate: addDaysToISODate(today, 1) })
+        .where(eq(planDays.id, missedRun.id));
+      await runPass();
+
+      expect(await storedDistances(nextRun.id)).toEqual([10000]);
+      expect((await storedDay(nextRun.id))?.mainWorkout).toBe("10 km easy @ 6:05-6:42/km");
+    });
+  });
+
   it("holds for a skipped session too, and not for an optional one", async () => {
     const { missed, next } = await seedPlan();
     await db

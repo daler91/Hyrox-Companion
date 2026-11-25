@@ -94,7 +94,7 @@ export interface PlannerMissedSession {
 export interface PlannerFollowOnChange {
   readonly exercise: string;
   readonly date: string;
-  /** "4x6". */
+  /** A lift's "4x6"; empty for a long run. */
   readonly scheme: string;
   readonly from: number;
   readonly to: number;
@@ -620,7 +620,9 @@ function followOnLines(input: PlannerInput): string[] {
   if (!followOn || followOn.changes.length === 0) return [];
   const lines = followOn.changes.slice(0, MAX_FOLLOW_ON_LINES).map((change) => {
     const whose = `${capitalise(dayLabel(change.date, input.today))}'s ${change.exercise}`;
-    const load = `${change.scheme} @ ${change.to} ${change.unit}`;
+    // A lift reads "5x5 @ 100 kg"; a long run is only its distance, "9 km".
+    const amount = `${change.to} ${change.unit}`;
+    const load = change.scheme ? `${change.scheme} @ ${amount}` : amount;
     return followOn.applied
       ? `${whose} stays at ${load} instead of ${change.from} ${change.unit}.`
       : `${whose} will repeat ${load} instead of climbing to ${change.from} ${change.unit}.`;

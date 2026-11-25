@@ -586,8 +586,9 @@ export class PlanStorage {
 
   /**
    * Change prescribed sets of one plan day in place: loads the engine moved,
-   * notes whose paces it moved. Scoped to the day, so a set id from anywhere
-   * else is a no-op; the caller checks the day belongs to the athlete first.
+   * notes whose paces it moved, a long run's distance it held. Scoped to the
+   * day, so a set id from anywhere else is a no-op; the caller checks the day
+   * belongs to the athlete first.
    */
   async updatePlanDaySets(
     planDayId: string,
@@ -596,6 +597,8 @@ export class PlanStorage {
       readonly weight?: number;
       readonly weightUnit?: string;
       readonly notes?: string;
+      readonly distance?: number;
+      readonly plannedDistance?: number;
     }>,
     tx?: DbExecutor,
   ): Promise<void> {

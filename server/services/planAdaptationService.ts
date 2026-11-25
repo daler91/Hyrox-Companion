@@ -15,11 +15,7 @@ import { addDaysToISODate } from "@shared/dateUtils";
 import { inSequence } from "@shared/inSequence";
 import type { TrainingPlan } from "@shared/schema";
 import { resolveSessionPriority } from "@shared/sessionPriority";
-import {
-  standardizeWeightUnit,
-  storedWeightToDisplay,
-  type UnitPreferences,
-} from "@shared/unitConversion";
+import { standardizeWeightUnit, type UnitPreferences } from "@shared/unitConversion";
 
 import type { DbExecutor } from "../db";
 import type { TrainingContext } from "../gemini/index";
@@ -40,6 +36,7 @@ import {
   type MissFollowOn,
   missKey,
   previewMissHolds,
+  standingMissHolds,
 } from "./workoutEngine/adaptation";
 
 /** History the adaptation reads: the same ~10-week window generation calibrates from. */
@@ -82,6 +79,10 @@ function toAdaptableSets(row: AdaptationPlanDayRow): AdaptablePlanSet[] {
     weight: set.weight,
     weightUnit: set.weightUnit,
     notes: set.notes,
+    // A long run's distance, which a missed long run holds (missedLongRun.ts).
+    distance: set.distance,
+    plannedDistance: set.plannedDistance,
+    distanceUnit: set.distanceUnit,
   }));
 }
 
@@ -249,8 +250,6 @@ export interface MissedSessionFollowOn {
 }
 
 const NO_FOLLOW_ON: MissedSessionFollowOn = { applied: false, changes: [] };
-/** Two loads in the same unit closer than this are the same load. */
-const SAME_LOAD_TOLERANCE = 0.01;
 
 /**
  * What following a missed session holds in the sessions after it — the plan
@@ -285,32 +284,29 @@ export async function previewMissedSessionFollowOn(
     const row = rows.find((candidate) => candidate.id === planDayId);
     if (!row?.scheduledDate) return NO_FOLLOW_ON;
     const upcoming = upcomingRows.flatMap((day) => toAdaptableDay(day) ?? []);
+    const distanceUnit = unitPreferences.distanceUnit ?? "km";
+    /** The plan as the adaptation reads it, with whatever was logged since `since`. */
+    const inputWith = (
+      logged: Pick<Parameters<typeof previewMissHolds>[0], "logs" | "sets">,
+    ): Parameters<typeof previewMissHolds>[0] => ({
+      today,
+      now: new Date().toISOString(),
+      weightUnit,
+      distanceUnit,
+      plan: { startDate: plan.startDate, totalWeeks: plan.totalWeeks, engineState: plan.engineState },
+      upcoming,
+      fatigued: false,
+      ...logged,
+    });
 
     const key = missKey({ planDayId, date: row.scheduledDate });
     if (plan.engineState?.adaptedMisses?.includes(key)) {
       // Already followed: say what still stands of it, not what it once wrote.
-      const current = new Map(
-        upcoming.flatMap((day) =>
-          day.sets.map(
-            (set) =>
-              [
-                set.id,
-                storedWeightToDisplay(set.weight ?? 0, { weightUnit: set.weightUnit }, { weightUnit }),
-              ] as const,
-          ),
-        ),
+      const recorded = (plan.engineState.missHolds ?? []).filter(
+        (hold) => missKey({ planDayId: hold.planDayId, date: hold.missedOn }) === key,
       );
-      const standing = (plan.engineState.missHolds ?? [])
-        .filter((hold) => missKey({ planDayId: hold.planDayId, date: hold.missedOn }) === key)
-        .filter((hold) => hold.unit === weightUnit)
-        .map((hold) => ({
-          ...hold,
-          sets: hold.sets.filter(
-            (record) =>
-              Math.abs((current.get(record.setId) ?? Number.NaN) - record.to) <= SAME_LOAD_TOLERANCE,
-          ),
-        }));
-      return { applied: true, changes: describeMissHolds(standing, upcoming) };
+      const standing = standingMissHolds(inputWith({ logs: [], sets: [] }), recorded);
+      return { applied: true, changes: describeMissHolds(standing, upcoming, distanceUnit) };
     }
 
     const { missed } = readMissedSessions(
@@ -321,23 +317,14 @@ export async function previewMissedSessionFollowOn(
     );
     const miss = missed.at(0);
     if (!miss) return NO_FOLLOW_ON;
-    // Only what was logged since the miss matters: a lift trained anyway is not held.
-    const sets = await storage.analytics.getAllExerciseSetsWithDates(userId, miss.date, today);
-    const holds = previewMissHolds(
-      {
-        today,
-        now: new Date().toISOString(),
-        weightUnit,
-        distanceUnit: unitPreferences.distanceUnit ?? "km",
-        plan: { startDate: plan.startDate, totalWeeks: plan.totalWeeks, engineState: plan.engineState },
-        logs: [],
-        sets,
-        upcoming,
-        fatigued: false,
-      },
-      miss,
-    );
-    return { applied: false, changes: describeMissHolds(holds, upcoming) };
+    // Only what was logged since the miss matters: a lift trained anyway, or a
+    // long run run anyway, is not held.
+    const [logs, sets] = await Promise.all([
+      storage.analytics.getWorkoutLogsByDateRange(userId, miss.date, today),
+      storage.analytics.getAllExerciseSetsWithDates(userId, miss.date, today),
+    ]);
+    const holds = previewMissHolds(inputWith({ logs, sets }), miss);
+    return { applied: false, changes: describeMissHolds(holds, upcoming, distanceUnit) };
   } catch (err) {
     // Reads and a pure computation; no row content is logged (logger S2).
     // bearer:disable javascript_lang_logger_leak

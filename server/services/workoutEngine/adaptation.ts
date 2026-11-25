@@ -62,6 +62,7 @@ import {
   type LoggedSession,
   MAX_RAISE,
   setsOf,
+  storedRunDistance,
   toWorkingDay,
   weekdayName,
   type WorkingDay,
@@ -92,6 +93,7 @@ export {
   type MissFollowOn,
   missKey,
   previewMissHolds,
+  standingMissHolds,
 } from "./missedSessions";
 
 // ---------------------------------------------------------------------------
@@ -509,11 +511,13 @@ function toDayAdaptation(day: WorkingDay, input: AdaptationInput): DayAdaptation
   for (const set of day.day.sets) {
     const weight = day.touchedSets.has(set.id) ? day.weights.get(set.id) : undefined;
     const notes = day.setNotes.get(set.id);
-    if (weight == null && notes == null) continue;
+    const meters = day.touchedRuns.has(set.id) ? day.runMeters.get(set.id) : undefined;
+    if (weight == null && notes == null && meters == null) continue;
     setUpdates.push({
       setId: set.id,
       ...(weight == null ? {} : { weight, weightUnit: input.weightUnit }),
       ...(notes == null ? {} : { notes }),
+      ...(meters == null ? {} : storedRunDistance(set, meters, input.distanceUnit)),
     });
   }
   const sentences = [...new Set(day.reasons)].map(

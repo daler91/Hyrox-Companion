@@ -177,6 +177,21 @@ describe("planMissedSessionRecovery", () => {
       ]);
     });
 
+    it("reads a long run as a distance, not as sets and reps", () => {
+      const longRun = { exercise: "Long Run", date: "2026-09-27", scheme: "", from: 10, to: 9, unit: "km" };
+      const before = planMissedSessionRecovery(
+        input({ missed: missed({ followOn: { applied: false, changes: [longRun] } }) }),
+      );
+      expect(before.letGo.impact.followOn?.at(0)).toBe(
+        "Sunday's Long Run will repeat 9 km instead of climbing to 10 km.",
+      );
+
+      const after = planMissedSessionRecovery(
+        input({ missed: missed({ followOn: { applied: true, changes: [longRun] } }) }),
+      );
+      expect(after.letGo.impact.followOn?.at(0)).toBe("Sunday's Long Run stays at 9 km instead of 10 km.");
+    });
+
     it("names the first few lifts of a long session", () => {
       const many = ["Back Squat", "Bench Press", "Deadlift", "Overhead Press", "Bent Over Row", "Hip Thrust"].map(
         (exercise) => ({ ...squat, exercise }),

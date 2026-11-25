@@ -6,8 +6,9 @@
  * athlete: miss 5x5 @ 100 kg and next week still reads 102.5 kg. This is the
  * part of the adaptation (./adaptation.ts) that reads the plan's own days as
  * well as the logs: each lift of a session that was missed or skipped picks
- * up from the step that was not done, and the hold is taken back if the
- * session returns to the plan (folded into another day, or logged late).
+ * up from the step that was not done (so does its long run,
+ * ./missedLongRun.ts), and the hold is taken back if the session returns to
+ * the plan (folded into another day, or logged late).
  *
  * Pure, like the rest of the adaptation: the caller says which sessions are
  * not happening and which have returned (planAdaptationService).
@@ -16,32 +17,42 @@ import { addDaysToISODate, dayDiff } from "@shared/dateUtils";
 import type { PlanEngineState, PlanMissHold } from "@shared/schema";
 import { storedWeightToDisplay, type WeightUnit } from "@shared/unitConversion";
 
-import { shortDate } from "../missedRecovery/planner";
 import { planDeloadWeeks } from "../planBlueprint";
 import type {
   AdaptablePlanDay,
   AdaptablePlanSet,
   AdaptationInput,
   MissedPlanSession,
-  ProgressionChange,
 } from "./adaptationTypes";
 import {
   applyDecision,
+  displayRunDistance,
   equivalentLoad,
   exerciseLabel,
   isAdaptableSet,
   LOAD_HORIZON_DAYS,
   loggedLift,
+  LONG_RUN,
+  markHeld,
   MAX_STEP_ABOVE_MISS,
+  nearDayName,
   recordChange,
   repsOf,
+  runUnitLabel,
   setsOf,
   topWeight,
   toWorkingDay,
-  weekdayName,
   type WorkingDay,
 } from "./adaptationWorking";
 import { implementFor, liftKey } from "./loadMath";
+import {
+  heldLongRun,
+  holdMissedLongRun,
+  LONG_RUN_HOLD_UNIT,
+  ranSince,
+  releaseLongRunHold,
+  SAME_DISTANCE_METERS,
+} from "./missedLongRun";
 
 /** Sessions missed longer ago than this are the return-from-break rule's to handle. */
 export const MISSED_SESSION_WINDOW_DAYS = 14;
@@ -55,19 +66,12 @@ const MISS_HOLD_MAX_AGE_DAYS = 28;
 const MAX_ADAPTED_MISSES = 200;
 const MAX_MISS_HOLDS = 50;
 const MAX_HOLD_SETS = 100;
-/** What a coach note's list of changes may hold (coachMissedSessionHoldSchema). */
-const MAX_NOTE_CHANGES = 10;
 /** Two loads in the same unit closer than this are the same load. */
 const SAME_LOAD_TOLERANCE = 0.01;
 
 /** How the engine state names a miss: the plan day, on the day it was missed. */
 export function missKey(miss: { readonly planDayId: string; readonly date: string }): string {
   return `${miss.planDayId}|${miss.date}`;
-}
-
-/** "Tuesday" within a week of today, "Tue 22 Sep" beyond it. */
-function nearDayName(date: string, today: string): string {
-  return Math.abs(dayDiff(today, date)) < 7 ? weekdayName(date) : shortDate(date);
 }
 
 /** One lift of a session that never happened: its heaviest prescribed set. */
@@ -143,24 +147,6 @@ function firstClimbPast(later: readonly WorkingDay[], lift: MissedLift): number 
 }
 
 /**
- * Leave on a day the record of what a missed session held on it, for its card
- * (CoachNoteInputs.missedSessionHold). A day two misses reach keeps the first
- * one's name and gains the second's loads.
- */
-function markHeld(
-  day: WorkingDay,
-  miss: MissedPlanSession,
-  held: readonly ProgressionChange[],
-): void {
-  if (held.length === 0) return;
-  const record = day.missedSessionHold ?? { kind: miss.kind, date: miss.date, changes: [] };
-  day.missedSessionHold = {
-    ...record,
-    changes: [...record.changes, ...held.map((change) => ({ ...change }))].slice(0, MAX_NOTE_CHANGES),
-  };
-}
-
-/**
  * Hold one lift at the step a session never did: its next session repeats the
  * missed load instead of climbing past it, and the ones after resume from
  * there (applyCap). Returns what it lowered, or null when nothing was.
@@ -219,6 +205,11 @@ function holdMissedLift(
   };
 }
 
+/** A hold on the long run's distance (./missedLongRun.ts), not on a lift's load. */
+function isLongRunHold(hold: PlanMissHold): boolean {
+  return hold.exercise === LONG_RUN && hold.unit === LONG_RUN_HOLD_UNIT;
+}
+
 /**
  * Take a hold back: the step it stood for is being done after all, so the
  * loads it lowered return — but only where a set still reads what the hold
@@ -231,6 +222,10 @@ function releaseHold(
   input: AdaptationInput,
   reason: string,
 ): void {
+  if (isLongRunHold(hold)) {
+    releaseLongRunHold(working, hold, input, reason);
+    return;
+  }
   // Written in another unit: the loads cannot be compared, so they stand.
   if (hold.unit !== input.weightUnit) return;
   const topBefore = new Map<WorkingDay, number>();
@@ -256,6 +251,21 @@ export interface MissRecord {
   readonly adapted: Set<string>;
   /** Holds that can still be taken back. */
   readonly holds: PlanMissHold[];
+}
+
+/**
+ * Whether the athlete has done since the miss what a hold stands for: the
+ * lift, in any session; or, for a long run, a run of about the distance the
+ * hold left on its first session.
+ */
+function doneSince(input: AdaptationInput, hold: PlanMissHold): boolean {
+  if (!isLongRunHold(hold)) return trainedSince(input, hold.exercise, hold.missedOn);
+  const firstDay = [...input.upcoming]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .flatMap((day) => heldLongRun(hold, day) ?? [])
+    .at(0);
+  // None of its sessions is ahead any more: nothing a run could make up.
+  return firstDay !== undefined && ranSince(input, hold.missedOn, firstDay.to);
 }
 
 /**
@@ -311,24 +321,26 @@ export function openMissRecord(
     const key = missKey({ planDayId: hold.planDayId, date: hold.missedOn });
     const when = nearDayName(hold.missedOn, input.today);
     const label = exerciseLabel(hold.exercise);
+    const planned = isLongRunHold(hold) ? "distance" : "load";
     const firstHeld = firstHeldDate(hold, aheadDates);
     if (!stillMissed.has(key)) {
       const backOn = returned.get(hold.planDayId);
       if (backOn === undefined) continue;
       adapted.delete(key);
       if (firstHeld !== null && backOn < firstHeld) {
-        const reason = `${when}'s session is no longer missed, so ${label} returns to its planned load`;
+        const reason = `${when}'s session is no longer missed, so ${label} returns to its planned ${planned}`;
         releaseHold(working, hold, input, reason);
       }
       continue;
     }
     if (dayDiff(hold.missedOn, input.today) > MISS_HOLD_MAX_AGE_DAYS) continue;
-    if (!trainedSince(input, hold.exercise, hold.missedOn)) {
+    if (!doneSince(input, hold)) {
       holds.push(hold);
       continue;
     }
     if (firstHeld !== null) {
-      const reason = `you have trained ${label} since ${when}'s session, so it returns to its planned load`;
+      const did = isLongRunHold(hold) ? "have run long" : `have trained ${label}`;
+      const reason = `you ${did} since ${when}'s session, so it returns to its planned ${planned}`;
       releaseHold(working, hold, input, reason);
     }
   }
@@ -336,9 +348,10 @@ export function openMissRecord(
 }
 
 /**
- * What one missed session holds: each of its lifts, in the next session that
- * climbs past it. Nothing for a lift the athlete has trained since anyway, or
- * for a deload week (no step of the progression was lost).
+ * What one missed session holds: each of its lifts, and its long run, in the
+ * next session that climbs past it. Nothing for a lift the athlete has
+ * trained since anyway (or a long run they ran), or for a deload week (no
+ * step of the progression was lost).
  */
 function holdsFor(
   working: readonly WorkingDay[],
@@ -347,10 +360,11 @@ function holdsFor(
   horizonEnd: string,
 ): PlanMissHold[] {
   if (planDeloadWeeks(input.plan.totalWeeks).includes(miss.weekNumber)) return [];
-  return missedLifts(miss, input.weightUnit).flatMap((lift) => {
+  const lifts = missedLifts(miss, input.weightUnit).flatMap((lift) => {
     if (trainedSince(input, lift.exercise, miss.date)) return [];
     return holdMissedLift(working, miss, lift, input, horizonEnd) ?? [];
   });
+  return [...lifts, ...[holdMissedLongRun(working, miss, input, horizonEnd) ?? []].flat()];
 }
 
 /**
@@ -402,13 +416,13 @@ export function previewMissHolds(input: AdaptationInput, miss: MissedPlanSession
 
 /** What one hold does to the first session it reaches. */
 export interface MissFollowOn {
-  /** The lift, as the coach note names it. */
+  /** The lift (or "Long Run"), as the coach note names it. */
   readonly exercise: string;
   /** The first session the hold reaches. */
   readonly date: string;
-  /** The lift's sets and reps in that session: "4x6". */
+  /** A lift's sets and reps in that session, "4x6"; empty for a long run, which is only a distance. */
   readonly scheme: string;
-  /** Its top load there without the hold and with it, in `unit`. */
+  /** Its top load (or its distance) there without the hold and with it, in `unit`. */
   readonly from: number;
   readonly to: number;
   readonly unit: string;
@@ -421,6 +435,7 @@ export interface MissFollowOn {
 export function describeMissHolds(
   holds: readonly PlanMissHold[],
   upcoming: readonly AdaptablePlanDay[],
+  distanceUnit = "km",
 ): MissFollowOn[] {
   const days = [...upcoming].sort((a, b) => a.date.localeCompare(b.date));
   return holds
@@ -428,6 +443,20 @@ export function describeMissHolds(
       const records = new Map(hold.sets.map((record) => [record.setId, record]));
       const day = days.find((candidate) => candidate.sets.some((set) => records.has(set.id)));
       if (!day) return [];
+      if (isLongRunHold(hold)) {
+        const run = heldLongRun(hold, day);
+        if (!run) return [];
+        return [
+          {
+            exercise: exerciseLabel(hold.exercise),
+            date: day.date,
+            scheme: "",
+            from: displayRunDistance(run.from, distanceUnit),
+            to: displayRunDistance(run.to, distanceUnit),
+            unit: runUnitLabel(distanceUnit),
+          },
+        ];
+      }
       const lowered = day.sets.flatMap((set) => {
         const record = records.get(set.id);
         return record ? [{ set, record }] : [];
@@ -446,4 +475,31 @@ export function describeMissHolds(
       ];
     })
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * The recorded holds as they stand in the plan now: each with only the sets
+ * that still read what the hold wrote. A load or distance the athlete has
+ * since changed is theirs, and no longer the hold's to report.
+ */
+export function standingMissHolds(
+  input: AdaptationInput,
+  holds: readonly PlanMissHold[],
+): PlanMissHold[] {
+  const working = input.upcoming
+    .filter((day) => day.date >= input.today)
+    .map((day) => toWorkingDay(day, input));
+  const reads = (hold: PlanMissHold, setId: string, to: number): boolean => {
+    const day = working.find((each) => each.day.sets.some((set) => set.id === setId));
+    if (isLongRunHold(hold)) {
+      const meters = day?.runMeters.get(setId);
+      return meters != null && Math.abs(meters - to) <= SAME_DISTANCE_METERS;
+    }
+    const weight = hold.unit === input.weightUnit ? day?.weights.get(setId) : undefined;
+    return weight != null && Math.abs(weight - to) <= SAME_LOAD_TOLERANCE;
+  };
+  return holds.map((hold) => ({
+    ...hold,
+    sets: hold.sets.filter((record) => reads(hold, record.setId, record.to)),
+  }));
 }

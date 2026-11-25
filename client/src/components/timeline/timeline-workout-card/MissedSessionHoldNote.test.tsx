@@ -37,6 +37,15 @@ describe("MissedSessionHoldNote", () => {
     );
   });
 
+  it("reads a held long run as a distance", () => {
+    const changes = [{ exercise: "long_run", kind: "hold" as const, from: 10, to: 9, unit: "km" }];
+    render(<MissedSessionHoldNote entry={entry({ aiInputsUsed: { missedSessionHold: { ...squatHold, changes } } })} />);
+
+    expect(screen.getByTestId("missed-session-hold-plan-1")).toHaveTextContent(
+      "Adjusted after the session you missed on Tue 13 Oct · Long Run: 10 → 9 km",
+    );
+  });
+
   it("names the first few lifts of a long list", () => {
     const changes = ["back_squat", "bench_press", "deadlift", "overhead_press", "bent_over_row"].map(
       (exercise) => ({ exercise, kind: "hold" as const, from: 60, to: 57.5, unit: "kg" }),
