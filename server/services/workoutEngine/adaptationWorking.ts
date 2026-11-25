@@ -420,18 +420,24 @@ function applyCap(
     const target =
       equivalentLoad(decision.load, decision.reps, repsOf(day, exercise)) *
       (1 + RESUME_RATE_PER_WEEK) ** weeks;
-    const cap = roundLoad(target, exercise, unit, decision.missedStep ? "nearest" : "down");
     const before = topWeight(day, exercise);
+    // Well above a step that was only missed: another exposure of the lift.
     if (decision.missedStep && before > target * (1 + MAX_STEP_ABOVE_MISS)) continue;
-    for (const set of setsOf(day, exercise)) {
-      if ((day.weights.get(set.id) ?? 0) <= cap || cap <= 0) continue;
-      day.weights.set(set.id, cap);
-      day.touchedSets.add(set.id);
-    }
+    lowerToCap(day, exercise, roundLoad(target, exercise, unit, decision.missedStep ? "nearest" : "down"));
     recordChange(day, exercise, decision.deload ? "deload" : "hold", before, unit);
     if (topWeight(day, exercise) !== before) changed.push(day);
   }
   return changed;
+}
+
+/** Bring every set of the lift above `cap` down to it; a set already under it stays. */
+function lowerToCap(day: WorkingDay, exercise: string, cap: number): void {
+  if (cap <= 0) return;
+  for (const set of setsOf(day, exercise)) {
+    if ((day.weights.get(set.id) ?? 0) <= cap) continue;
+    day.weights.set(set.id, cap);
+    day.touchedSets.add(set.id);
+  }
 }
 
 /** Ad-hoc work stronger than the plan's next session pulls the plan up to it. */

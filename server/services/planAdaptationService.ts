@@ -128,6 +128,21 @@ function missedKind(
 }
 
 /**
+ * Whether the adaptation follows a session that is not happening: one the plan
+ * leans on, as the athlete was shown it, in the plan's live stretch.
+ */
+function isFollowedSession(
+  row: AdaptationPlanDayRow,
+  date: string,
+  plan: Pick<TrainingPlan, "raceDate" | "retiredOn">,
+): boolean {
+  if (plan.retiredOn && date >= plan.retiredOn) return false;
+  if (deriveRaceDayOverride(date, plan.raceDate) !== null) return false;
+  const priority = resolveSessionPriority(row);
+  return priority === "key" || priority === "supporting";
+}
+
+/**
  * The plan's sessions the engine should follow as not done, and the ones it
  * was following that are back. Only sessions the plan leans on: key and
  * supporting ones, as the coach's own list of misses (collectRecentMisses).
@@ -153,10 +168,7 @@ function readMissedSessions(
       if (held.has(row.id)) returnedPlanDays.set(row.id, date);
       continue;
     }
-    if (plan.retiredOn && date >= plan.retiredOn) continue;
-    if (deriveRaceDayOverride(date, plan.raceDate) !== null) continue;
-    const priority = resolveSessionPriority(row);
-    if (priority !== "key" && priority !== "supporting") continue;
+    if (!isFollowedSession(row, date, plan)) continue;
     missed.push({
       planDayId: row.id,
       date,

@@ -150,7 +150,7 @@ async function sweepMissedPlanDaysInZone(tz: string, today: string): Promise<Swe
     .innerJoin(users, eq(users.id, trainingPlans.userId))
     .where(eq(users.userTimezone, tz));
 
-  const result = await db
+  return await db
     .update(planDays)
     // A let-go left behind on a planned day (logged, then the log deleted)
     // is not a decision about this miss, so the sweep clears it rather
@@ -182,7 +182,6 @@ async function sweepMissedPlanDaysInZone(tz: string, today: string): Promise<Swe
       focus: planDays.focus,
       mainWorkout: planDays.mainWorkout,
     });
-  return result;
 }
 
 /** What the sweep needs of a day it marked: enough to tell whether the plan leaned on it. */

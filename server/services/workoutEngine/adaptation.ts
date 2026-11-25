@@ -43,6 +43,7 @@ import type { CoachNoteInputs, PlanEngineState } from "@shared/schema";
 import type { WeightUnit } from "@shared/unitConversion";
 
 import type {
+  AdaptablePlanSet,
   AdaptationInput,
   AdaptationLog,
   AdaptationResult,
@@ -505,21 +506,27 @@ function buildInputs(day: WorkingDay, input: AdaptationInput, reason: string): C
   };
 }
 
+/** What the pass changed on one prescribed set: its load, its notes, a long run's distance; null for none. */
+function setUpdateFor(
+  day: WorkingDay,
+  set: AdaptablePlanSet,
+  input: AdaptationInput,
+): SetLoadUpdate | null {
+  const weight = day.touchedSets.has(set.id) ? day.weights.get(set.id) : undefined;
+  const notes = day.setNotes.get(set.id);
+  const meters = day.touchedRuns.has(set.id) ? day.runMeters.get(set.id) : undefined;
+  if (weight == null && notes == null && meters == null) return null;
+  return {
+    setId: set.id,
+    ...(weight == null ? {} : { weight, weightUnit: input.weightUnit }),
+    ...(notes == null ? {} : { notes }),
+    ...(meters == null ? {} : storedRunDistance(set, meters, input.distanceUnit)),
+  };
+}
+
 function toDayAdaptation(day: WorkingDay, input: AdaptationInput): DayAdaptation | null {
   if (day.changes.length === 0) return null;
-  const setUpdates: SetLoadUpdate[] = [];
-  for (const set of day.day.sets) {
-    const weight = day.touchedSets.has(set.id) ? day.weights.get(set.id) : undefined;
-    const notes = day.setNotes.get(set.id);
-    const meters = day.touchedRuns.has(set.id) ? day.runMeters.get(set.id) : undefined;
-    if (weight == null && notes == null && meters == null) continue;
-    setUpdates.push({
-      setId: set.id,
-      ...(weight == null ? {} : { weight, weightUnit: input.weightUnit }),
-      ...(notes == null ? {} : { notes }),
-      ...(meters == null ? {} : storedRunDistance(set, meters, input.distanceUnit)),
-    });
-  }
+  const setUpdates = day.day.sets.flatMap((set) => setUpdateFor(day, set, input) ?? []);
   const sentences = [...new Set(day.reasons)].map(
     (reason) => `${reason.charAt(0).toUpperCase()}${reason.slice(1)}.`,
   );

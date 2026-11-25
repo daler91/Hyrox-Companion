@@ -251,6 +251,13 @@ export interface MissRecord {
   readonly adapted: Set<string>;
   /** Holds that can still be taken back. */
   readonly holds: PlanMissHold[];
+  /**
+   * What a hold was taken back for this pass: lifts, and LONG_RUN. A later
+   * miss of the same one held nothing while the earlier hold stood (the plan
+   * already repeated its step), so it gets its say again — see
+   * holdMissedSessions.
+   */
+  readonly released: Set<string>;
 }
 
 /**
@@ -283,22 +290,73 @@ function firstHeldDate(hold: PlanMissHold, aheadDates: ReadonlyMap<string, strin
   return first;
 }
 
+/** What a pass knows when it settles the holds kept from earlier ones. */
+interface SettleContext {
+  readonly input: AdaptationInput;
+  /** The sessions still not happening on their day (missKey). */
+  readonly stillMissed: ReadonlySet<string>;
+  /** Held sessions that are sessions again, and the day each is now on. */
+  readonly returned: ReadonlyMap<string, string>;
+  /** Every set still ahead and its day. */
+  readonly aheadDates: ReadonlyMap<string, string>;
+}
+
 /**
- * Open the pass's record of missed sessions, or null when the caller gave
- * none to look at. Each hold kept from an earlier pass is settled here,
- * before any log is read, so a raise this pass builds on a restored load:
+ * What becomes of a hold: kept as it is; dropped with its loads left
+ * standing; or taken back, with the sentence that says why. `sessionBack`
+ * marks a hold whose session is in the plan again, whatever becomes of its
+ * loads: it counts afresh if it is missed again.
+ */
+type HoldFate =
+  | { readonly kind: "keep" | "drop"; readonly sessionBack?: boolean }
+  | { readonly kind: "release"; readonly reason: string; readonly sessionBack?: boolean };
+
+/** The coach note's sentence for a hold taken back: its session returned, or the step was done anyway. */
+function releaseReason(hold: PlanMissHold, today: string, why: "returned" | "done"): string {
+  const when = nearDayName(hold.missedOn, today);
+  const label = exerciseLabel(hold.exercise);
+  const planned = isLongRunHold(hold) ? "distance" : "load";
+  if (why === "returned") {
+    return `${when}'s session is no longer missed, so ${label} returns to its planned ${planned}`;
+  }
+  const did = isLongRunHold(hold) ? "have run long" : `have trained ${label}`;
+  return `you ${did} since ${when}'s session, so it returns to its planned ${planned}`;
+}
+
+/**
+ * Settle one hold kept from an earlier pass:
  *
  *   - its session is back in the plan ahead of the sessions held for it
  *     (moved to an earlier day, or logged late) → taken back;
  *   - its session is back, but after a session held for it → the loads
  *     stand: that session still comes before the missed step is done;
  *   - its day was deleted → dropped, nothing to take back;
- *   - the lift was trained anyway before any held session came up (the
- *     session done as a workout of its own) → taken back: the step was made up;
- *   - the lift was trained in a held session, or the miss is long ago → dropped
+ *   - the step was done anyway before any held session came up (the session
+ *     done as a workout of its own) → taken back: it was made up;
+ *   - the step was done in a held session, or the miss is long ago → dropped
  *     and the loads stand: the plan has moved on from the held load.
- *
- * A session that is back counts afresh if it is missed again.
+ */
+function settleHold(hold: PlanMissHold, ctx: SettleContext): HoldFate {
+  const { input } = ctx;
+  const firstHeld = firstHeldDate(hold, ctx.aheadDates);
+  const key = missKey({ planDayId: hold.planDayId, date: hold.missedOn });
+  if (!ctx.stillMissed.has(key)) {
+    const backOn = ctx.returned.get(hold.planDayId);
+    if (backOn === undefined) return { kind: "drop" };
+    if (firstHeld === null || backOn >= firstHeld) return { kind: "drop", sessionBack: true };
+    return { kind: "release", reason: releaseReason(hold, input.today, "returned"), sessionBack: true };
+  }
+  if (dayDiff(hold.missedOn, input.today) > MISS_HOLD_MAX_AGE_DAYS) return { kind: "drop" };
+  if (!doneSince(input, hold)) return { kind: "keep" };
+  if (firstHeld === null) return { kind: "drop" };
+  return { kind: "release", reason: releaseReason(hold, input.today, "done") };
+}
+
+/**
+ * Open the pass's record of missed sessions, or null when the caller gave
+ * none to look at. Each hold kept from an earlier pass is settled here
+ * (settleHold), before any log is read, so a raise this pass builds on a
+ * restored load.
  */
 export function openMissRecord(
   working: readonly WorkingDay[],
@@ -306,45 +364,44 @@ export function openMissRecord(
   state: PlanEngineState,
 ): MissRecord | null {
   if (!input.missed) return null;
-  const stillMissed = new Set(input.missed.map(missKey));
-  const returned = input.returnedPlanDays ?? new Map<string, string>();
-  const adapted = new Set(state.adaptedMisses ?? []);
-  const holds: PlanMissHold[] = [];
-  // Every set still ahead and its day, a day another stage rewrote this pass
-  // included: a held set missing from here belongs to a session gone by.
-  const aheadDates = new Map(
-    input.upcoming
-      .filter((day) => day.date >= input.today)
-      .flatMap((day) => day.sets.map((set) => [set.id, day.date] as const)),
-  );
+  const ctx: SettleContext = {
+    input,
+    stillMissed: new Set(input.missed.map(missKey)),
+    returned: input.returnedPlanDays ?? new Map<string, string>(),
+    // A day another stage rewrote this pass is still ahead: a held set
+    // missing from here belongs to a session gone by.
+    aheadDates: new Map(
+      input.upcoming
+        .filter((day) => day.date >= input.today)
+        .flatMap((day) => day.sets.map((set) => [set.id, day.date] as const)),
+    ),
+  };
+  const record: MissRecord = {
+    adapted: new Set(state.adaptedMisses ?? []),
+    holds: [],
+    released: new Set(),
+  };
   for (const hold of state.missHolds ?? []) {
-    const key = missKey({ planDayId: hold.planDayId, date: hold.missedOn });
-    const when = nearDayName(hold.missedOn, input.today);
-    const label = exerciseLabel(hold.exercise);
-    const planned = isLongRunHold(hold) ? "distance" : "load";
-    const firstHeld = firstHeldDate(hold, aheadDates);
-    if (!stillMissed.has(key)) {
-      const backOn = returned.get(hold.planDayId);
-      if (backOn === undefined) continue;
-      adapted.delete(key);
-      if (firstHeld !== null && backOn < firstHeld) {
-        const reason = `${when}'s session is no longer missed, so ${label} returns to its planned ${planned}`;
-        releaseHold(working, hold, input, reason);
-      }
-      continue;
+    const fate = settleHold(hold, ctx);
+    if (fate.sessionBack) {
+      record.adapted.delete(missKey({ planDayId: hold.planDayId, date: hold.missedOn }));
     }
-    if (dayDiff(hold.missedOn, input.today) > MISS_HOLD_MAX_AGE_DAYS) continue;
-    if (!doneSince(input, hold)) {
-      holds.push(hold);
-      continue;
-    }
-    if (firstHeld !== null) {
-      const did = isLongRunHold(hold) ? "have run long" : `have trained ${label}`;
-      const reason = `you ${did} since ${when}'s session, so it returns to its planned ${planned}`;
-      releaseHold(working, hold, input, reason);
+    if (fate.kind === "keep") record.holds.push(hold);
+    if (fate.kind === "release") {
+      releaseHold(working, hold, input, fate.reason);
+      record.released.add(hold.exercise);
     }
   }
-  return { adapted, holds };
+  return record;
+}
+
+/** Where a pass holds for one missed session, and which of its steps. */
+interface HoldScope {
+  readonly working: readonly WorkingDay[];
+  readonly input: AdaptationInput;
+  readonly horizonEnd: string;
+  /** Only these (lifts, LONG_RUN) when given; every step of the session otherwise. */
+  readonly only?: ReadonlySet<string>;
 }
 
 /**
@@ -353,18 +410,38 @@ export function openMissRecord(
  * trained since anyway (or a long run they ran), or for a deload week (no
  * step of the progression was lost).
  */
-function holdsFor(
-  working: readonly WorkingDay[],
-  miss: MissedPlanSession,
-  input: AdaptationInput,
-  horizonEnd: string,
-): PlanMissHold[] {
+function holdsFor(miss: MissedPlanSession, scope: HoldScope): PlanMissHold[] {
+  const { working, input, horizonEnd, only } = scope;
   if (planDeloadWeeks(input.plan.totalWeeks).includes(miss.weekNumber)) return [];
-  const lifts = missedLifts(miss, input.weightUnit).flatMap((lift) => {
-    if (trainedSince(input, lift.exercise, miss.date)) return [];
-    return holdMissedLift(working, miss, lift, input, horizonEnd) ?? [];
-  });
-  return [...lifts, ...[holdMissedLongRun(working, miss, input, horizonEnd) ?? []].flat()];
+  const wanted = (exercise: string): boolean => only === undefined || only.has(exercise);
+  const holds: PlanMissHold[] = [];
+  for (const lift of missedLifts(miss, input.weightUnit)) {
+    if (!wanted(lift.exercise) || trainedSince(input, lift.exercise, miss.date)) continue;
+    const hold = holdMissedLift(working, miss, lift, input, horizonEnd);
+    if (hold) holds.push(hold);
+  }
+  const longRun = wanted(LONG_RUN) ? holdMissedLongRun(working, miss, input, horizonEnd) : null;
+  if (longRun) holds.push(longRun);
+  return holds;
+}
+
+/**
+ * The steps of an already-counted miss that get their say again this pass:
+ * the ones a hold was just taken back for, where this miss holds nothing of
+ * its own. Two sessions missed with the same lift, read in one pass: the
+ * first lowers the sessions ahead, so the second finds the plan already
+ * repeating its step and holds nothing. Take the first hold back (its session
+ * returned) and, without this, the loads it restores climb straight past the
+ * step the second session still has not done.
+ */
+function stepsToHoldAgain(miss: MissedPlanSession, record: MissRecord): Set<string> {
+  const key = missKey(miss);
+  const held = new Set(
+    record.holds
+      .filter((hold) => missKey({ planDayId: hold.planDayId, date: hold.missedOn }) === key)
+      .map((hold) => hold.exercise),
+  );
+  return new Set([...record.released].filter((exercise) => !held.has(exercise)));
 }
 
 /**
@@ -386,10 +463,15 @@ export function holdMissedSessions(
   );
   const windowStart = addDaysToISODate(input.today, -MISSED_SESSION_WINDOW_DAYS);
   for (const miss of missed) {
-    const key = missKey(miss);
-    if (adapted.has(key) || miss.date < windowStart) continue;
-    adapted.add(key);
-    holds.push(...holdsFor(working, miss, input, horizonEnd));
+    if (miss.date < windowStart) continue;
+    const scope: HoldScope = { working, input, horizonEnd };
+    if (!adapted.has(missKey(miss))) {
+      adapted.add(missKey(miss));
+      holds.push(...holdsFor(miss, scope));
+      continue;
+    }
+    const again = stepsToHoldAgain(miss, record);
+    if (again.size > 0) holds.push(...holdsFor(miss, { ...scope, only: again }));
   }
   return {
     adaptedMisses: [...adapted].slice(-MAX_ADAPTED_MISSES),
@@ -411,7 +493,11 @@ export function previewMissHolds(input: AdaptationInput, miss: MissedPlanSession
   const working = input.upcoming
     .filter((day) => day.date >= input.today)
     .map((day) => toWorkingDay(day, input));
-  return holdsFor(working, miss, input, addDaysToISODate(input.today, LOAD_HORIZON_DAYS));
+  return holdsFor(miss, {
+    working,
+    input,
+    horizonEnd: addDaysToISODate(input.today, LOAD_HORIZON_DAYS),
+  });
 }
 
 /** What one hold does to the first session it reaches. */
@@ -461,7 +547,13 @@ export function describeMissHolds(
         const record = records.get(set.id);
         return record ? [{ set, record }] : [];
       });
-      const top = lowered.reduce((best, each) => (each.record.to > best.record.to ? each : best));
+      // The heaviest set the hold left on the day: what the session now tops out at.
+      const [first, ...rest] = lowered;
+      if (!first) return [];
+      let top = first;
+      for (const each of rest) {
+        if (each.record.to > top.record.to) top = each;
+      }
       const count = day.sets.filter((set) => liftKey(set) === hold.exercise).length;
       return [
         {

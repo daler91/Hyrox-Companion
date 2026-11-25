@@ -365,6 +365,97 @@ describe("adaptPlan — sessions that never happened", () => {
     expect(result.engineState.adaptedMisses).toEqual(["m1|2026-10-06", "m2|2026-10-13"]);
   });
 
+  describe("two sessions missed with the same lift", () => {
+    const earlier = missedDay({ planDayId: "m1", date: "2026-10-06", weight: 82.5 });
+    const later = missedDay({ planDayId: "m2", date: "2026-10-13", weight: 85 });
+
+    /** Both misses read in one pass: only the earlier one has anything to hold. */
+    function bothMissed() {
+      const first = adaptPlan(missInput({ missed: [earlier, later] }));
+      expect(first.engineState.missHolds?.map((hold) => hold.planDayId)).toEqual(["m1"]);
+      expect(weights(first, "n1")).toEqual([82.5, 82.5, 82.5, 82.5]);
+      return first;
+    }
+
+    it("does not climb past the later miss when the earlier one's hold is taken back", () => {
+      const first = bothMissed();
+      // The earlier session is folded in before next Tuesday; the later one is still missed.
+      const result = adaptPlan(
+        missInput({
+          plan: withState(first.engineState),
+          upcoming: after(first),
+          missed: [later],
+          returnedPlanDays: new Map([["m1", "2026-10-15"]]),
+        }),
+      );
+
+      // Back up from 82.5, but to the 85 kg the later session never did — not
+      // to the 87.5, 90 and 92.5 the plan first had.
+      expect(weights(result, "n1")).toEqual([85, 85, 85, 85]);
+      expect(weights(result, "n2")).toEqual([87.5, 87.5, 87.5, 87.5]);
+      expect(weights(result, "n3")).toEqual([90, 90, 90, 90]);
+      const day = result.days.find((entry) => entry.planDayId === "n1");
+      expect(day?.rationale).toContain("You missed Tuesday's Front Squat (4x6 @ 85 kg)");
+      expect(day?.inputsUsed.missedSessionHold).toMatchObject({ kind: "missed", date: "2026-10-13" });
+
+      // The later miss now has a hold of its own, so it can be taken back in turn.
+      expect(result.engineState.missHolds?.map((hold) => hold.planDayId)).toEqual(["m2"]);
+      const back = adaptPlan(
+        missInput({
+          plan: withState(result.engineState),
+          upcoming: after(result),
+          missed: [],
+          returnedPlanDays: new Map([["m2", "2026-10-16"]]),
+        }),
+      );
+      expect(weights(back, "n1")).toEqual([87.5, 87.5, 87.5, 87.5]);
+    });
+
+    it("holds at the later miss when the earlier one was made up in between", () => {
+      const first = bothMissed();
+      // The lift trained on the 8th: after the first miss, before the second.
+      const result = adaptPlan(
+        missInput({
+          plan: withState({ ...first.engineState, adaptedLogIds: ["between"] }),
+          upcoming: after(first),
+          missed: [earlier, later],
+          logs: [log("between", "2026-10-08")],
+          sets: squatSets("between", "2026-10-08", [6, 6, 6, 6], 82.5, null),
+        }),
+      );
+
+      expect(weights(result, "n1")).toEqual([85, 85, 85, 85]);
+      expect(result.engineState.missHolds?.map((hold) => hold.planDayId)).toEqual(["m2"]);
+    });
+
+    it("leaves a load the athlete edited alone when only the other lift's hold is taken back", () => {
+      // A hold taken back for the squat is no reason to look at any other lift again.
+      const first = bothMissed();
+      const edited = after(first).map((day) => ({
+        ...day,
+        sets: [
+          ...day.sets,
+          { id: `${day.id}-bench`, exerciseName: "bench_press", reps: 6, weight: 80, weightUnit: "kg" },
+        ],
+      }));
+      const withBench = {
+        ...later,
+        sets: [...later.sets, { id: "m2-bench", exerciseName: "bench_press", reps: 6, weight: 70, weightUnit: "kg" }],
+      };
+      const result = adaptPlan(
+        missInput({
+          plan: withState(first.engineState),
+          upcoming: edited,
+          missed: [withBench],
+          returnedPlanDays: new Map([["m1", "2026-10-15"]]),
+        }),
+      );
+
+      const n1 = result.days.find((entry) => entry.planDayId === "n1");
+      expect(n1?.setUpdates.map((update) => update.setId)).not.toContain("n1-bench");
+    });
+  });
+
   it("says skipped for a skip, and never calls a declared absence a miss", () => {
     const skipped = adaptPlan(missInput({ missed: [missedDay({ kind: "skipped" })] }));
     expect(skipped.days[0]?.rationale).toContain("You skipped Tuesday's Front Squat (4x6 @ 85 kg)");

@@ -140,18 +140,21 @@ const RECENT_MISS_DAYS = 14;
  * `today` is the athlete's own date. Without it nothing is too old to count,
  * and no miss says how long ago it was.
  */
+type MissThatMatters = TimelineEntry & { date: string; priority: "key" | "supporting" };
+
+/** A missed session the plan leaned on: key or supporting, never a rest day or an optional one. */
+function isMissThatMatters(entry: TimelineEntry): entry is MissThatMatters {
+  if (entry.status !== "missed" || !entry.date) return false;
+  return entry.priority === "key" || entry.priority === "supporting";
+}
+
 export function collectRecentMisses(
   timeline: TimelineEntry[],
   today?: string,
 ): NonNullable<TrainingContext["coachingInsights"]>["recentMisses"] {
   return timeline
-    .filter(
-      (entry): entry is TimelineEntry & { date: string; priority: "key" | "supporting" } =>
-        entry.status === "missed" &&
-        Boolean(entry.date) &&
-        (entry.priority === "key" || entry.priority === "supporting") &&
-        (today === undefined || dayDiff(entry.date, today) <= RECENT_MISS_DAYS),
-    )
+    .filter(isMissThatMatters)
+    .filter((entry) => today === undefined || dayDiff(entry.date, today) <= RECENT_MISS_DAYS)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, MAX_RECENT_MISSES)
     .map((entry) => ({

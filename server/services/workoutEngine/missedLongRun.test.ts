@@ -283,6 +283,28 @@ describe("adaptPlan — a missed long run", () => {
     expect(result.engineState.missHolds).toEqual([]);
   });
 
+  it("does not build past a later missed long run when the earlier one's hold is taken back", () => {
+    // Two Sundays missed, read in one pass: only the earlier has anything to hold.
+    const earlier = missedRun({ planDayId: "m1", date: "2026-10-04", km: 9 });
+    const later = missedRun({ planDayId: "m2", date: MISSED_ON, km: 9.5 });
+    const first = adaptPlan(runInput({ missed: [earlier, later] }));
+    expect(first.engineState.missHolds?.map((hold) => hold.planDayId)).toEqual(["m1"]);
+    expect(distances(first, "r1")).toEqual([9000]);
+
+    const result = adaptPlan(
+      runInput({
+        plan: withState(first.engineState),
+        upcoming: after(first),
+        missed: [later],
+        returnedPlanDays: new Map([["m1", "2026-10-16"]]),
+      }),
+    );
+
+    // Back up from 9 km, but to the 9.5 km still not run — not to the plan's 10.
+    expect(distances(result, "r1")).toEqual([9500]);
+    expect(result.engineState.missHolds?.map((hold) => hold.planDayId)).toEqual(["m2"]);
+  });
+
   it("restores only the rows that still read what the hold wrote", () => {
     const first = adaptPlan(runInput());
     const held = after(first);
