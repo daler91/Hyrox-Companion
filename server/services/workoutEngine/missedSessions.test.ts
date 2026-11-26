@@ -204,6 +204,36 @@ describe("adaptPlan — sessions that never happened", () => {
     expect(result.engineState.adaptedMisses).toEqual(["m|2026-10-13"]);
   });
 
+  it("lets go of a hold four weeks after the miss, and leaves its loads as they are", () => {
+    // A hold from an earlier pass still standing on a session that has not come up.
+    const late = squatDay("late", "2026-11-17", 10, 92.5);
+    const state: PlanEngineState = {
+      ...adaptPlan(missInput()).engineState,
+      missHolds: [
+        {
+          planDayId: "m",
+          missedOn: "2026-10-13",
+          exercise: "front_squat",
+          unit: "kg",
+          sets: late.sets.map((set) => ({ setId: set.id, from: 95, to: 92.5 })),
+        },
+      ],
+    };
+    const pass = (today: string) =>
+      adaptPlan(missInput({ plan: withState(state), upcoming: [late], today, now: `${today}T18:00:00.000Z` }));
+
+    // 28 days on, the session is still missed and the lift untrained: it stands.
+    const kept = pass("2026-11-10");
+    expect(kept.days).toEqual([]);
+    expect(kept.engineState.missHolds).toEqual(state.missHolds);
+
+    // A day later the hold is forgotten, without the held loads being put back.
+    const dropped = pass("2026-11-11");
+    expect(dropped.days).toEqual([]);
+    expect(dropped.engineState.missHolds).toEqual([]);
+    expect(dropped.engineState.adaptedMisses).toEqual(["m|2026-10-13"]);
+  });
+
   it("holds nothing for a lift the athlete trained anyway", () => {
     // An unplanned squat session on the day of the miss.
     const result = adaptPlan(
@@ -478,6 +508,51 @@ describe("adaptPlan — sessions that never happened", () => {
 
       expect(describeMissHolds(holds, NEXT)).toEqual([
         { exercise: "Front Squat", date: "2026-10-20", scheme: "4x6", from: 87.5, to: 85, unit: "kg" },
+      ]);
+    });
+
+    it("describes a session by the heaviest set the hold left on it", () => {
+      // A top set and two back-off sets, each lowered by a different amount.
+      const day = squatDay("w", "2026-10-20", 6, 90);
+      const [top, backOff, last, untouched] = day.sets;
+      const hold = {
+        planDayId: "m",
+        missedOn: "2026-10-13",
+        exercise: "front_squat",
+        unit: "kg",
+        sets: [
+          { setId: backOff?.id ?? "", from: 85, to: 80 },
+          { setId: top?.id ?? "", from: 90, to: 87.5 },
+          { setId: last?.id ?? "", from: 82.5, to: 80 },
+        ],
+      };
+
+      // Four squat sets on the day (one the hold never touched), topping out at 87.5.
+      expect(untouched).toBeDefined();
+      expect(describeMissHolds([hold], [day])).toEqual([
+        { exercise: "Front Squat", date: "2026-10-20", scheme: "4x6", from: 90, to: 87.5, unit: "kg" },
+      ]);
+    });
+
+    it("counts the sets when the top set has no rep target, and lists holds soonest first", () => {
+      const later = squatDay("z", "2026-10-27", 7, 90);
+      const sooner = {
+        ...squatDay("y", "2026-10-20", 6, 85),
+        sets: squatDay("y", "2026-10-20", 6, 85).sets.map((set) => ({ ...set, reps: null })),
+      };
+      const holdOn = (day: typeof later, from: number, to: number) => ({
+        planDayId: `m-${day.id}`,
+        missedOn: "2026-10-13",
+        exercise: "front_squat",
+        unit: "kg",
+        sets: day.sets.map((set) => ({ setId: set.id, from, to })),
+      });
+
+      expect(
+        describeMissHolds([holdOn(later, 90, 87.5), holdOn(sooner, 85, 82.5)], [later, sooner]),
+      ).toEqual([
+        { exercise: "Front Squat", date: "2026-10-20", scheme: "4 sets", from: 85, to: 82.5, unit: "kg" },
+        { exercise: "Front Squat", date: "2026-10-27", scheme: "4x6", from: 90, to: 87.5, unit: "kg" },
       ]);
     });
 

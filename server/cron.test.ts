@@ -751,6 +751,142 @@ describe("jobs on scheduleLockedCronJob with their own failure log", () => {
   });
 });
 
+describe("cleanup jobs on scheduleLockedCronJob", () => {
+  const storage = {
+    idempotency: { cleanupExpired: vi.fn() },
+    aiUsage: { deleteExpiredLogs: vi.fn() },
+    users: { resetStaleAutoCoaching: vi.fn() },
+    coaching: { pruneDanglingChunks: vi.fn() },
+  };
+  let scheduled: (expression: string) => () => Promise<void>;
+
+  beforeAll(() => {
+    mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
+    scheduled = startCronWith(storage);
+  });
+
+  beforeEach(() => {
+    storage.idempotency.cleanupExpired.mockReset();
+    storage.aiUsage.deleteExpiredLogs.mockReset();
+    storage.users.resetStaleAutoCoaching.mockReset();
+    storage.coaching.pruneDanglingChunks.mockReset();
+    vi.mocked(cleanupExpiredSharedRuntimeState).mockReset();
+    vi.mocked(logger.info).mockClear();
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(logger.error).mockClear();
+  });
+
+  it("logs how many rows each cleanup removed", async () => {
+    storage.idempotency.cleanupExpired.mockResolvedValueOnce(4);
+    storage.aiUsage.deleteExpiredLogs.mockResolvedValueOnce(2);
+    storage.coaching.pruneDanglingChunks.mockResolvedValueOnce({ pruned: 6 });
+    vi.mocked(cleanupExpiredSharedRuntimeState).mockResolvedValueOnce({ rateLimitBuckets: 3, runtimeCache: 0 });
+
+    await scheduled("30 3 * * *")();
+    await scheduled("0 4 * * *")();
+    await scheduled("50 3 * * *")();
+    await scheduled("15 4 * * *")();
+
+    expect(logger.info).toHaveBeenCalledWith({ context: "cron", deleted: 4 }, "Idempotency cleanup: removed 4 expired row(s)");
+    expect(logger.info).toHaveBeenCalledWith({ context: "cron", deleted: 2 }, "AI usage cleanup: removed 2 expired row(s)");
+    expect(logger.info).toHaveBeenCalledWith({ context: "cron", pruned: 6 }, "RAG chunk prune: removed 6 dangling chunk(s)");
+    expect(logger.info).toHaveBeenCalledWith(
+      { context: "cron", rateLimitBuckets: 3, runtimeCache: 0 },
+      "Shared runtime state cleanup complete",
+    );
+    // AI usage logs are kept for a week.
+    expect(storage.aiUsage.deleteExpiredLogs).toHaveBeenCalledWith(7);
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("warns when it resets orphaned isAutoCoaching flags", async () => {
+    storage.users.resetStaleAutoCoaching.mockResolvedValueOnce(2);
+
+    await scheduled("*/10 * * * *")();
+
+    expect(logger.warn).toHaveBeenCalledWith({ context: "cron", reset: 2 }, "Reset 2 orphaned isAutoCoaching flag(s)");
+  });
+
+  it("stays quiet on a tick that removes nothing", async () => {
+    storage.idempotency.cleanupExpired.mockResolvedValueOnce(0);
+    storage.aiUsage.deleteExpiredLogs.mockResolvedValueOnce(0);
+    storage.users.resetStaleAutoCoaching.mockResolvedValueOnce(0);
+    storage.coaching.pruneDanglingChunks.mockResolvedValueOnce({ pruned: 0 });
+    vi.mocked(cleanupExpiredSharedRuntimeState).mockResolvedValueOnce({ rateLimitBuckets: 0, runtimeCache: 0 });
+
+    await scheduled("30 3 * * *")();
+    await scheduled("0 4 * * *")();
+    await scheduled("*/10 * * * *")();
+    await scheduled("50 3 * * *")();
+    await scheduled("15 4 * * *")();
+
+    expect(logger.info).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+});
+
+describe("queue-depth telemetry cron job", () => {
+  let telemetryCallback: () => Promise<void>;
+
+  beforeAll(() => {
+    mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
+    const scheduled = startCronWith({});
+    telemetryCallback = scheduled("*/5 * * * *");
+  });
+
+  beforeEach(() => {
+    vi.mocked(queue.getQueues).mockReset();
+    vi.mocked(logger.info).mockClear();
+    vi.mocked(logger.warn).mockClear();
+  });
+
+  it("reports each queue's depth at info, reading a count pg-boss left out as zero", async () => {
+    vi.mocked(queue.getQueues).mockResolvedValueOnce([
+      { name: "auto-coach", queuedCount: 3, deferredCount: 100, activeCount: 5 },
+      { name: "embed" },
+    ] as never);
+
+    await telemetryCallback();
+
+    // Exactly at the thresholds (100 deferred, 5 active) is not yet a backlog.
+    expect(logger.info).toHaveBeenCalledWith(
+      { context: "queue-depth", queue: "auto-coach", deferred: 100, active: 5, queued: 3 },
+      "pg-boss queue depth",
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      { context: "queue-depth", queue: "embed", deferred: 0, active: 0, queued: 0 },
+      "pg-boss queue depth",
+    );
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("escalates only the backlogged queues to warn: over 100 deferred or over 5 active", async () => {
+    vi.mocked(queue.getQueues).mockResolvedValueOnce([
+      { name: "deferred-heavy", queuedCount: 1, deferredCount: 101, activeCount: 0 },
+      { name: "active-heavy", queuedCount: 0, deferredCount: 0, activeCount: 6 },
+      { name: "healthy", queuedCount: 500, deferredCount: 0, activeCount: 1 },
+    ] as never);
+
+    await telemetryCallback();
+
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith(
+      { context: "queue-depth", queue: "deferred-heavy", deferred: 101, active: 0, queued: 1 },
+      "pg-boss queue is backlogged",
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      { context: "queue-depth", queue: "active-heavy", deferred: 0, active: 6, queued: 0 },
+      "pg-boss queue is backlogged",
+    );
+    // A long queue of ready jobs alone is not what the alert is for.
+    expect(logger.info).toHaveBeenCalledWith(
+      { context: "queue-depth", queue: "healthy", deferred: 0, active: 1, queued: 500 },
+      "pg-boss queue depth",
+    );
+  });
+});
+
 describe("stopCron", () => {
   afterEach(() => {
     mocks.cronSchedule.mockReset();
