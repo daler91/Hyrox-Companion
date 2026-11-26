@@ -23,10 +23,7 @@ import { storage } from "../../storage";
 import type { PlanDayRecoveryWrite } from "../../storage/plans";
 import { deriveRaceDayOverride } from "../../storage/raceDayView";
 import { getLocalDateStrSafe } from "../../timezone";
-import {
-  enqueueAutoCoachInBackground,
-  enqueueMissedSessionCoachInBackground,
-} from "../autoCoachQueue";
+import { enqueueMissedSessionCoachInBackground } from "../autoCoachQueue";
 import { previewMissedSessionFollowOn } from "../planAdaptationService";
 import { recordPlanDayMove } from "../planDayMoves";
 import {
@@ -431,8 +428,9 @@ async function moveMissedSession(
     toDate: updated.scheduledDate,
     kind: action === "fold" ? "folded" : "shortened",
   });
-  // The upcoming schedule changed shape: let the coach look at it again.
-  enqueueAutoCoachInBackground(userId, "plan-day-rescheduled");
+  // The session is one again: the coach looks at the new shape of the week,
+  // and the pass gives the sessions held for it their loads back.
+  enqueueMissedSessionCoachInBackground(storage, userId, day.planId, "plan-day-rescheduled");
   return updated;
 }
 
@@ -489,8 +487,9 @@ async function undoMove(userId: string, day: PlanDay): Promise<PlanDay> {
     toDate: restored.scheduledDate,
     kind: "recovery_undone",
   });
-  // The upcoming schedule changed shape again.
-  enqueueAutoCoachInBackground(userId, "plan-day-rescheduled");
+  // Back on the day it was missed, and stored `missed`, so the sweep will
+  // never mark it: this pass is the one that holds the sessions after it again.
+  enqueueMissedSessionCoachInBackground(storage, userId, day.planId, "plan-day-rescheduled");
   return restored;
 }
 

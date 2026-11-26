@@ -38,6 +38,7 @@ vi.mock("../storage/planSlot", () => ({ planSlotForMove: vi.fn().mockResolvedVal
 vi.mock("./planDayMoves", () => ({ recordPlanDayMove: vi.fn() }));
 vi.mock("./autoCoachQueue", () => ({
   enqueueAutoCoachInBackground: vi.fn(),
+  enqueueCoachAfterPlanDayMove: vi.fn(),
   enqueueMissedSessionCoachInBackground: vi.fn(),
 }));
 vi.mock("./analyticsRouteCache", () => ({ invalidateAnalyticsCachesForUser: vi.fn() }));

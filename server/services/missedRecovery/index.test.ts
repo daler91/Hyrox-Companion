@@ -289,7 +289,12 @@ describe("applyMissedSessionRecovery", () => {
       },
     });
     expect(day).toMatchObject({ scheduledDate: "2026-09-24", recovery: "folded" });
-    expect(enqueueAutoCoachInBackground).toHaveBeenCalledWith(USER, "plan-day-rescheduled");
+    expect(enqueueMissedSessionCoachInBackground).toHaveBeenCalledWith(
+      expect.anything(),
+      USER,
+      "plan-1",
+      "plan-day-rescheduled",
+    );
     // The coach's record of plan changes lists it as the athlete's reschedule.
     expect(recordPlanDayMove).toHaveBeenCalledWith(USER, {
       planDayId: "pd-missed",
@@ -340,7 +345,7 @@ describe("applyMissedSessionRecovery", () => {
     mocks.getPlanDay.mockResolvedValue(shortened);
     // Sets 4 and 5 are gone now.
     mocks.getExerciseSetsByPlanDay.mockResolvedValue(intervalSets().slice(0, 3));
-    vi.mocked(enqueueAutoCoachInBackground).mockClear();
+    vi.mocked(enqueueMissedSessionCoachInBackground).mockClear();
 
     await applyMissedSessionRecovery(USER, "pd-missed", { action: "reopen" });
 
@@ -354,7 +359,12 @@ describe("applyMissedSessionRecovery", () => {
       recoveryUndo: null,
     });
     expect(undo.insertSets?.map((set) => set.id)).toEqual(["set-4", "set-5"]);
-    expect(enqueueAutoCoachInBackground).toHaveBeenCalledWith(USER, "plan-day-rescheduled");
+    expect(enqueueMissedSessionCoachInBackground).toHaveBeenCalledWith(
+      expect.anything(),
+      USER,
+      "plan-1",
+      "plan-day-rescheduled",
+    );
     expect(recordPlanDayMove).toHaveBeenLastCalledWith(USER, {
       planDayId: "pd-missed",
       fromDate: "2026-09-26",

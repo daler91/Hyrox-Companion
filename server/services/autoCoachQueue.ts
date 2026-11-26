@@ -1,3 +1,5 @@
+import { resolveSessionPriority } from "@shared/sessionPriority";
+
 import { logger } from "../logger";
 import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
 import type { IStorage } from "../storage";
@@ -99,6 +101,46 @@ export function enqueueMissedSessionCoachInBackground(
     // bearer:disable javascript_lang_logger_leak
     logger.error({ err, trigger }, "Failed to queue auto-coach job");
   });
+}
+
+/** What the queue reads of a plan day to tell whether the plan adaptation follows it. */
+interface FollowablePlanDay {
+  readonly planId: string | null;
+  readonly status: string | null;
+  readonly priority?: string | null;
+  readonly focus: string | null | undefined;
+  readonly mainWorkout: string | null | undefined;
+}
+
+/**
+ * Whether the plan adaptation is following this day as a session that is not
+ * happening: skipped or missed, and one the plan leans on (key or
+ * supporting). The sessions after such a day are held at its step.
+ */
+export function isFollowedAsNotHappening(day: FollowablePlanDay): boolean {
+  if (day.status !== "skipped" && day.status !== "missed") return false;
+  const priority = resolveSessionPriority(day);
+  return priority === "key" || priority === "supporting";
+}
+
+/**
+ * Queue the coach after a plan day moved to another date. `moved` is the day
+ * as it was before the move. When the adaptation was following it as not
+ * happening, the move has brought it back, and the pass is what gives the
+ * sessions after it their loads back: a refused send is retried like the
+ * other missed-session triggers. Any other move is the plain background
+ * trigger.
+ */
+export function enqueueCoachAfterPlanDayMove(
+  storage: IStorage,
+  userId: string,
+  moved: FollowablePlanDay | null | undefined,
+): void {
+  if (moved && isFollowedAsNotHappening(moved)) {
+    enqueueMissedSessionCoachInBackground(storage, userId, moved.planId, "plan-day-rescheduled");
+    return;
+  }
+  enqueueAutoCoachInBackground(userId, "plan-day-rescheduled");
 }
 
 /**

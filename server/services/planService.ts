@@ -16,6 +16,7 @@ import { invalidateAnalyticsCachesForUser } from "./analyticsRouteCache";
 import {
   type AutoCoachTrigger,
   enqueueAutoCoachInBackground,
+  enqueueCoachAfterPlanDayMove,
   enqueueMissedSessionCoachInBackground,
 } from "./autoCoachQueue";
 import {
@@ -31,9 +32,11 @@ import { recordPlanDayMove } from "./planDayMoves";
 // re-run the auto-coach and let its suggestions/review notes reflect the new
 // order. enqueueAutoCoachInBackground owns the singleton key and window that
 // collapse a burst of reschedules (dragging three workouts in a row) into one
-// job — see services/autoCoachQueue.
-function enqueueAutoCoachForReschedule(userId: string): void {
-  enqueueAutoCoachInBackground(userId, "plan-day-rescheduled");
+// job — see services/autoCoachQueue. `moved` is the day as it was: a missed or
+// skipped session the plan follows gets the retrying trigger
+// (enqueueCoachAfterPlanDayMove).
+function enqueueAutoCoachForReschedule(userId: string, moved: PlanDay | null): void {
+  enqueueCoachAfterPlanDayMove(storage, userId, moved);
 }
 
 interface CSVRow {
@@ -412,7 +415,7 @@ export async function updatePlanDayWithCleanup(
   if (result && existing && reschedulePending) {
     const oldDate = existing.scheduledDate ?? null;
     if (reschedulePending.nextDate !== oldDate) {
-      enqueueAutoCoachForReschedule(userId);
+      enqueueAutoCoachForReschedule(userId, existing);
     }
   }
 
@@ -817,7 +820,7 @@ async function reschedulePlanDay(dayId: string, scheduledDate: string | null | u
     reschedule &&
     reschedule.nextDate !== (existing.scheduledDate ?? null)
   ) {
-    enqueueAutoCoachForReschedule(userId);
+    enqueueAutoCoachForReschedule(userId, existing);
   }
   return result;
 }
@@ -837,7 +840,7 @@ export async function updatePlanDayStatus(
   // Transition path: do the read, transition check, optional log cleanup,
   // and write inside a single transaction so a concurrent cron or workout
   // mutation can't race the check and sneak through a forbidden from-state.
-  const { updatedDay, dateChanged, previousDate, reopened, skipChanged } = await db.transaction(async (tx) => {
+  const { updatedDay, dateChanged, previousDate, reopened, previousStatus } = await db.transaction(async (tx) => {
     const [current] = await tx
       .select({
         planId: planDays.planId,
@@ -905,8 +908,7 @@ export async function updatePlanDayStatus(
       dateChanged,
       previousDate: current.scheduledDate,
       reopened: leavesCompleted,
-      // Into a skip or back out of one: the session stopped, or started, counting.
-      skipChanged: (from === "skipped") !== (status === "skipped"),
+      previousStatus: from,
     };
   });
 
@@ -925,33 +927,47 @@ export async function updatePlanDayStatus(
     });
   }
 
-  const trigger = updatedDay
-    ? statusChangeCoachTrigger(updatedDay, { status, dateChanged, skipChanged })
+  const coach = updatedDay
+    ? statusChangeCoachTrigger(updatedDay, { from: previousStatus, status, dateChanged })
     : null;
-  if (trigger === "plan-day-skipped") {
-    // Nothing else brings the coach back after a skip, so a refused send is retried.
-    enqueueMissedSessionCoachInBackground(storage, userId, updatedDay?.planId, trigger);
-  } else if (trigger) {
-    enqueueAutoCoachInBackground(userId, trigger);
+  if (coach?.followed) {
+    // Nothing else brings the coach back for this, so a refused send is retried.
+    enqueueMissedSessionCoachInBackground(storage, userId, updatedDay?.planId, coach.trigger);
+  } else if (coach) {
+    enqueueAutoCoachInBackground(userId, coach.trigger);
   }
 
   return updatedDay;
 }
 
+/** Skipped or missed: a session that is not happening, which the plan adaptation follows. */
+function isNotHappening(status: PlanDayStatus): boolean {
+  return status === "skipped" || status === "missed";
+}
+
 /**
  * Why a status change sends the coach back over the plan, or null when it
- * need not look. A skip, and taking one back, changes what the sessions after
- * it should build from (the plan adaptation holds them at the skipped step) —
- * but only for a session the plan leans on: skipping an optional one, or a
- * rest day, leaves everything after it as it was.
+ * need not look.
+ *
+ * `followed` marks a change the plan adaptation follows: a session the plan
+ * leans on stopped, or started, being one that is not happening. Skipped,
+ * marked missed, or either taken back, it changes what the sessions after it
+ * should build from (they are held at the step that was not done). It is
+ * worked out apart from the label, because a skip can arrive with a new date
+ * or a completion and still be that change. Skipping an optional session, or
+ * a rest day, leaves everything after it as it was.
  */
 function statusChangeCoachTrigger(
   day: PlanDay,
-  change: { status: PlanDayStatus; dateChanged: boolean; skipChanged: boolean },
-): AutoCoachTrigger | null {
-  if (change.status === "completed") return "plan-day-completed";
-  if (change.dateChanged) return "plan-day-rescheduled";
-  if (!change.skipChanged) return null;
+  change: { from: PlanDayStatus; status: PlanDayStatus; dateChanged: boolean },
+): { trigger: AutoCoachTrigger; followed: boolean } | null {
   const priority = resolveSessionPriority(day);
-  return priority === "key" || priority === "supporting" ? "plan-day-skipped" : null;
+  const followed =
+    (priority === "key" || priority === "supporting") &&
+    isNotHappening(change.from) !== isNotHappening(change.status);
+  if (change.status === "completed") return { trigger: "plan-day-completed", followed };
+  if (change.dateChanged) return { trigger: "plan-day-rescheduled", followed };
+  if (!followed) return null;
+  const missed = change.from === "missed" || change.status === "missed";
+  return { trigger: missed ? "plan-day-missed" : "plan-day-skipped", followed };
 }

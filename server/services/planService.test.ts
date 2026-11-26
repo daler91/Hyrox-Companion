@@ -947,26 +947,24 @@ describe("updatePlanDayStatus — coach pass after a skip", () => {
     vi.clearAllMocks();
   });
 
-  it("sends the coach back over the plan when a session it leans on is skipped", async () => {
-    // The sessions after it should build from the skipped step, not past it.
-    statusChange("planned", createMockPlanDay({ id: dayId, status: "skipped" }));
-
-    await updatePlanDayStatus(dayId, { status: "skipped" }, userId);
-
-    expect(await coachTriggers()).toEqual(["plan-day-skipped"]);
-  });
-
-  it("leaves the plan for the hourly tick to retry when the queue refuses the pass", async () => {
-    // No log is on its way after a skip: a lost pass would leave the sessions
-    // after it climbing past the skipped step until the athlete next trains.
+  // A session the plan leans on stopped counting: the coach goes back over the
+  // plan, so the sessions after it build from that step, not past it. No log
+  // is on its way after any of these, so whatever the trigger is called, a
+  // pass the queue refuses leaves the plan for the hourly tick to retry.
+  it.each([
+    ["a skip", { status: "skipped" }, "plan-day-skipped"],
+    ["a day marked missed", { status: "missed" }, "plan-day-missed"],
+    ["a skip that also moves the day", { status: "skipped", scheduledDate: "2026-02-01" }, "plan-day-rescheduled"],
+  ] as const)("retries a pass the queue refuses for %s", async (_what, change, trigger) => {
     const { queue } = await import("../queue");
     vi.mocked(queue.sendDebounced).mockRejectedValueOnce(new Error("queue unavailable"));
-    statusChange("planned", createMockPlanDay({ id: dayId, planId: "plan-9", status: "skipped" }));
+    statusChange("planned", createMockPlanDay({ id: dayId, planId: "plan-9", status: change.status }));
 
-    await updatePlanDayStatus(dayId, { status: "skipped" }, userId);
-    await vi.waitFor(() =>
-      expect(storage.plans.keepAwaitingCoachAfterMiss).toHaveBeenCalledWith(["plan-9"]),
-    );
+    await updatePlanDayStatus(dayId, change, userId);
+
+    expect(await coachTriggers()).toEqual([trigger]);
+    const kept = storage.plans.keepAwaitingCoachAfterMiss;
+    await vi.waitFor(() => expect(kept).toHaveBeenCalledWith(["plan-9"]));
   });
 
   it("sends it again when the skip is taken back", async () => {

@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { logger } from "../logger";
 import { queue } from "../queue";
 import type { IStorage } from "../storage";
-import { enqueueMissedSessionCoachInBackground } from "./autoCoachQueue";
+import {
+  enqueueCoachAfterPlanDayMove,
+  enqueueMissedSessionCoachInBackground,
+  isFollowedAsNotHappening,
+} from "./autoCoachQueue";
 
 vi.mock("../queue", () => ({
   queue: { sendDebounced: vi.fn().mockResolvedValue("job-1") },
@@ -50,6 +54,44 @@ describe("enqueueMissedSessionCoachInBackground", () => {
     enqueueMissedSessionCoachInBackground(storage, "u1", null, "plan-day-skipped");
 
     await vi.waitFor(() => expect(logger.error).toHaveBeenCalledTimes(1));
+    expect(keepAwaitingCoachAfterMiss).not.toHaveBeenCalled();
+  });
+});
+
+describe("enqueueCoachAfterPlanDayMove", () => {
+  const keepAwaitingCoachAfterMiss = vi.fn();
+  const storage = { plans: { keepAwaitingCoachAfterMiss } } as unknown as IStorage;
+  const squats = { planId: "plan-1", priority: null, focus: "Lower Strength", mainWorkout: "Back Squat 5x5 @ 100 kg" };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(queue.sendDebounced).mockRejectedValue(new Error("queue unavailable"));
+  });
+
+  it("tells a session the plan follows as not happening from any other day", () => {
+    expect(isFollowedAsNotHappening({ ...squats, status: "missed" })).toBe(true);
+    expect(isFollowedAsNotHappening({ ...squats, status: "skipped" })).toBe(true);
+    expect(isFollowedAsNotHappening({ ...squats, status: "planned" })).toBe(false);
+    expect(isFollowedAsNotHappening({ ...squats, status: "missed", priority: "optional" })).toBe(false);
+    const restDay = { planId: "plan-1", status: "missed", focus: "Rest", mainWorkout: "Rest day" };
+    expect(isFollowedAsNotHappening(restDay)).toBe(false);
+  });
+
+  // The move brought the session back: the pass is what gives the sessions
+  // held for it their loads back.
+  it("retries a refused pass when the day that moved was a missed session", async () => {
+    enqueueCoachAfterPlanDayMove(storage, "u1", { ...squats, status: "missed" });
+
+    await vi.waitFor(() => expect(keepAwaitingCoachAfterMiss).toHaveBeenCalledWith(["plan-1"]));
+    const [, data] = vi.mocked(queue.sendDebounced).mock.calls[0];
+    expect(data).toEqual({ userId: "u1", trigger: "plan-day-rescheduled" });
+  });
+
+  it("only logs a refused pass for any other move", async () => {
+    enqueueCoachAfterPlanDayMove(storage, "u1", { ...squats, status: "planned" });
+    enqueueCoachAfterPlanDayMove(storage, "u1", null);
+
+    await vi.waitFor(() => expect(logger.error).toHaveBeenCalledTimes(2));
     expect(keepAwaitingCoachAfterMiss).not.toHaveBeenCalled();
   });
 });
