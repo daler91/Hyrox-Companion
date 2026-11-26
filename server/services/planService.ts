@@ -13,7 +13,11 @@ import { storage } from "../storage";
 import { planSlotForMove } from "../storage/planSlot";
 import { getLocalDateStrSafe } from "../timezone";
 import { invalidateAnalyticsCachesForUser } from "./analyticsRouteCache";
-import { type AutoCoachTrigger, enqueueAutoCoachInBackground } from "./autoCoachQueue";
+import {
+  type AutoCoachTrigger,
+  enqueueAutoCoachInBackground,
+  enqueueMissedSessionCoachInBackground,
+} from "./autoCoachQueue";
 import {
   isCorrectedRecordingSet,
   isUncorrectedRecordingSet,
@@ -924,7 +928,12 @@ export async function updatePlanDayStatus(
   const trigger = updatedDay
     ? statusChangeCoachTrigger(updatedDay, { status, dateChanged, skipChanged })
     : null;
-  if (trigger) enqueueAutoCoachInBackground(userId, trigger);
+  if (trigger === "plan-day-skipped") {
+    // Nothing else brings the coach back after a skip, so a refused send is retried.
+    enqueueMissedSessionCoachInBackground(storage, userId, updatedDay?.planId, trigger);
+  } else if (trigger) {
+    enqueueAutoCoachInBackground(userId, trigger);
+  }
 
   return updatedDay;
 }

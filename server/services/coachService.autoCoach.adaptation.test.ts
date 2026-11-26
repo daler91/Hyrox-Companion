@@ -46,6 +46,21 @@ function adaptation(planDayId: string): PlanAdaptation {
       adaptedLogIds: ["log-1"],
     },
     baseline: { engineStateUpdatedAt: null, dayFingerprints: new Map([[planDayId, "fp"]]) },
+    heldDayIds: new Set(),
+  };
+}
+
+/** A pass that changes nothing, on a plan whose `heldDayId` an earlier pass holds for a missed session. */
+function standingHold(heldDayId: string): PlanAdaptation {
+  return {
+    planId: "plan-1",
+    result: {
+      days: [],
+      engineState: { version: 1, runVdot: null, adaptedLogIds: [], updatedAt: "now" },
+      adaptedLogIds: [],
+    },
+    baseline: { engineStateUpdatedAt: null, dayFingerprints: new Map() },
+    heldDayIds: new Set([heldDayId]),
   };
 }
 
@@ -86,6 +101,50 @@ describe("triggerAutoCoach — plan adaptation", () => {
       .mock.calls.flatMap((call) => call[1].map((workout) => workout.id));
     expect(reviewed).not.toContain("day-1");
     expect(result.adjusted).toBe(2);
+  });
+
+  // The hold was written on an earlier pass, so the day is not one this pass
+  // changes. A rewrite would put its loads wherever the model likes, past the
+  // step that was not done, and delete the rows the hold is recorded against.
+  it("refuses the model's rewrite of a day still held for a missed session, and reviews it instead", async () => {
+    twoPlannedDays();
+    vi.mocked(computePlanAdaptation).mockResolvedValue(standingHold("day-1"));
+    vi.mocked(applyPlanAdaptation).mockResolvedValue(0);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      makeSuggestion({ workoutId: "day-1", recommendation: "Back Squat 5x5 @ 105 kg" }),
+      makeSuggestion({ workoutId: "day-2", recommendation: "Swap to intervals" }),
+    ] as never);
+    vi.mocked(generateReviewNotes).mockResolvedValue([
+      { workoutId: "day-1", note: "Held at last week's load after the missed session." },
+    ]);
+
+    await triggerAutoCoach("user-1");
+
+    const writes = vi.mocked(storage.plans).updatePlanDay.mock.calls;
+    // The other day's rewrite goes through; the held day gets only its note.
+    expect(writes.map(([dayId]) => dayId)).toEqual(["day-2", "day-1"]);
+    const held = writes.find(([dayId]) => dayId === "day-1")?.[1];
+    expect(held?.aiSource).toBe("review");
+    expect(held).not.toHaveProperty("mainWorkout");
+  });
+
+  it("still lets the model add a cue to a held day", async () => {
+    twoPlannedDays();
+    vi.mocked(computePlanAdaptation).mockResolvedValue(standingHold("day-1"));
+    vi.mocked(applyPlanAdaptation).mockResolvedValue(0);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      makeSuggestion({
+        workoutId: "day-1",
+        targetField: "notes",
+        action: "append",
+        recommendation: "Brace before each rep.",
+      }),
+    ] as never);
+
+    await triggerAutoCoach("user-1");
+
+    const cue = vi.mocked(storage.plans).updatePlanDay.mock.calls.find(([dayId]) => dayId === "day-1");
+    expect(cue?.[1].notes).toContain("Brace before each rep.");
   });
 
   it("still adapts the plan when the athlete's AI budget is spent", async () => {

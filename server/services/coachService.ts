@@ -36,11 +36,12 @@ import {
 } from "./aiSafety";
 import { checkAiBudget } from "./aiUsageService";
 import { lockAutoCoachWriteTargets } from "./autoCoachWriteGuard";
-import { buildCoachNoteInputs } from "./coachNoteInputs";
+import { buildCoachNoteInputs, carryPriorCoachState } from "./coachNoteInputs";
 import {
   adaptedDayIds,
   applyPlanAdaptation,
   computePlanAdaptation,
+  isReplaceOfHeldDay,
   type PlanAdaptation,
 } from "./planAdaptationService";
 import { retrieveCoachingText } from "./ragRetrieval";
@@ -80,45 +81,6 @@ function buildUpdateValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout)
     return appendCoachCue(existing, suggestion.recommendation);
   }
   return appendCoachBlock(existing, suggestion.recommendation);
-}
-
-/**
- * Preserve the day's own coach state across coach-note rewrites.
- * `aiInputsUsed` is rebuilt from scratch on every coach run (and by review
- * notes / manual refreshes), so without this the next write to a day wiped:
- *   - the "Originally planned" record captured when the day was converted;
- *   - lastFatigueReduction / lastModification, which the repeat-fatigue guard
- *     reads. A suppressed repeat cut gets a review note, so the guard erased
- *     its own record and the pass after that cut the day again.
- *     AI15 (CODEBASE_ANALYSIS_2026-10-03)
- *   - missedSessionHold, the card's "adjusted after a missed session" line.
- * Each is carried forward only when the fresh inputs don't set one — a genuine
- * new conversion or modification always wins. The plan adaptation's
- * buildInputs carries the same state.
- */
-function carryPriorCoachState(
-  next: CoachNoteInputs,
-  prior: CoachNoteInputs | null | undefined,
-): CoachNoteInputs {
-  if (!prior) return next;
-  return {
-    ...next,
-    ...(!next.replacedPrescription && prior.replacedPrescription
-      ? { replacedPrescription: prior.replacedPrescription }
-      : {}),
-    ...(!next.lastModification && prior.lastModification
-      ? { lastModification: prior.lastModification }
-      : {}),
-    ...(!next.lastFatigueReduction && prior.lastFatigueReduction
-      ? { lastFatigueReduction: prior.lastFatigueReduction }
-      : {}),
-    // Why the day's loads are held (a session before it never happened): the
-    // card says so until the engine next changes the day, and a review note
-    // written in between must not make it forget.
-    ...(!next.missedSessionHold && prior.missedSessionHold
-      ? { missedSessionHold: prior.missedSessionHold }
-      : {}),
-  };
 }
 
 interface PreparedSuggestion {
@@ -328,7 +290,10 @@ async function applyStructuredSuggestion(
     suggestionInputs = withReplacedPrescription(suggestionInputs, entry, retitled);
   }
 
-  suggestionInputs = carryPriorCoachState(suggestionInputs, entry.aiInputsUsed);
+  // Only the governor's replace reaches a held day: the model's is refused
+  // (isReplaceOfHeldDay).
+  const replaced = suggestion.action === "replace";
+  suggestionInputs = carryPriorCoachState(suggestionInputs, entry.aiInputsUsed, { replaced });
   updates.aiInputsUsed = suggestionInputs;
 
   await storage.plans.updatePlanDay(suggestion.workoutId, updates, userId, tx);
@@ -862,6 +827,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     const suggestions = safetyAdjustedSuggestions.filter(
       (suggestion) =>
         !stages.modifiedIds.has(suggestion.workoutId) &&
+        !isReplaceOfHeldDay(suggestion, stages.adaptation) &&
         !isRefusedStructuredReplace(suggestion, workoutMap.get(suggestion.workoutId)) &&
         !shouldSuppressRepeatedFatigueReduction(
           suggestion,

@@ -7,6 +7,7 @@ import {
   applyPlanAdaptation,
   computePlanAdaptation,
   isFatigued,
+  isReplaceOfHeldDay,
   type PlanAdaptation,
   previewMissedSessionFollowOn,
 } from "./planAdaptationService";
@@ -346,6 +347,22 @@ describe("computePlanAdaptation", () => {
       const still = await computePlanAdaptation("user-1", context, units, new Set());
       expect(still?.result.days).toEqual([]);
       expect(still?.result.engineState.missHolds).toEqual(held.missHolds);
+      // The pass changes nothing on the held day, so it is named apart: the
+      // model may add to it, never replace it.
+      expect(still?.heldDayIds).toEqual(new Set(["day-a"]));
+      const onHeldDay = { workoutId: "day-a", targetField: "mainWorkout", action: "replace" } as const;
+      expect(isReplaceOfHeldDay(onHeldDay, still ?? null)).toBe(true);
+      expect(isReplaceOfHeldDay({ ...onHeldDay, action: "append" }, still ?? null)).toBe(false);
+      expect(isReplaceOfHeldDay({ ...onHeldDay, targetField: "notes" }, still ?? null)).toBe(false);
+      expect(isReplaceOfHeldDay({ ...onHeldDay, workoutId: "day-b" }, still ?? null)).toBe(false);
+      expect(isReplaceOfHeldDay(onHeldDay, null)).toBe(false);
+
+      // A load the athlete has put back is theirs: nothing of the hold stands on the day.
+      plans.getActivePlan.mockResolvedValueOnce(plan);
+      plans.getPlanDaysForAdaptation.mockResolvedValueOnce([planDayRow()]);
+      plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([missedRow()]);
+      const edited = await computePlanAdaptation("user-1", context, units, new Set());
+      expect(edited?.heldDayIds).toEqual(new Set());
 
       // Folded to a day after the session that was held for it: that session
       // still comes before the missed step is done, so its load stands.
@@ -501,6 +518,7 @@ describe("applyPlanAdaptation", () => {
       adaptedLogIds: ["log-1"],
     },
     baseline: { engineStateUpdatedAt: null, dayFingerprints: new Map() },
+    heldDayIds: new Set(),
   };
 
   it("writes each day's note, text and sets, then the plan's engine state", async () => {

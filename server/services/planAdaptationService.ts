@@ -13,7 +13,7 @@
 import { type AbsenceRange, isDateExcused, isExcusedFromMissed } from "@shared/absence";
 import { addDaysToISODate } from "@shared/dateUtils";
 import { inSequence } from "@shared/inSequence";
-import type { TrainingPlan } from "@shared/schema";
+import type { TrainingPlan, WorkoutSuggestion } from "@shared/schema";
 import { resolveSessionPriority } from "@shared/sessionPriority";
 import { standardizeWeightUnit, type UnitPreferences } from "@shared/unitConversion";
 
@@ -27,6 +27,7 @@ import { fingerprintStoredPlanDay } from "./autoCoachWriteGuard";
 import {
   type AdaptablePlanDay,
   type AdaptablePlanSet,
+  type AdaptationInput,
   type AdaptationResult,
   adaptPlan,
   describeMissHolds,
@@ -54,6 +55,13 @@ export interface PlanAdaptation {
     readonly engineStateUpdatedAt: string | null;
     readonly dayFingerprints: ReadonlyMap<string, string | undefined>;
   };
+  /**
+   * The upcoming days whose loads (or long run) an earlier pass holds for a
+   * missed session and that still read what the hold wrote. This pass changes
+   * nothing on them, so they are not among `result.days`; the model's pass
+   * may add to them but not replace them (isReplaceOfHeldDay).
+   */
+  readonly heldDayIds: ReadonlySet<string>;
 }
 
 /** Nothing may rise while the load governor or the RPE trend reports fatigue. */
@@ -181,6 +189,22 @@ function readMissedSessions(
 }
 
 /**
+ * The upcoming days a hold kept from an earlier pass still stands on: one of
+ * their sets reads what the hold wrote. A hold written this pass is not
+ * counted: its days are among the ones the pass changes, which the model is
+ * kept off altogether (adaptedDayIds).
+ */
+function stillHeldDayIds(input: AdaptationInput, result: AdaptationResult): Set<string> {
+  const standing = standingMissHolds(input, result.engineState.missHolds ?? []);
+  const heldSets = new Set(standing.flatMap((hold) => hold.sets.map((record) => record.setId)));
+  return new Set(
+    input.upcoming
+      .filter((day) => day.sets.some((set) => heldSets.has(set.id)))
+      .map((day) => day.id),
+  );
+}
+
+/**
  * What the athlete's recent logs change in their active plan, or null when
  * there is no plan to adapt. Never throws: a failure here costs the athlete an
  * adaptation, not the coach run it is part of.
@@ -215,7 +239,7 @@ export async function computePlanAdaptation(
       today,
       annotations.map(({ startDate, endDate }) => ({ startDate, endDate })),
     );
-    const result = adaptPlan({
+    const input: AdaptationInput = {
       today,
       now: new Date().toISOString(),
       weightUnit: standardizeWeightUnit(unitPreferences.weightUnit),
@@ -232,7 +256,8 @@ export async function computePlanAdaptation(
       excludedDayIds,
       missed,
       returnedPlanDays,
-    });
+    };
+    const result = adaptPlan(input);
     const changed = new Set(result.days.map((day) => day.planDayId));
     const dayFingerprints = new Map(
       days
@@ -243,6 +268,7 @@ export async function computePlanAdaptation(
       planId: plan.id,
       result,
       baseline: { engineStateUpdatedAt: plan.engineState?.updatedAt ?? null, dayFingerprints },
+      heldDayIds: stillHeldDayIds(input, result),
     };
   } catch (err) {
     // Reads and a pure computation: a failed query or a bug reports its
@@ -350,6 +376,24 @@ export async function previewMissedSessionFollowOn(
 /** The plan days an adaptation will rewrite, so the model's pass leaves them alone. */
 export function adaptedDayIds(adaptation: PlanAdaptation | null): Set<string> {
   return new Set(adaptation?.result.days.map((day) => day.planDayId) ?? []);
+}
+
+/**
+ * Whether a model suggestion would replace the prescription of a day whose
+ * loads still stand held for a missed session. The hold was written on an
+ * earlier pass, so nothing else keeps the model off the day, and a replace
+ * swaps every set row: the loads go wherever the rewrite puts them, past the
+ * step that was not done, and the rows the hold is recorded against are
+ * gone, so it could never be taken back. The coach pass refuses these and
+ * reviews the day instead. A note, or an exercise appended, leaves the held
+ * sets as they are and goes through.
+ */
+export function isReplaceOfHeldDay(
+  suggestion: Pick<WorkoutSuggestion, "workoutId" | "action" | "targetField">,
+  adaptation: PlanAdaptation | null,
+): boolean {
+  if (suggestion.action !== "replace" || suggestion.targetField === "notes") return false;
+  return adaptation?.heldDayIds?.has(suggestion.workoutId) === true;
 }
 
 /**

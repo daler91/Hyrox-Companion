@@ -23,7 +23,10 @@ import { storage } from "../../storage";
 import type { PlanDayRecoveryWrite } from "../../storage/plans";
 import { deriveRaceDayOverride } from "../../storage/raceDayView";
 import { getLocalDateStrSafe } from "../../timezone";
-import { enqueueAutoCoachInBackground } from "../autoCoachQueue";
+import {
+  enqueueAutoCoachInBackground,
+  enqueueMissedSessionCoachInBackground,
+} from "../autoCoachQueue";
 import { previewMissedSessionFollowOn } from "../planAdaptationService";
 import { recordPlanDayMove } from "../planDayMoves";
 import {
@@ -536,8 +539,9 @@ export async function applyMissedSessionRecovery(
     // Settled as not happening: the coach follows it into the sessions still
     // ahead (the plan adaptation holds them at its step). The overnight sweep
     // does this for a day it marks, but a day let go before the sweep reached
-    // it is never one the sweep marks.
-    enqueueAutoCoachInBackground(userId, "missed-session-let-go");
+    // it is never one the sweep marks. A send the queue refuses is retried on
+    // the hourly tick.
+    enqueueMissedSessionCoachInBackground(storage, userId, letGo.planId, "missed-session-let-go");
     return letGo;
   }
   return moveMissedSession(userId, context, body.action, body.targetDate);

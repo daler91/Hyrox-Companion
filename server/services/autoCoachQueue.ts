@@ -79,6 +79,29 @@ export function enqueueAutoCoachInBackground(userId: string, trigger: AutoCoachT
 }
 
 /**
+ * The background variant for the passes a session that is not happening asks
+ * for from a request: a skip (or one taken back) and a missed session let go.
+ * For the other triggers a lost pass only leaves a note stale until the next
+ * log. Here no log is on its way: the pass is what moves the sessions after
+ * the miss, and nothing else brings the coach back. So a send the queue
+ * refuses also puts the plan on the missed-session sweep's waiting list, and
+ * the next hourly tick queues the pass (coachAthletesAfterMissedSweep), with
+ * that list's checks on the athlete.
+ */
+export function enqueueMissedSessionCoachInBackground(
+  storage: IStorage,
+  userId: string,
+  planId: string | null | undefined,
+  trigger: AutoCoachTrigger,
+): void {
+  enqueueAutoCoach(userId, trigger).catch((err) => {
+    if (planId) storage.plans.keepAwaitingCoachAfterMiss([planId]);
+    // bearer:disable javascript_lang_logger_leak
+    logger.error({ err, trigger }, "Failed to queue auto-coach job");
+  });
+}
+
+/**
  * Queue a coach pass for every athlete the missed-session sweep left waiting
  * for one (storage.plans.takeAthletesToCoachAfterMiss), so the sessions after
  * a missed one are looked at overnight rather than whenever the athlete next

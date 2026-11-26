@@ -24,7 +24,10 @@ vi.mock("../storage", () => ({
 }));
 vi.mock("../storage/planSlot", () => ({ planSlotForMove: vi.fn().mockResolvedValue({}) }));
 vi.mock("./planDayMoves", () => ({ recordPlanDayMove: vi.fn() }));
-vi.mock("./autoCoachQueue", () => ({ enqueueAutoCoachInBackground: vi.fn() }));
+vi.mock("./autoCoachQueue", () => ({
+  enqueueAutoCoachInBackground: vi.fn(),
+  enqueueMissedSessionCoachInBackground: vi.fn(),
+}));
 vi.mock("./deviceActivityLink", () => ({
   releaseStravaActivityInTx: vi.fn(),
   stripStravaActivityLabel: vi.fn(),

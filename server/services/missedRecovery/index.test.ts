@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay, createMockTrainingPlan } from "../../../test/factories";
 import type { storage } from "../../storage";
-import { enqueueAutoCoachInBackground } from "../autoCoachQueue";
+import {
+  enqueueAutoCoachInBackground,
+  enqueueMissedSessionCoachInBackground,
+} from "../autoCoachQueue";
 import { previewMissedSessionFollowOn } from "../planAdaptationService";
 import { recordPlanDayMove } from "../planDayMoves";
 import { applyMissedSessionRecovery, getMissedSessionRecoveryPreview } from "./index";
@@ -37,7 +40,10 @@ vi.mock("../../storage", () => ({
     },
   },
 }));
-vi.mock("../autoCoachQueue", () => ({ enqueueAutoCoachInBackground: vi.fn() }));
+vi.mock("../autoCoachQueue", () => ({
+  enqueueAutoCoachInBackground: vi.fn(),
+  enqueueMissedSessionCoachInBackground: vi.fn(),
+}));
 vi.mock("../planAdaptationService", () => ({ previewMissedSessionFollowOn: vi.fn() }));
 vi.mock("../planDayMoves", () => ({ recordPlanDayMove: vi.fn() }));
 
@@ -391,7 +397,14 @@ describe("applyMissedSessionRecovery", () => {
     // The sweep never marks a day that was let go before it got there, so
     // this is the pass that holds the next sessions at the missed step.
     await applyMissedSessionRecovery(USER, "pd-missed", { action: "let_go" });
-    expect(enqueueAutoCoachInBackground).toHaveBeenCalledExactlyOnceWith(USER, "missed-session-let-go");
+    // With the plan, so a send the queue refuses is retried on the hourly tick.
+    expect(enqueueMissedSessionCoachInBackground).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      USER,
+      "plan-1",
+      "missed-session-let-go",
+    );
+    expect(enqueueAutoCoachInBackground).not.toHaveBeenCalled();
   });
 
   it("does not send the coach when a let-go is refused or taken back", async () => {
@@ -404,6 +417,7 @@ describe("applyMissedSessionRecovery", () => {
     await applyMissedSessionRecovery(USER, "pd-missed", { action: "reopen" });
 
     expect(enqueueAutoCoachInBackground).not.toHaveBeenCalled();
+    expect(enqueueMissedSessionCoachInBackground).not.toHaveBeenCalled();
   });
 
   it("reopens only a decision the timeline shows", async () => {

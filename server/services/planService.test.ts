@@ -51,6 +51,7 @@ vi.mock("../storage", () => {
       getPlanDay: getPlanDayMock,
       updatePlanDay: updatePlanDayMock,
       deleteTrainingPlan: vi.fn(),
+      keepAwaitingCoachAfterMiss: vi.fn(),
     },
     users: {
       getUser: getUserMock,
@@ -953,6 +954,19 @@ describe("updatePlanDayStatus — coach pass after a skip", () => {
     await updatePlanDayStatus(dayId, { status: "skipped" }, userId);
 
     expect(await coachTriggers()).toEqual(["plan-day-skipped"]);
+  });
+
+  it("leaves the plan for the hourly tick to retry when the queue refuses the pass", async () => {
+    // No log is on its way after a skip: a lost pass would leave the sessions
+    // after it climbing past the skipped step until the athlete next trains.
+    const { queue } = await import("../queue");
+    vi.mocked(queue.sendDebounced).mockRejectedValueOnce(new Error("queue unavailable"));
+    statusChange("planned", createMockPlanDay({ id: dayId, planId: "plan-9", status: "skipped" }));
+
+    await updatePlanDayStatus(dayId, { status: "skipped" }, userId);
+    await vi.waitFor(() =>
+      expect(storage.plans.keepAwaitingCoachAfterMiss).toHaveBeenCalledWith(["plan-9"]),
+    );
   });
 
   it("sends it again when the skip is taken back", async () => {
