@@ -512,9 +512,9 @@ describe("adaptPlan — sessions that never happened", () => {
     });
 
     it("describes a session by the heaviest set the hold left on it", () => {
-      // A top set and two back-off sets, each lowered by a different amount.
+      // A lighter opener, then the top set and a back-off set, each lowered by a different amount.
       const day = squatDay("w", "2026-10-20", 6, 90);
-      const [top, backOff, last, untouched] = day.sets;
+      const [backOff, top, last, untouched] = day.sets;
       const hold = {
         planDayId: "m",
         missedOn: "2026-10-13",
