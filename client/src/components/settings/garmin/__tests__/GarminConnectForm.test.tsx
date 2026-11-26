@@ -77,4 +77,22 @@ describe("GarminConnectForm", () => {
     await user.click(screen.getByTestId("button-connect-garmin"));
     expect(props.onConnect).toHaveBeenCalledTimes(1);
   });
+
+  it("submits on Enter in the password field", async () => {
+    const user = userEvent.setup();
+    const props = renderForm({ email: "a@b.co", password: "pw" });
+
+    screen.getByTestId("input-garmin-password").focus();
+    await user.keyboard("{Enter}");
+    expect(props.onConnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not submit on Enter when fields are empty", async () => {
+    const user = userEvent.setup();
+    const props = renderForm();
+
+    screen.getByTestId("input-garmin-email").focus();
+    await user.keyboard("{Enter}");
+    expect(props.onConnect).not.toHaveBeenCalled();
+  });
 });
