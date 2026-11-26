@@ -118,7 +118,8 @@ describe("Continue to exercises while dictating (CL30)", () => {
 
     expect(parseNow).toHaveBeenCalledTimes(1);
     expect(parseNow).toHaveBeenCalledWith("3x10 back squat 5x5 deadlift");
-    expect(screen.getByTestId("confirm-step")).toBeInTheDocument();
+    // Steps 2 and 3 are lazy chunks, so the step paints once its import resolves.
+    expect(await screen.findByTestId("confirm-step")).toBeInTheDocument();
     expect(screen.getByTestId("free-text")).toHaveTextContent(/^3x10 back squat 5x5 deadlift$/);
   });
 
@@ -130,7 +131,7 @@ describe("Continue to exercises while dictating (CL30)", () => {
     recognition.end();
 
     expect(parseNow).toHaveBeenCalledWith("3x10 back squat 5x5 deadlift");
-    expect(screen.getByTestId("confirm-step")).toBeInTheDocument();
+    expect(await screen.findByTestId("confirm-step")).toBeInTheDocument();
   });
 
   it("cuts off a recogniser that never ends and parses the words on screen", async () => {
@@ -181,7 +182,7 @@ describe("Continue to exercises while dictating (CL30)", () => {
 
     expect(parseNow).toHaveBeenCalledTimes(1);
     expect(parseNow).toHaveBeenCalledWith("3x10 back squat 5x5 deadlift");
-    expect(screen.getByTestId("confirm-step")).toBeInTheDocument();
+    expect(await screen.findByTestId("confirm-step")).toBeInTheDocument();
   });
 
   it("advances straight away when no dictation is running", async () => {
@@ -194,6 +195,6 @@ describe("Continue to exercises while dictating (CL30)", () => {
     clickContinue();
 
     expect(parseNow).toHaveBeenCalledWith("3x10 back squat");
-    expect(screen.getByTestId("confirm-step")).toBeInTheDocument();
+    expect(await screen.findByTestId("confirm-step")).toBeInTheDocument();
   });
 });

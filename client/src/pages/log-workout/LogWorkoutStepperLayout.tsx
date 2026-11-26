@@ -1,5 +1,5 @@
-import { Check } from "lucide-react";
-import { useEffect, useLayoutEffect, useReducer, useRef } from "react";
+import { Check, Loader2 } from "lucide-react";
+import { Suspense, useEffect, useLayoutEffect, useReducer, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { PageContainer } from "@/components/ui/PageContainer";
@@ -7,6 +7,8 @@ import { WorkoutHeader } from "@/components/workout/WorkoutHeader";
 import type { useToast } from "@/hooks/use-toast";
 import type { WorkoutStep } from "@/hooks/useLogWorkoutDraft";
 import type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "@/lib/api";
+import { ignoreResult } from "@/lib/ignoreResult";
+import { lazyWithReload } from "@/lib/lazyWithReload";
 import { cn } from "@/lib/utils";
 
 import type {
@@ -16,8 +18,34 @@ import type {
   ComposerVoiceProps,
 } from "./sharedComposerProps";
 import { CaptureStep } from "./steps/CaptureStep";
-import { ConfirmStep } from "./steps/ConfirmStep";
-import { type ReflectFields, ReflectStep } from "./steps/ReflectStep";
+import type { ReflectFields } from "./steps/ReflectStep";
+
+// Steps 2 and 3 are code-split: only Capture is on screen when the page opens,
+// yet the static imports put the structure editor (StructureBlocksEditor,
+// WorkoutStructureEditor, useStructureDrafts), the plan-day picker and Radix
+// Select in the route's first download. Splitting them cut the /log route's
+// static closure from 344.7 kB / 108.0 kB gzip to 273.3 kB / 87.8 kB gzip.
+// The chunks are warmed as soon as the page mounts (see the effect below), so
+// "Continue" normally finds them loaded and the Suspense fallback is only seen
+// on a slow connection or when a restored draft opens straight on step 2 or 3.
+const loadConfirmStep = () =>
+  import("./steps/ConfirmStep").then((m) => ({ default: m.ConfirmStep }));
+const loadReflectStep = () =>
+  import("./steps/ReflectStep").then((m) => ({ default: m.ReflectStep }));
+const ConfirmStep = lazyWithReload(loadConfirmStep);
+const ReflectStep = lazyWithReload(loadReflectStep);
+
+function StepFallback() {
+  return (
+    <output
+      className="flex justify-center py-12 text-muted-foreground"
+      aria-label="Loading step"
+      data-testid="stepper-step-loading"
+    >
+      <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+    </output>
+  );
+}
 
 interface LogWorkoutStepperLayoutProps
   extends
@@ -95,6 +123,15 @@ export function LogWorkoutStepperLayout(props: LogWorkoutStepperLayoutProps) {
   // CaptureStep unmounting on step transitions. Returning to Capture after
   // an in-flight parse fails would otherwise reseed the ref to the edited
   // text and skip the next re-parse, persisting stale blocks (Codex P1).
+  // Fetch the later steps while the athlete is still describing the session,
+  // so stepping forward does not wait on the network. A failed warm-up is
+  // ignored here: the lazy component retries the import when it renders, and
+  // lazyWithReload handles a chunk a deploy removed.
+  useEffect(() => {
+    loadConfirmStep().catch(ignoreResult);
+    loadReflectStep().catch(ignoreResult);
+  }, []);
+
   const lastParsedTextRef = useRef("");
   const pendingParseTextRef = useRef<string | null>(null);
   useEffect(() => {
@@ -192,20 +229,22 @@ export function LogWorkoutStepperLayout(props: LogWorkoutStepperLayoutProps) {
           />
         )}
 
-        {step === 2 && (
-          <ConfirmStep
-            freeText={freeText}
-            {...exerciseTableProps}
-            onBack={() => setStep(1)}
-            onContinue={() => setStep(3)}
-          />
-        )}
+        <Suspense fallback={<StepFallback />}>
+          {step === 2 && (
+            <ConfirmStep
+              freeText={freeText}
+              {...exerciseTableProps}
+              onBack={() => setStep(1)}
+              onContinue={() => setStep(3)}
+            />
+          )}
 
-        {step === 3 && (
-          // The reflect fields ride through untouched, so they are spread from
-          // props wholesale instead of being relayed name by name.
-          <ReflectStep {...props} onBack={() => setStep(2)} />
-        )}
+          {step === 3 && (
+            // The reflect fields ride through untouched, so they are spread from
+            // props wholesale instead of being relayed name by name.
+            <ReflectStep {...props} onBack={() => setStep(2)} />
+          )}
+        </Suspense>
       </div>
     </PageContainer>
   );
