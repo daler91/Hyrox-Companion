@@ -9,7 +9,8 @@ import { priorAiContextParts } from "./priorAiContext";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-function dayOffsetLabel(diff: number): string {
+/** How far a date is from today, in words: "today", "in 3 days", "2 days ago". */
+export function dayOffsetLabel(diff: number): string {
   if (diff === 0) return "today";
   if (diff === 1) return "tomorrow";
   if (diff === -1) return "yesterday";

@@ -248,6 +248,16 @@ describe("suggestionService - failed coach calls", () => {
     await expect(call()).rejects.toBe(missingModel);
   });
 
+  it("asks review notes to acknowledge a recent miss instead of reassuring past it", async () => {
+    vi.mocked(generateJsonText).mockResolvedValue({ text: "[]", model: "m" });
+
+    await generateReviewNotes(context, upcoming);
+
+    const [request] = vi.mocked(generateJsonText).mock.calls[0];
+    expect(request.systemInstruction).toContain("When a RECENT MISSED SESSIONS section is present");
+    expect(request.systemInstruction).toContain("Never scold");
+  });
+
   it("makes no call when there is nothing upcoming", async () => {
     await expect(generateWorkoutSuggestions(context, [])).resolves.toEqual([]);
     await expect(generateReviewNotes(context, [])).resolves.toEqual([]);

@@ -65,6 +65,26 @@ export const updateTrainingPlanRetirementSchema = z.object({
 });
 
 /**
+ * What one session that never happened changed in the sessions after it: the
+ * loads of one lift, held at the missed step. Kept so the change can be taken
+ * back if the session returns (folded into another day, or logged late), and
+ * only where a set still reads what the hold wrote.
+ */
+export const planMissHoldSchema = z.object({
+  planDayId: z.string().max(255),
+  /** The day the session was scheduled on when it was missed. */
+  missedOn: z.string().max(10),
+  /** The lift, as the engine keys it (a custom lift is `custom:<label>`). */
+  exercise: z.string().max(300),
+  /** The weight unit `from` and `to` are in. */
+  unit: z.string().max(16),
+  sets: z
+    .array(z.object({ setId: z.string().max(255), from: z.number(), to: z.number() }))
+    .max(100),
+});
+export type PlanMissHold = z.infer<typeof planMissHoldSchema>;
+
+/**
  * `training_plans.engine_state`: what the workout engine remembers about a
  * plan between adaptation passes. Server-managed — no client schema accepts it.
  */
@@ -74,6 +94,14 @@ export const planEngineStateSchema = z.object({
   runVdot: z.number().positive().nullable(),
   /** Workout logs already adapted into the plan, oldest first and bounded, so each counts once. */
   adaptedLogIds: z.array(z.string().max(255)).max(200),
+  /**
+   * Sessions that never happened and are already reflected in the plan, as
+   * `<planDayId>|<date>`, oldest first and bounded, so each counts once. Absent
+   * on a state written before the engine read misses.
+   */
+  adaptedMisses: z.array(z.string().max(300)).max(200).optional(),
+  /** The holds those sessions left that can still be taken back. */
+  missHolds: z.array(planMissHoldSchema).max(50).optional(),
   updatedAt: z.string(),
 });
 export type PlanEngineState = z.infer<typeof planEngineStateSchema>;
@@ -177,6 +205,23 @@ export const progressionChangeSchema = z.object({
 });
 export type ProgressionChangeRecord = z.infer<typeof progressionChangeSchema>;
 
+/**
+ * The workout engine held this day's loads because a session before it never
+ * happened (server/services/workoutEngine/missedSessions.ts). Kept across the
+ * review notes written on the day afterwards, so its card can go on saying
+ * why it reads lighter than the plan first had it, until the engine next
+ * changes the day (a later log, or the hold taken back).
+ */
+export const coachMissedSessionHoldSchema = z.object({
+  /** How that session reads: missed, skipped by choice, or inside a declared absence. */
+  kind: z.enum(["missed", "skipped", "excused"]),
+  /** The day it was scheduled on (YYYY-MM-DD). */
+  date: z.string().max(10),
+  /** The loads held on this day because of it. */
+  changes: z.array(progressionChangeSchema).max(10),
+});
+export type CoachMissedSessionHold = z.infer<typeof coachMissedSessionHoldSchema>;
+
 const loadGovernorAcwrZoneSchema = z.enum([
   "insufficient_data",
   "undertraining",
@@ -238,6 +283,8 @@ export const coachNoteInputsSchema = z.object({
   lastModification: coachModificationMetadataSchema.optional(),
   // What an auto-progression changed on this day, when that is what the note is.
   progressionChanges: z.array(progressionChangeSchema).max(10).optional(),
+  // The session that never happened which this day's loads are held for.
+  missedSessionHold: coachMissedSessionHoldSchema.optional(),
   lastFatigueReduction: coachFatigueReductionMetadataSchema.optional(),
   // Snapshot of the prescription that was swapped out when the coach converted
   // this day to a different session (e.g. a strength day downshifted to a

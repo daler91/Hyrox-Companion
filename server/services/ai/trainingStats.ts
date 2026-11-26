@@ -1,3 +1,4 @@
+import { dayDiff } from "@shared/dateUtils";
 import { pooledRatio } from "@shared/ratio";
 import type { UnitPreferences } from "@shared/unitConversion";
 
@@ -122,23 +123,38 @@ export function collectRecentSkips(
 }
 
 const MAX_RECENT_MISSES = 5;
+/**
+ * A miss older than this no longer shapes the sessions ahead. The window the
+ * plan adaptation follows a missed session over (MISSED_SESSION_WINDOW_DAYS),
+ * so the coach and the plan's own holds talk about the same misses.
+ */
+const RECENT_MISS_DAYS = 14;
 
 /**
  * The missed sessions worth a coach's attention, newest first, capped: key
- * and supporting ones, with whether the athlete let each go. Optional misses
- * and rest days stay out — the plan never needed them — and a folded or
- * shortened session has moved to a later day, so it is not a miss any more.
+ * and supporting ones of the last two weeks, with whether the athlete let each
+ * go, whether they can still move it, and what it was. Optional misses and
+ * rest days stay out — the plan never needed them — and a folded or shortened
+ * session has moved to a later day, so it is not a miss any more.
+ *
+ * `today` is the athlete's own date. Without it nothing is too old to count,
+ * and no miss says how long ago it was.
  */
+type MissThatMatters = TimelineEntry & { date: string; priority: "key" | "supporting" };
+
+/** A missed session the plan leaned on: key or supporting, never a rest day or an optional one. */
+function isMissThatMatters(entry: TimelineEntry): entry is MissThatMatters {
+  if (entry.status !== "missed" || !entry.date) return false;
+  return entry.priority === "key" || entry.priority === "supporting";
+}
+
 export function collectRecentMisses(
   timeline: TimelineEntry[],
+  today?: string,
 ): NonNullable<TrainingContext["coachingInsights"]>["recentMisses"] {
   return timeline
-    .filter(
-      (entry): entry is TimelineEntry & { date: string; priority: "key" | "supporting" } =>
-        entry.status === "missed" &&
-        Boolean(entry.date) &&
-        (entry.priority === "key" || entry.priority === "supporting"),
-    )
+    .filter(isMissThatMatters)
+    .filter((entry) => today === undefined || dayDiff(entry.date, today) <= RECENT_MISS_DAYS)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, MAX_RECENT_MISSES)
     .map((entry) => ({
@@ -146,6 +162,9 @@ export function collectRecentMisses(
       focus: entry.focus || "",
       priority: entry.priority,
       decision: entry.recovery === "let_go" ? "let_go" : "undecided",
+      movable: entry.recoverable === true,
+      ...(today === undefined ? {} : { daysAgo: dayDiff(entry.date, today) }),
+      ...(entry.mainWorkout ? { mainWorkout: entry.mainWorkout } : {}),
     }));
 }
 

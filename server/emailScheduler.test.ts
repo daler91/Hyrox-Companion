@@ -18,7 +18,9 @@ import type { IStorage } from './storage';
 vi.mock('./queue', () => ({
   queue: {
     send: vi.fn().mockResolvedValue(undefined),
+    sendDebounced: vi.fn().mockResolvedValue(null),
   },
+  DEFAULT_JOB_OPTIONS: {},
   sendJob: vi.fn().mockResolvedValue(undefined),
   sendJobNoRetry: vi.fn().mockResolvedValue(undefined),
 }));
@@ -109,7 +111,11 @@ describe('runEmailCronJob', () => {
     vi.setSystemTime(new Date('2023-10-16T07:00:00Z'));
 
     mockStorage = {
-      plans: { markMissedPlanDays: vi.fn().mockResolvedValue(0) },
+      plans: {
+        markMissedPlanDays: vi.fn().mockResolvedValue(0),
+        takeAthletesToCoachAfterMiss: vi.fn().mockResolvedValue([]),
+        keepAwaitingCoachAfterMiss: vi.fn(),
+      },
       users: {
         getUsersWithEmailNotifications: vi.fn().mockResolvedValue([
           makeMockUser({ id: 1, email: 'test@example.com' }),
@@ -133,6 +139,60 @@ describe('runEmailCronJob', () => {
     expect(result.emailsSent).toBe(2);
     expect(sendJobNoRetry).toHaveBeenCalledWith('send-weekly-summary', { userId: 1 });
     expect(sendJobNoRetry).toHaveBeenCalledWith('send-missed-reminder', { userId: 1 });
+  });
+
+  it('sends the coach over the plans that lost a session to the sweep, with nobody to email', async () => {
+    const { queue } = await import('./queue');
+    // The sweep marked nothing this tick: these are left from the boot-time
+    // sweep, which runs before the queue is up.
+    mockStorage.plans.takeAthletesToCoachAfterMiss = vi.fn().mockResolvedValue([
+      { userId: 'u1', planIds: ['plan-1'] },
+      { userId: 'u2', planIds: ['plan-2'] },
+    ]);
+    mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([]);
+
+    const result = await runEmailCronJob(mockStorage);
+
+    expect(result.usersChecked).toBe(0);
+    expect(vi.mocked(queue.sendDebounced).mock.calls.map(([name, data]) => [name, data])).toEqual([
+      ['auto-coach', { userId: 'u1', trigger: 'plan-day-missed' }],
+      ['auto-coach', { userId: 'u2', trigger: 'plan-day-missed' }],
+    ]);
+    expect(mockStorage.plans.keepAwaitingCoachAfterMiss).not.toHaveBeenCalled();
+  });
+
+  it('keeps an athlete for the next tick when the queue refuses their coach pass', async () => {
+    const { queue } = await import('./queue');
+    const { logger } = await import('./logger');
+    mockStorage.plans.takeAthletesToCoachAfterMiss = vi.fn().mockResolvedValue([
+      { userId: 'u1', planIds: ['plan-1', 'plan-1b'] },
+      { userId: 'u2', planIds: ['plan-2'] },
+    ]);
+    const refused = new Error('queue unavailable');
+    vi.mocked(queue.sendDebounced).mockRejectedValueOnce(refused);
+
+    const result = await runEmailCronJob(mockStorage);
+
+    // Only u1's plans go back; u2's pass was queued, and the emails still went.
+    expect(vi.mocked(mockStorage.plans.keepAwaitingCoachAfterMiss).mock.calls).toEqual([
+      [['plan-1', 'plan-1b']],
+    ]);
+    expect(queue.sendDebounced).toHaveBeenCalledTimes(2);
+    expect(logger.error).toHaveBeenCalledWith(
+      { err: refused, trigger: 'plan-day-missed' },
+      'Failed to queue auto-coach job',
+    );
+    expect(result.emailsSent).toBe(2);
+  });
+
+  it('still sends its emails when the coach hand-off fails', async () => {
+    const { sendJobNoRetry } = await import('./queue');
+    mockStorage.plans.takeAthletesToCoachAfterMiss = vi.fn().mockRejectedValue(new Error('db down'));
+
+    const result = await runEmailCronJob(mockStorage);
+
+    expect(result.emailsSent).toBe(2);
+    expect(sendJobNoRetry).toHaveBeenCalledWith('send-weekly-summary', { userId: 1 });
   });
 
   it('enqueues a MAF test reminder for users whose baseline test is due', async () => {
@@ -862,7 +922,11 @@ describe('runEmailCronJob resilience', () => {
     vi.setSystemTime(new Date('2023-10-17T07:00:00Z'));
     const { sendJobNoRetry } = await import('./queue');
     const storage = {
-      plans: { markMissedPlanDays: vi.fn().mockResolvedValue(0) },
+      plans: {
+        markMissedPlanDays: vi.fn().mockResolvedValue(0),
+        takeAthletesToCoachAfterMiss: vi.fn().mockResolvedValue([]),
+        keepAwaitingCoachAfterMiss: vi.fn(),
+      },
       users: {
         getUsersWithEmailNotifications: vi.fn().mockResolvedValue([
           makeMockUser({ id: 'broken', email: 'b@example.com', userTimezone: 'Not/AZone' }),

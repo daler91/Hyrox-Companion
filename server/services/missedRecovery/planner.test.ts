@@ -141,6 +141,77 @@ describe("planMissedSessionRecovery", () => {
     ]);
   });
 
+  describe("what staying missed changes next", () => {
+    const squat = { exercise: "Back Squat", date: "2026-09-29", scheme: "5x5", from: 102.5, to: 100, unit: "kg" };
+
+    it("says which lift repeats the missed step, in which session, before any coach pass", () => {
+      const preview = planMissedSessionRecovery(
+        input({
+          missed: missed({
+            followOn: {
+              applied: false,
+              changes: [squat, { ...squat, exercise: "Bench Press", date: "2026-09-25", scheme: "4x6", from: 72.5, to: 70 }],
+            },
+          }),
+        }),
+      );
+
+      expect(preview.letGo.impact.followOn).toEqual([
+        "Tuesday's Back Squat will repeat 5x5 @ 100 kg instead of climbing to 102.5 kg.",
+        "Tomorrow's Bench Press will repeat 4x6 @ 70 kg instead of climbing to 72.5 kg.",
+        "The sessions after that follow one step behind.",
+      ]);
+      // Folding or shortening brings the session back: nothing is held for those.
+      expect(preview.fold.targets.every((target) => target.impact.followOn === undefined)).toBe(true);
+      expect(preview.shorten.targets.every((target) => target.impact.followOn === undefined)).toBe(true);
+    });
+
+    it("says the plan already reads that way once a pass has followed the miss", () => {
+      const preview = planMissedSessionRecovery(
+        input({ missed: missed({ followOn: { applied: true, changes: [squat] } }) }),
+      );
+
+      expect(preview.letGo.impact.followOn).toEqual([
+        "Tuesday's Back Squat stays at 5x5 @ 100 kg instead of 102.5 kg.",
+        "The sessions after that follow one step behind.",
+      ]);
+    });
+
+    it("reads a long run as a distance, not as sets and reps", () => {
+      const longRun = { exercise: "Long Run", date: "2026-09-27", scheme: "", from: 10, to: 9, unit: "km" };
+      const before = planMissedSessionRecovery(
+        input({ missed: missed({ followOn: { applied: false, changes: [longRun] } }) }),
+      );
+      expect(before.letGo.impact.followOn?.at(0)).toBe(
+        "Sunday's Long Run will repeat 9 km instead of climbing to 10 km.",
+      );
+
+      const after = planMissedSessionRecovery(
+        input({ missed: missed({ followOn: { applied: true, changes: [longRun] } }) }),
+      );
+      expect(after.letGo.impact.followOn?.at(0)).toBe("Sunday's Long Run stays at 9 km instead of 10 km.");
+    });
+
+    it("names the first few lifts of a long session", () => {
+      const many = ["Back Squat", "Bench Press", "Deadlift", "Overhead Press", "Bent Over Row", "Hip Thrust"].map(
+        (exercise) => ({ ...squat, exercise }),
+      );
+      const preview = planMissedSessionRecovery(
+        input({ missed: missed({ followOn: { applied: false, changes: many } }) }),
+      );
+
+      expect(preview.letGo.impact.followOn).toHaveLength(5);
+    });
+
+    it("says nothing when nothing is held, or the plan is not adapted at all", () => {
+      const nothingHeld = planMissedSessionRecovery(
+        input({ missed: missed({ followOn: { applied: false, changes: [] } }) }),
+      );
+      expect(nothingHeld.letGo.impact).not.toHaveProperty("followOn");
+      expect(planMissedSessionRecovery(input()).letGo.impact).not.toHaveProperty("followOn");
+    });
+  });
+
   it("shows what letting it go costs the week", () => {
     const preview = planMissedSessionRecovery(
       input({ sessions: [session("2026-09-27", "Long run", { priority: "key", durationMin: 90, rpe: 4 })] }),
@@ -149,7 +220,7 @@ describe("planMissedSessionRecovery", () => {
     const { impact } = preview.letGo;
     expect(impact.keptFraction).toBe(0);
     expect(impact.day).toBeNull();
-    expect(impact.summary).toBe("Threshold run stays missed, and the rest of the plan carries on as it is.");
+    expect(impact.summary).toBe("Threshold run stays missed, and no session moves to make up for it.");
     expect(impact.weeks).toEqual([
       {
         weekStart: "2026-09-21",

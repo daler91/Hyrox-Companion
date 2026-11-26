@@ -51,6 +51,7 @@ vi.mock("../storage", () => {
       getPlanDay: getPlanDayMock,
       updatePlanDay: updatePlanDayMock,
       deleteTrainingPlan: vi.fn(),
+      keepAwaitingCoachAfterMiss: vi.fn(),
     },
     users: {
       getUser: getUserMock,
@@ -909,6 +910,86 @@ describe("planService — moving a missed session", () => {
     await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-28" }, userId);
 
     expect(recordPlanDayMoveMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("updatePlanDayStatus — coach pass after a skip", () => {
+  const dayId = "test-day-id";
+  const userId = "test-user-id";
+
+  /** The two statements a status change runs: the locked read of the day, then the write. */
+  function statusChange(from: string, written: ReturnType<typeof createMockPlanDay>) {
+    const tx = {
+      select: vi.fn().mockReturnValue({
+        from: () => ({
+          innerJoin: () => ({
+            where: () => ({ for: vi.fn().mockResolvedValue([{ status: from }]) }),
+          }),
+        }),
+      }),
+      update: vi.fn().mockReturnValue({
+        set: () => ({ where: () => ({ returning: vi.fn().mockResolvedValue([written]) }) }),
+      }),
+    };
+    transactionMock.mockImplementation(async (callback) =>
+      callback(tx as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0]),
+    );
+  }
+
+  async function coachTriggers(): Promise<unknown[]> {
+    const { queue } = await import("../queue");
+    return vi
+      .mocked(queue.sendDebounced)
+      .mock.calls.map(([, data]) => (data as { trigger?: string }).trigger);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // A session the plan leans on stopped counting: the coach goes back over the
+  // plan, so the sessions after it build from that step, not past it. No log
+  // is on its way after any of these, so whatever the trigger is called, a
+  // pass the queue refuses leaves the plan for the hourly tick to retry.
+  it.each([
+    ["a skip", { status: "skipped" }, "plan-day-skipped"],
+    ["a day marked missed", { status: "missed" }, "plan-day-missed"],
+    ["a skip that also moves the day", { status: "skipped", scheduledDate: "2026-02-01" }, "plan-day-rescheduled"],
+  ] as const)("retries a pass the queue refuses for %s", async (_what, change, trigger) => {
+    const { queue } = await import("../queue");
+    vi.mocked(queue.sendDebounced).mockRejectedValueOnce(new Error("queue unavailable"));
+    statusChange("planned", createMockPlanDay({ id: dayId, planId: "plan-9", status: change.status }));
+
+    await updatePlanDayStatus(dayId, change, userId);
+
+    expect(await coachTriggers()).toEqual([trigger]);
+    const kept = storage.plans.keepAwaitingCoachAfterMiss;
+    await vi.waitFor(() => expect(kept).toHaveBeenCalledWith(["plan-9"]));
+  });
+
+  it("sends it again when the skip is taken back", async () => {
+    statusChange("skipped", createMockPlanDay({ id: dayId, status: "planned" }));
+
+    await updatePlanDayStatus(dayId, { status: "planned" }, userId);
+
+    expect(await coachTriggers()).toEqual(["plan-day-skipped"]);
+  });
+
+  it("does not for an optional session, a rest day, or a skip that was already one", async () => {
+    statusChange("planned", createMockPlanDay({ id: dayId, status: "skipped", priority: "optional" }));
+    await updatePlanDayStatus(dayId, { status: "skipped" }, userId);
+
+    statusChange(
+      "planned",
+      createMockPlanDay({ id: dayId, status: "skipped", focus: "Rest", mainWorkout: "Rest day" }),
+    );
+    await updatePlanDayStatus(dayId, { status: "skipped" }, userId);
+
+    // Only the reason changed: the session was not counting before either.
+    statusChange("skipped", createMockPlanDay({ id: dayId, status: "skipped" }));
+    await updatePlanDayStatus(dayId, { status: "skipped", skipReason: "ill" }, userId);
+
+    expect(await coachTriggers()).toEqual([]);
   });
 });
 

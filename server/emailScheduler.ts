@@ -30,6 +30,7 @@ import { type PushPayload,sendPushToUser } from "./pushNotifications";
 import { sendJobNoRetry } from "./queue";
 import { calculateStreak } from "./routeUtils";
 import { calculatePersonalRecords, countPersonalRecordsInRange } from "./services/analyticsService";
+import { coachAthletesAfterMissedSweep } from "./services/autoCoachQueue";
 import { getLocalMondayWeekBoundaries } from "./services/weeklyProgress";
 import { buildWeeklyReview } from "./services/weeklyReviewService";
 import type { IStorage } from "./storage";
@@ -636,6 +637,14 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
       // A count only.
       // bearer:disable javascript_lang_logger_leak
       logger.info({ context: "email" }, `Marked ${markedMissed} past planned day(s) as missed`);
+    }
+    // Every tick, not only one that marked something: the boot-time sweep runs
+    // before the queue is up and leaves its athletes for the first tick.
+    const coached = await coachAthletesAfterMissedSweep(storage);
+    if (coached > 0) {
+      // A count only.
+      // bearer:disable javascript_lang_logger_leak
+      logger.info({ context: "email" }, `Queued ${coached} coach pass(es) after missed sessions`);
     }
     if (usersToCheck.length === 0 && dueMafUsers.length === 0) {
       return { usersChecked: 0, emailsSent: 0, details: ["No users with email notifications or due MAF tests"] };

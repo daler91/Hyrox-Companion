@@ -103,6 +103,9 @@
                   "tone": "info",
                   "message": "sample text"
                 }
+              ],
+              "followOn": [
+                "sample text"
               ]
             }
           }
@@ -149,6 +152,9 @@
                   "tone": "info",
                   "message": "sample text"
                 }
+              ],
+              "followOn": [
+                "sample text"
               ]
             }
           }
@@ -190,6 +196,9 @@
               "tone": "info",
               "message": "sample text"
             }
+          ],
+          "followOn": [
+            "sample text"
           ]
         }
       }
@@ -272,6 +281,9 @@
                   }
                 }
               ],
+              "followOn": [
+                "sample text"
+              ],
               "zzPropertyFromANewerServer": {
                 "added": true
               }
@@ -339,6 +351,9 @@
                   }
                 }
               ],
+              "followOn": [
+                "sample text"
+              ],
               "zzPropertyFromANewerServer": {
                 "added": true
               }
@@ -400,6 +415,9 @@
                 "added": true
               }
             }
+          ],
+          "followOn": [
+            "sample text"
           ],
           "zzPropertyFromANewerServer": {
             "added": true

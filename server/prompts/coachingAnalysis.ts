@@ -13,7 +13,7 @@ import type {
 
 import type { TrainingContext } from "../gemini/types";
 import { sanitizeUserInput } from "../utils/sanitize";
-import { weekdayDate } from "./coachingContext";
+import { dayOffsetLabel, weekdayDate } from "./coachingContext";
 
 type CoachingInsights = NonNullable<TrainingContext["coachingInsights"]>;
 
@@ -389,20 +389,62 @@ function formatRecentSkips(recentSkips: CoachingInsights["recentSkips"]): string
   return `RECENT SKIPS (athlete-stated reasons): ${items}. Treat ill/injured skips as recovery signals to program around — not as compliance failures to nudge about.`;
 }
 
+type RecentMiss = NonNullable<CoachingInsights["recentMisses"]>[number];
+
+/** A missed session's description is plan text: enough of it to say what was lost, no more. */
+const MISSED_SESSION_TEXT_MAX = 240;
+/** This many misses inside a week and the next session is a return, not a continuation. */
+const REENTRY_MISSES = 2;
+const REENTRY_WINDOW_DAYS = 7;
+
+/** Where a miss stands: let go, still the athlete's to move, or simply gone. */
+function missState(miss: RecentMiss): string {
+  if (miss.decision === "let_go") return "let go";
+  return miss.movable ? "no decision yet, the athlete can still move it" : "not made up, too old to move";
+}
+
+function formatMiss(miss: RecentMiss): string {
+  const ago = miss.daysAgo === undefined ? "" : ` (${dayOffsetLabel(-miss.daysAgo)})`;
+  // Plan text is athlete-editable, like the focus: sanitize both before they reach the model.
+  const was = miss.mainWorkout?.replaceAll(/\s+/g, " ").trim().slice(0, MISSED_SESSION_TEXT_MAX);
+  const what = was ? ` It was: ${sanitizeUserInput(was)}` : "";
+  return `- ${weekdayDate(miss.date)}${ago}: ${sanitizeUserInput(miss.focus)} (${miss.priority}, ${missState(miss)}).${what}`;
+}
+
 /**
- * Missed key and supporting sessions, and what the athlete decided about each.
- * A let-go is a settled decision; the coach should build on it rather than
- * quietly putting the session back.
+ * How the coach answers a missed session. It used to be told only what not to
+ * do ("don't add it back", "don't make up the volume"), so a miss changed
+ * nothing in what it wrote next. These are the moves a coach does make: repeat
+ * the step, never cram, give a lost key session a smaller home, ease back in.
+ */
+const MISSED_SESSION_RULES = [
+  "Never cram: do not put a missed session back as a session, and do not pile its work onto another day.",
+  "The next session of the same kind repeats the missed step instead of progressing past it (the same long-run distance, the same intervals at the same pace). Lift loads are already held at the missed step by the plan itself (its \"Auto-progression\" notes): leave those loads as they are.",
+  "A missed KEY session that is let go or too old to move: when nothing of its kind is left in that week, ONE nearby supporting or optional session may become a shorter version of it (about two-thirds of its main set), replacing that session's work, never adding to it. Only where the load governor, the training state and the plan phase allow hard work, and never the day before or after another key session.",
+  "A missed session the athlete can still move is theirs to place: change nothing on its account.",
+] as const;
+
+/**
+ * Missed key and supporting sessions of the last two weeks: what each was,
+ * what the athlete decided about it, and how to coach around them.
  */
 function formatRecentMisses(recentMisses: CoachingInsights["recentMisses"]): string {
   if (!recentMisses || recentMisses.length === 0) return "";
-  const items = recentMisses
-    .map(
-      (miss) =>
-        `${weekdayDate(miss.date)} ${sanitizeUserInput(miss.focus)} (${miss.priority}, ${miss.decision === "let_go" ? "let go" : "no decision yet"})`,
-    )
-    .join("; ");
-  return `RECENT MISSED SESSIONS: ${items}. A session the athlete let go is their decision — don't add it back. Protect the key sessions still ahead rather than making up the missed volume.`;
+  const thisWeek = recentMisses.filter(
+    (miss) => miss.daysAgo !== undefined && miss.daysAgo <= REENTRY_WINDOW_DAYS,
+  ).length;
+  const reentry =
+    thisWeek >= REENTRY_MISSES
+      ? [
+          `${thisWeek} sessions were missed in the last ${REENTRY_WINDOW_DAYS} days: the next session is a return to training. Keep it as planned or lighter, and do not raise its load or intensity.`,
+        ]
+      : [];
+  return [
+    "RECENT MISSED SESSIONS (newest first):",
+    ...recentMisses.map(formatMiss),
+    "How to coach around a missed session:",
+    ...[...MISSED_SESSION_RULES, ...reentry].map((rule) => `- ${rule}`),
+  ].join("\n");
 }
 
 export function formatCoachingAnalysis(insights: CoachingInsights, planGoal?: string): string {

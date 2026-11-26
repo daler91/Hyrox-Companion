@@ -252,15 +252,29 @@ export interface TrainingContext {
       reason: PlanDaySkipReason;
     }>;
     /**
-     * Recent missed sessions that mattered (key or supporting), newest first,
-     * capped, with what the athlete decided about each — let it go, or not
-     * decided yet. Folded and shortened ones have moved and are upcoming.
+     * Missed sessions of the last two weeks that mattered (key or supporting),
+     * newest first, capped, with what the athlete decided about each — let it
+     * go, or not decided yet. Folded and shortened ones have moved and are
+     * upcoming.
      */
     recentMisses?: Array<{
       date: string;
       focus: string;
       priority: PlanDayPriority;
       decision: "let_go" | "undecided";
+      /**
+       * The athlete can still move it themselves: undecided and inside the
+       * recovery window (the timeline's `recoverable`). Otherwise it is
+       * settled, and the plan carries on without it.
+       */
+      movable?: boolean;
+      /** Days before the athlete's today it was missed on. */
+      daysAgo?: number;
+      /**
+       * What the session was, as its plan day wrote it. Athlete-editable free
+       * text: sanitize it before it reaches a prompt, as `focus`.
+       */
+      mainWorkout?: string;
     }>;
     // Canonical training-load summary (shared with the analytics tab). Kept as a
     // direct reference so the coaching prompt context never drifts from the

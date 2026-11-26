@@ -101,7 +101,7 @@ function loadGovernorVectorChips(inputs: CoachNoteInputs): string[] {
  * One line per load or pace an auto-progression moved, e.g. "Front Squat
  * 85 → 90 kg" — the number the athlete will actually see changed on the day.
  */
-function describeProgressionChange(change: ProgressionChangeRecord): string {
+export function describeProgressionChange(change: ProgressionChangeRecord): string {
   if (change.kind === "pace") return `Run paces: fitness ${change.from} → ${change.to} (VDOT)`;
   const label = knownExerciseLabel(change.exercise) ?? change.exercise.replaceAll("_", " ");
   return `${label}: ${change.from} → ${change.to} ${change.unit}`;
@@ -124,10 +124,23 @@ function keyedProgressionChanges(
   });
 }
 
+/**
+ * What an auto-progression went on: the athlete's logs, or — when the day's
+ * loads are held for one — a session that never happened. A declared absence
+ * is never called a miss.
+ */
+function progressionBasisChip(inputs: CoachNoteInputs): string | null {
+  const hold = inputs.missedSessionHold;
+  if (hold?.kind === "missed") return "A missed session";
+  if (hold?.kind === "skipped") return "A skipped session";
+  if (hold) return "A session not done";
+  return inputs.lastModification?.kind === "auto_progression" ? "Your logged sessions" : null;
+}
+
 function basedOnChips(inputs: CoachNoteInputs | null | undefined): string[] {
   if (!inputs) return [];
   const candidates: Array<string | null | undefined> = [
-    inputs.lastModification?.kind === "auto_progression" ? "Your logged sessions" : null,
+    progressionBasisChip(inputs),
     inputs.planGoalPresent ? "Plan goal" : null,
     phaseChip(inputs.planPhase),
     remainingPhasesChip(inputs.planPhase),

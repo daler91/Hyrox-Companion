@@ -22,6 +22,9 @@ import {
   TimelineTodayIndicator,
   WeeklyReviewPrompt,
 } from "@/components/timeline";
+// From the module, not the `missed-recovery` barrel, which would pull the
+// recovery dialog into this route's eager chunk (see TimelineWorkoutCard).
+import { MissedAftermathProvider } from "@/components/timeline/missed-recovery/MissedAftermathNote";
 import { Input } from "@/components/ui/input";
 import { PageContainer } from "@/components/ui/PageContainer";
 import { SCROLL_TO_TODAY_DELAY_MS } from "@/hooks/constants";
@@ -39,8 +42,8 @@ import { useTimelineState } from "@/hooks/useTimelineState";
 import { getTodayString } from "@/lib/dateUtils";
 import { featureFlags } from "@/lib/featureFlags";
 import { canMoveEntryTo, timelineCollisionDetection } from "@/pages/timeline/dropTargets";
-import { LazyTimelineWorkoutSurfaces } from "@/pages/timeline/LazyTimelineWorkoutSurfaces";
 import { renderedFuellingWindow } from "@/pages/timeline/fuellingWindow";
+import { LazyTimelineWorkoutSurfaces } from "@/pages/timeline/LazyTimelineWorkoutSurfaces";
 import { startScrollTodayConvergence } from "@/pages/timeline/scrollTodayConvergence";
 import { TimelineCoachPanels } from "@/pages/timeline/TimelineCoachPanels";
 import { TimelineContent } from "@/pages/timeline/TimelineContent";
@@ -478,52 +481,55 @@ export default function Timeline() {
                 screenReaderInstructions: dndScreenReaderInstructions,
               }}
             >
-              <TimelineContent
-                timelineLoading={timelineLoading}
-                timelineError={timelineError}
-                isRetryingTimeline={isRetryingTimeline}
-                onRetryTimeline={retryTimeline}
-                filterStatus={filterStatus}
-                selectedPlanId={selectedPlanId}
-                plans={plans}
-                samplePlanMutation={samplePlanMutation}
-                importMutation={importMutation}
-                handleFileUpload={handleFileUpload}
-                setSchedulingPlanId={setSchedulingPlanId}
-                setFilterStatus={setFilterStatus}
-                hiddenPastCount={hiddenPastCount}
-                setShowAllPast={setShowAllPast}
-                showAllPast={showAllPast}
-                pastGroups={pastGroups}
-                hasOlderEntries={hasOlderEntries}
-                isLoadingOlder={isLoadingOlder}
-                onLoadOlder={loadOlderEntries}
-                hiddenFutureCount={hiddenFutureCount}
-                setShowAllFuture={setShowAllFuture}
-                showAllFuture={showAllFuture}
-                futureGroups={futureGroups}
-                allVisibleGroups={allVisibleGroups}
-                rowVirtualizer={rowVirtualizer}
-                todayRef={todayRef}
-                handleMarkComplete={handleMarkComplete}
-                onCardClick={openTimelineSurface}
-                handleCombine={handleCombine}
-                combiningEntry={combiningEntry}
-                personalRecords={personalRecords}
-                isAutoCoaching={isAutoCoaching}
-                annotationsByDate={annotationsByDate}
-                onAddAnnotation={handleAddAnnotation}
-                onEditAnnotation={handleEditAnnotation}
-                onDeleteAnnotation={handleDeleteAnnotation}
-                isAnnotationDeleting={isAnnotationDeleting}
-                onMoveEntry={moveEntry}
-                isMovingEntry={isMoving}
-                isBulkSelectMode={bulkDeleteMode}
-                selectedBulkEntryKeys={selectedBulkEntryKeys}
-                onBulkSelectToggle={handleBulkSelectToggle}
-                onRecoverEntry={missedRecovery.recover}
-                fuellingByDate={fuellingByDate}
-              />
+              {/* Lets a missed session's card say what the plan changed after it. */}
+              <MissedAftermathProvider entries={timelineData}>
+                <TimelineContent
+                  timelineLoading={timelineLoading}
+                  timelineError={timelineError}
+                  isRetryingTimeline={isRetryingTimeline}
+                  onRetryTimeline={retryTimeline}
+                  filterStatus={filterStatus}
+                  selectedPlanId={selectedPlanId}
+                  plans={plans}
+                  samplePlanMutation={samplePlanMutation}
+                  importMutation={importMutation}
+                  handleFileUpload={handleFileUpload}
+                  setSchedulingPlanId={setSchedulingPlanId}
+                  setFilterStatus={setFilterStatus}
+                  hiddenPastCount={hiddenPastCount}
+                  setShowAllPast={setShowAllPast}
+                  showAllPast={showAllPast}
+                  pastGroups={pastGroups}
+                  hasOlderEntries={hasOlderEntries}
+                  isLoadingOlder={isLoadingOlder}
+                  onLoadOlder={loadOlderEntries}
+                  hiddenFutureCount={hiddenFutureCount}
+                  setShowAllFuture={setShowAllFuture}
+                  showAllFuture={showAllFuture}
+                  futureGroups={futureGroups}
+                  allVisibleGroups={allVisibleGroups}
+                  rowVirtualizer={rowVirtualizer}
+                  todayRef={todayRef}
+                  handleMarkComplete={handleMarkComplete}
+                  onCardClick={openTimelineSurface}
+                  handleCombine={handleCombine}
+                  combiningEntry={combiningEntry}
+                  personalRecords={personalRecords}
+                  isAutoCoaching={isAutoCoaching}
+                  annotationsByDate={annotationsByDate}
+                  onAddAnnotation={handleAddAnnotation}
+                  onEditAnnotation={handleEditAnnotation}
+                  onDeleteAnnotation={handleDeleteAnnotation}
+                  isAnnotationDeleting={isAnnotationDeleting}
+                  onMoveEntry={moveEntry}
+                  isMovingEntry={isMoving}
+                  isBulkSelectMode={bulkDeleteMode}
+                  selectedBulkEntryKeys={selectedBulkEntryKeys}
+                  onBulkSelectToggle={handleBulkSelectToggle}
+                  onRecoverEntry={missedRecovery.recover}
+                  fuellingByDate={fuellingByDate}
+                />
+              </MissedAftermathProvider>
             </DndContext>
 
             {!isWorkoutSurfaceOpen && !bulkDeleteMode && (

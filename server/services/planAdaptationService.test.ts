@@ -7,12 +7,15 @@ import {
   applyPlanAdaptation,
   computePlanAdaptation,
   isFatigued,
+  isReplaceOfHeldDay,
   type PlanAdaptation,
+  previewMissedSessionFollowOn,
 } from "./planAdaptationService";
 
 const plans = vi.hoisted(() => ({
   getActivePlan: vi.fn(),
   getPlanDaysForAdaptation: vi.fn(),
+  getPlanDaysForMissAdaptation: vi.fn(),
   updatePlanDay: vi.fn(),
   updatePlanDaySets: vi.fn(),
   updateEngineState: vi.fn(),
@@ -21,7 +24,8 @@ const analytics = vi.hoisted(() => ({
   getWorkoutLogsByDateRange: vi.fn(),
   getAllExerciseSetsWithDates: vi.fn(),
 }));
-vi.mock("../storage", () => ({ storage: { plans, analytics } }));
+const timelineAnnotations = vi.hoisted(() => ({ list: vi.fn() }));
+vi.mock("../storage", () => ({ storage: { plans, analytics, timelineAnnotations } }));
 vi.mock("../logger", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
 const TODAY = "2026-10-14";
@@ -57,6 +61,8 @@ beforeEach(() => {
     engineState: null,
   });
   plans.getPlanDaysForAdaptation.mockResolvedValue([planDayRow()]);
+  plans.getPlanDaysForMissAdaptation.mockResolvedValue([]);
+  timelineAnnotations.list.mockResolvedValue([]);
   analytics.getWorkoutLogsByDateRange.mockResolvedValue([
     { id: "log-1", date: "2026-10-13", focus: "Strength", rpe: 7, countsAsTraining: true },
   ]);
@@ -173,6 +179,310 @@ describe("computePlanAdaptation", () => {
     expect(day?.changes.map((change) => change.exercise)).toEqual(["Yoke Carry"]);
   });
 
+  describe("sessions that never happened", () => {
+    /** Last Friday's squat session, not done: 4x6 @ 82.5 kg where this Friday's climbs to 85. */
+    function missedRow(overrides: Record<string, unknown> = {}) {
+      return {
+        ...planDayRow(),
+        id: "day-missed",
+        scheduledDate: "2026-10-09",
+        weekNumber: 3,
+        status: "missed",
+        focus: "Lower Strength",
+        priority: null,
+        mainWorkout: "A) Front Squat 4x6 @ 82.5 kg",
+        sets: [1, 2, 3, 4].map((n) => ({
+          id: `m${n}`,
+          exerciseName: "front_squat",
+          category: "strength",
+          reps: 6,
+          weight: 82.5,
+          weightUnit: "kg",
+          notes: null,
+        })),
+        ...overrides,
+      };
+    }
+
+    function heldWeights(result: Awaited<ReturnType<typeof computePlanAdaptation>>) {
+      return result?.result.days.at(0)?.setUpdates.map((update) => update.weight);
+    }
+
+    beforeEach(() => {
+      // No new log: only the missed session speaks.
+      analytics.getWorkoutLogsByDateRange.mockResolvedValue([]);
+      analytics.getAllExerciseSetsWithDates.mockResolvedValue([]);
+    });
+
+    it("reads the last two weeks, sessions skipped ahead, and the days it holds a change for", async () => {
+      plans.getActivePlan.mockResolvedValueOnce({
+        id: "plan-1",
+        startDate: "2026-09-14",
+        totalWeeks: 12,
+        engineState: {
+          version: 1,
+          runVdot: null,
+          adaptedLogIds: [],
+          missHolds: [
+            { planDayId: "day-held", missedOn: "2026-10-02", exercise: "back_squat", unit: "kg", sets: [] },
+            { planDayId: "day-held", missedOn: "2026-10-02", exercise: "bench_press", unit: "kg", sets: [] },
+          ],
+          updatedAt: "t0",
+        },
+      });
+
+      await computePlanAdaptation("user-1", context, units, new Set());
+
+      expect(plans.getPlanDaysForMissAdaptation).toHaveBeenCalledWith("plan-1", {
+        from: "2026-09-30",
+        today: TODAY,
+        until: "2026-11-04",
+        alsoIds: ["day-held"],
+      });
+    });
+
+    it("holds the next session at a missed session's load", async () => {
+      plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([missedRow()]);
+
+      const result = await computePlanAdaptation("user-1", context, units, new Set());
+
+      expect(heldWeights(result)).toEqual([82.5, 82.5, 82.5, 82.5]);
+      expect(result?.result.days.at(0)?.rationale).toContain(
+        "You missed Friday's Front Squat (4x6 @ 82.5 kg)",
+      );
+      expect(result?.result.engineState.adaptedMisses).toEqual(["day-missed|2026-10-09"]);
+    });
+
+    it("reads a skip, and a planned day the sweep has not reached, as not done", async () => {
+      plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([missedRow({ status: "skipped" })]);
+      const skipped = await computePlanAdaptation("user-1", context, units, new Set());
+      expect(skipped?.result.days.at(0)?.rationale).toContain("You skipped Friday's Front Squat");
+
+      plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([missedRow({ status: "planned" })]);
+      const unswept = await computePlanAdaptation("user-1", context, units, new Set());
+      expect(unswept?.result.days.at(0)?.rationale).toContain("You missed Friday's Front Squat");
+    });
+
+    it("never calls a session inside a declared absence a miss", async () => {
+      plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([missedRow()]);
+      timelineAnnotations.list.mockResolvedValueOnce([
+        { startDate: "2026-10-08", endDate: "2026-10-10", type: "travel" },
+      ]);
+
+      const result = await computePlanAdaptation("user-1", context, units, new Set());
+
+      expect(heldWeights(result)).toEqual([82.5, 82.5, 82.5, 82.5]);
+      const rationale = result?.result.days.at(0)?.rationale ?? "";
+      expect(rationale).toContain("Friday's Front Squat (4x6 @ 82.5 kg) didn't happen");
+      expect(rationale).not.toMatch(/missed/i);
+    });
+
+    it("follows only the sessions the plan leans on", async () => {
+      const ignored = [
+        // The plan never needed an optional session, and a rest day is not one.
+        missedRow({ priority: "optional" }),
+        missedRow({ focus: "Easy Recovery" }),
+        missedRow({ focus: "Rest", mainWorkout: "Rest day", sets: missedRow().sets }),
+      ];
+      for (const row of ignored) {
+        plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([row]);
+        const result = await computePlanAdaptation("user-1", context, units, new Set());
+        expect(result?.result.days).toEqual([]);
+        expect(result?.result.engineState.adaptedMisses).toEqual([]);
+      }
+    });
+
+    it("leaves out a day the race date sets and a day past a retired plan's cut-off", async () => {
+      const base = { id: "plan-1", startDate: "2026-09-14", totalWeeks: 12, engineState: null };
+      // 9 Oct is the shakeout before a race on the 10th: its stored session was never shown.
+      plans.getActivePlan.mockResolvedValueOnce({ ...base, raceDate: "2026-10-10" });
+      plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([missedRow()]);
+      const raceWeek = await computePlanAdaptation("user-1", context, units, new Set());
+      expect(raceWeek?.result.days).toEqual([]);
+
+      plans.getActivePlan.mockResolvedValueOnce({ ...base, retiredOn: "2026-10-09" });
+      plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([missedRow()]);
+      const retired = await computePlanAdaptation("user-1", context, units, new Set());
+      expect(retired?.result.days).toEqual([]);
+    });
+
+    it("takes a hold back once the session is in the plan again", async () => {
+      const held = {
+        version: 1 as const,
+        runVdot: null,
+        adaptedLogIds: [],
+        adaptedMisses: ["day-missed|2026-10-09"],
+        missHolds: [
+          {
+            planDayId: "day-missed",
+            missedOn: "2026-10-09",
+            exercise: "front_squat",
+            unit: "kg",
+            sets: [1, 2, 3, 4].map((n) => ({ setId: `s${n}`, from: 85, to: 82.5 })),
+          },
+        ],
+        updatedAt: "t0",
+      };
+      const heldDay = {
+        ...planDayRow(),
+        mainWorkout: "A) Front Squat 4x6 @ 82.5 kg",
+        sets: planDayRow().sets.map((set) => ({ ...set, weight: 82.5 })),
+      };
+      const plan = { id: "plan-1", startDate: "2026-09-14", totalWeeks: 12, engineState: held };
+
+      // Folded into a day still ahead.
+      plans.getActivePlan.mockResolvedValueOnce(plan);
+      plans.getPlanDaysForAdaptation.mockResolvedValueOnce([heldDay]);
+      plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([
+        missedRow({ status: "planned", scheduledDate: "2026-10-15" }),
+      ]);
+      const folded = await computePlanAdaptation("user-1", context, units, new Set());
+      expect(heldWeights(folded)).toEqual([85, 85, 85, 85]);
+      expect(folded?.result.engineState.missHolds).toEqual([]);
+
+      // Still missed: the hold stays as it is.
+      plans.getActivePlan.mockResolvedValueOnce(plan);
+      plans.getPlanDaysForAdaptation.mockResolvedValueOnce([heldDay]);
+      plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([missedRow()]);
+      const still = await computePlanAdaptation("user-1", context, units, new Set());
+      expect(still?.result.days).toEqual([]);
+      expect(still?.result.engineState.missHolds).toEqual(held.missHolds);
+      // The pass changes nothing on the held day, so it is named apart: the
+      // model may add to it, never replace it.
+      expect(still?.heldDayIds).toEqual(new Set(["day-a"]));
+      const onHeldDay = { workoutId: "day-a", targetField: "mainWorkout", action: "replace" } as const;
+      expect(isReplaceOfHeldDay(onHeldDay, still ?? null)).toBe(true);
+      expect(isReplaceOfHeldDay({ ...onHeldDay, action: "append" }, still ?? null)).toBe(false);
+      expect(isReplaceOfHeldDay({ ...onHeldDay, targetField: "notes" }, still ?? null)).toBe(false);
+      expect(isReplaceOfHeldDay({ ...onHeldDay, workoutId: "day-b" }, still ?? null)).toBe(false);
+      expect(isReplaceOfHeldDay(onHeldDay, null)).toBe(false);
+
+      // A load the athlete has put back is theirs: nothing of the hold stands on the day.
+      plans.getActivePlan.mockResolvedValueOnce(plan);
+      plans.getPlanDaysForAdaptation.mockResolvedValueOnce([planDayRow()]);
+      plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([missedRow()]);
+      const edited = await computePlanAdaptation("user-1", context, units, new Set());
+      expect(edited?.heldDayIds).toEqual(new Set());
+
+      // Folded to a day after the session that was held for it: that session
+      // still comes before the missed step is done, so its load stands.
+      plans.getActivePlan.mockResolvedValueOnce(plan);
+      plans.getPlanDaysForAdaptation.mockResolvedValueOnce([heldDay]);
+      plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([
+        missedRow({ status: "planned", scheduledDate: "2026-10-18" }),
+      ]);
+      const foldedLater = await computePlanAdaptation("user-1", context, units, new Set());
+      expect(foldedLater?.result.days).toEqual([]);
+      expect(foldedLater?.result.engineState.missHolds).toEqual([]);
+
+      // Logged after all, it sits on the day it was missed: ahead of everything held.
+      plans.getActivePlan.mockResolvedValueOnce(plan);
+      plans.getPlanDaysForAdaptation.mockResolvedValueOnce([heldDay]);
+      plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([missedRow({ status: "completed" })]);
+      const loggedLate = await computePlanAdaptation("user-1", context, units, new Set());
+      expect(heldWeights(loggedLate)).toEqual([85, 85, 85, 85]);
+    });
+
+    describe("previewMissedSessionFollowOn", () => {
+      const preview = () => previewMissedSessionFollowOn("user-1", "day-missed", TODAY, units);
+
+      beforeEach(() => {
+        plans.getPlanDaysForMissAdaptation.mockResolvedValue([missedRow()]);
+      });
+
+      it("says what the next pass would hold, from the plan's own rule", async () => {
+        expect(await preview()).toEqual({
+          applied: false,
+          changes: [
+            { exercise: "Front Squat", date: "2026-10-16", scheme: "4x6", from: 85, to: 82.5, unit: "kg" },
+          ],
+        });
+        expect(plans.getPlanDaysForMissAdaptation).toHaveBeenCalledWith("plan-1", {
+          from: "2026-09-30",
+          today: TODAY,
+          until: TODAY,
+          alsoIds: ["day-missed"],
+        });
+        // Only what was logged since the miss can cancel the hold.
+        expect(analytics.getAllExerciseSetsWithDates).toHaveBeenCalledWith("user-1", "2026-10-09", TODAY);
+      });
+
+      it("says nothing where the plan would hold nothing", async () => {
+        // The lift trained anyway since the miss.
+        analytics.getAllExerciseSetsWithDates.mockResolvedValueOnce([
+          { workoutLogId: "adhoc", date: "2026-10-10", exerciseName: "front_squat", category: "strength", reps: 6, weight: 82.5, weightUnit: "kg" },
+        ]);
+        expect(await preview()).toEqual({ applied: false, changes: [] });
+
+        // A session the adaptation does not follow.
+        plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([missedRow({ priority: "optional" })]);
+        expect(await preview()).toEqual({ applied: false, changes: [] });
+
+        // A day that is not there, and an athlete with no plan.
+        plans.getPlanDaysForMissAdaptation.mockResolvedValueOnce([]);
+        expect(await preview()).toEqual({ applied: false, changes: [] });
+        plans.getActivePlan.mockResolvedValueOnce(undefined);
+        expect(await preview()).toEqual({ applied: false, changes: [] });
+      });
+
+      it("reports the holds a pass already made, where they still stand", async () => {
+        const state = {
+          version: 1 as const,
+          runVdot: null,
+          adaptedLogIds: [],
+          adaptedMisses: ["day-missed|2026-10-09"],
+          missHolds: [
+            {
+              planDayId: "day-missed",
+              missedOn: "2026-10-09",
+              exercise: "front_squat",
+              unit: "kg",
+              sets: [1, 2, 3, 4].map((n) => ({ setId: `s${n}`, from: 85, to: 82.5 })),
+            },
+          ],
+          updatedAt: "t0",
+        };
+        const plan = { id: "plan-1", startDate: "2026-09-14", totalWeeks: 12, engineState: state };
+        const heldDay = {
+          ...planDayRow(),
+          sets: planDayRow().sets.map((set) => ({ ...set, weight: 82.5 })),
+        };
+
+        plans.getActivePlan.mockResolvedValueOnce(plan);
+        plans.getPlanDaysForAdaptation.mockResolvedValueOnce([heldDay]);
+        expect(await preview()).toEqual({
+          applied: true,
+          changes: [
+            { exercise: "Front Squat", date: "2026-10-16", scheme: "4x6", from: 85, to: 82.5, unit: "kg" },
+          ],
+        });
+
+        // Holding already, though not counted yet: another of the session's
+        // steps is waiting for a session to come into range.
+        plans.getActivePlan.mockResolvedValueOnce({
+          ...plan,
+          engineState: { ...state, adaptedMisses: [] },
+        });
+        plans.getPlanDaysForAdaptation.mockResolvedValueOnce([heldDay]);
+        expect(await preview()).toEqual({
+          applied: true,
+          changes: [
+            { exercise: "Front Squat", date: "2026-10-16", scheme: "4x6", from: 85, to: 82.5, unit: "kg" },
+          ],
+        });
+
+        // The athlete has since put the load back: nothing of the hold stands.
+        plans.getActivePlan.mockResolvedValueOnce(plan);
+        expect(await preview()).toEqual({ applied: true, changes: [] });
+      });
+
+      it("never throws", async () => {
+        plans.getPlanDaysForAdaptation.mockRejectedValueOnce(new Error("db down"));
+        expect(await preview()).toEqual({ applied: false, changes: [] });
+      });
+    });
+  });
+
   it("is null without an active plan, and never throws", async () => {
     plans.getActivePlan.mockResolvedValueOnce(undefined);
     expect(await computePlanAdaptation("user-1", context, units, new Set())).toBeNull();
@@ -208,6 +518,7 @@ describe("applyPlanAdaptation", () => {
       adaptedLogIds: ["log-1"],
     },
     baseline: { engineStateUpdatedAt: null, dayFingerprints: new Map() },
+    heldDayIds: new Set(),
   };
 
   it("writes each day's note, text and sets, then the plan's engine state", async () => {

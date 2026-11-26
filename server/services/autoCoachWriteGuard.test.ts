@@ -236,6 +236,7 @@ describe("lockAutoCoachWriteTargets — plan adaptation", () => {
           ["day-9", fingerprintStoredPlanDay(adaptedDay as never, adaptedSets as never)],
         ]),
       },
+      heldDayIds: new Set(),
     };
   }
 

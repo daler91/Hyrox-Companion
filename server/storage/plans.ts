@@ -16,13 +16,15 @@ import {
   users,
   workoutLogs,
 } from "@shared/schema";
+import { resolveSessionPriority } from "@shared/sessionPriority";
 import type { Minutes } from "@shared/units";
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notExists, or, sql } from "drizzle-orm";
 
 import { db, type DbExecutor, type Tx } from "../db";
 import { logger } from "../logger";
 import { getLocalDateStrSafe } from "../timezone";
 import { noAbsenceDeclaredForPlanDay } from "./absenceGuard";
+import { type AthleteAwaitingCoach, findAthletesToCoachAfterMiss } from "./coachAfterMiss";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate } from "./planRetirement";
 import { planSlotForMove } from "./planSlot";
@@ -135,6 +137,15 @@ async function getPlanDayIdsWithWorkouts(
   return new Set(rows.flatMap((row) => (row.planDayId ? [row.planDayId] : [])));
 }
 
+/** What the sweep needs of a day it marked: enough to tell whether the plan leaned on it. */
+interface SweptPlanDay {
+  readonly id: string;
+  readonly planId: string;
+  readonly priority: string | null;
+  readonly focus: string | null;
+  readonly mainWorkout: string | null;
+}
+
 /**
  * Mark missed the past planned days of every athlete whose stored timezone is
  * `tz`, judged against `today`, that zone's local date. The local date is
@@ -142,14 +153,14 @@ async function getPlanDayIdsWithWorkouts(
  * raises `invalid value for parameter TimeZone` on a single unrecognised name
  * and would abort the sweep for every other athlete with it.
  */
-async function sweepMissedPlanDaysInZone(tz: string, today: string): Promise<number> {
+async function sweepMissedPlanDaysInZone(tz: string, today: string): Promise<SweptPlanDay[]> {
   const zonePlanIds = db
     .select({ id: trainingPlans.id })
     .from(trainingPlans)
     .innerJoin(users, eq(users.id, trainingPlans.userId))
     .where(eq(users.userTimezone, tz));
 
-  const result = await db
+  return await db
     .update(planDays)
     // A let-go left behind on a planned day (logged, then the log deleted)
     // is not a decision about this miss, so the sweep clears it rather
@@ -174,8 +185,38 @@ async function sweepMissedPlanDaysInZone(tz: string, today: string): Promise<num
         noAbsenceDeclaredForPlanDay(db),
       ),
     )
-    .returning({ id: planDays.id });
-  return result.length;
+    .returning({
+      id: planDays.id,
+      planId: planDays.planId,
+      priority: planDays.priority,
+      focus: planDays.focus,
+      mainWorkout: planDays.mainWorkout,
+    });
+}
+
+/** `days` with each one's prescribed sets, in sort order. */
+async function withPrescribedSets(
+  days: readonly PlanDay[],
+): Promise<Array<PlanDay & { sets: ExerciseSet[] }>> {
+  if (days.length === 0) return [];
+  const sets = await db
+    .select()
+    .from(exerciseSets)
+    .where(
+      inArray(
+        exerciseSets.planDayId,
+        days.map((day) => day.id),
+      ),
+    )
+    .orderBy(asc(exerciseSets.sortOrder));
+  const byDay = new Map<string, ExerciseSet[]>();
+  for (const set of sets) {
+    if (!set.planDayId) continue;
+    const list = byDay.get(set.planDayId) ?? [];
+    list.push(set);
+    byDay.set(set.planDayId, list);
+  }
+  return days.map((day) => ({ ...day, sets: byDay.get(day.id) ?? [] }));
 }
 
 /** The athlete's plan days, and each one's prescribed sets, as locked rows. */
@@ -228,6 +269,12 @@ export class PlanStorage {
    * days (markMissedPlanDays). PF16 (CODEBASE_ANALYSIS_2026-10-03)
    */
   private readonly sweptZoneDates = new Map<string, string>();
+
+  /**
+   * Plans that lost a key or supporting session to a sweep and have not been
+   * handed to the coach yet (takeAthletesToCoachAfterMiss).
+   */
+  private readonly plansAwaitingCoachAfterMiss = new Set<string>();
 
   async createTrainingPlan(plan: InsertTrainingPlan, tx?: DbExecutor): Promise<TrainingPlan> {
     const executor = tx ?? db;
@@ -489,31 +536,56 @@ export class PlanStorage {
         ),
       )
       .orderBy(asc(planDays.scheduledDate));
-    if (days.length === 0) return [];
-    const sets = await db
+    return withPrescribedSets(days);
+  }
+
+  /**
+   * The plan's sessions that may not be happening on their day, with their
+   * prescribed sets, for the workout engine to follow: the days between
+   * `from` and `until` that are missed or skipped, or still planned with
+   * their date behind `today` (the nightly sweep has not reached them, or a
+   * declared absence holds them out of missed). `alsoIds` come back whatever
+   * became of them: the engine holds a change for those, and takes it back
+   * when the session has returned to the plan.
+   */
+  async getPlanDaysForMissAdaptation(
+    planId: string,
+    window: {
+      readonly from: string;
+      readonly today: string;
+      readonly until: string;
+      readonly alsoIds: readonly string[];
+    },
+  ): Promise<Array<PlanDay & { sets: ExerciseSet[] }>> {
+    const days = await db
       .select()
-      .from(exerciseSets)
+      .from(planDays)
       .where(
-        inArray(
-          exerciseSets.planDayId,
-          days.map((day) => day.id),
+        and(
+          eq(planDays.planId, planId),
+          isNotNull(planDays.scheduledDate),
+          or(
+            and(
+              gte(planDays.scheduledDate, window.from),
+              lte(planDays.scheduledDate, window.until),
+              or(
+                inArray(planDays.status, ["missed", "skipped"]),
+                and(eq(planDays.status, "planned"), lt(planDays.scheduledDate, window.today)),
+              ),
+            ),
+            window.alsoIds.length > 0 ? inArray(planDays.id, [...window.alsoIds]) : undefined,
+          ),
         ),
       )
-      .orderBy(asc(exerciseSets.sortOrder));
-    const byDay = new Map<string, ExerciseSet[]>();
-    for (const set of sets) {
-      if (!set.planDayId) continue;
-      const list = byDay.get(set.planDayId) ?? [];
-      list.push(set);
-      byDay.set(set.planDayId, list);
-    }
-    return days.map((day) => ({ ...day, sets: byDay.get(day.id) ?? [] }));
+      .orderBy(asc(planDays.scheduledDate));
+    return withPrescribedSets(days);
   }
 
   /**
    * Change prescribed sets of one plan day in place: loads the engine moved,
-   * notes whose paces it moved. Scoped to the day, so a set id from anywhere
-   * else is a no-op; the caller checks the day belongs to the athlete first.
+   * notes whose paces it moved, a long run's distance it held. Scoped to the
+   * day, so a set id from anywhere else is a no-op; the caller checks the day
+   * belongs to the athlete first.
    */
   async updatePlanDaySets(
     planDayId: string,
@@ -522,6 +594,8 @@ export class PlanStorage {
       readonly weight?: number;
       readonly weightUnit?: string;
       readonly notes?: string;
+      readonly distance?: number;
+      readonly plannedDistance?: number;
     }>,
     tx?: DbExecutor,
   ): Promise<void> {
@@ -958,9 +1032,17 @@ export class PlanStorage {
       .filter(({ tz, today }) => this.sweptZoneDates.get(tz) !== today);
 
     const marked = await inSequence(due, async ({ tz, today }) => {
-      const count = await sweepMissedPlanDaysInZone(tz, today);
+      const swept = await sweepMissedPlanDaysInZone(tz, today);
       this.sweptZoneDates.set(tz, today);
-      return count;
+      for (const day of swept) {
+        // The sessions a plan leans on. An optional one, or a rest day, changes
+        // nothing about what comes next, so nobody needs to look again.
+        const priority = resolveSessionPriority(day);
+        if (day.planId && (priority === "key" || priority === "supporting")) {
+          this.plansAwaitingCoachAfterMiss.add(day.planId);
+        }
+      }
+      return swept.length;
     });
     // Zones nobody is in any more are dropped, so the record stays as long as
     // the zone list. Deleting the entry being visited is safe mid-iteration.
@@ -969,6 +1051,40 @@ export class PlanStorage {
       if (!live.has(tz)) this.sweptZoneDates.delete(tz);
     }
     return marked.reduce((total, count) => total + count, 0);
+  }
+
+  /**
+   * The athletes whose plan lost a key or supporting session to the sweeps
+   * since this was last asked: the ones whose upcoming sessions the coach
+   * should look at again, each with the plans that put them here. Only
+   * athletes with the AI coach on who are still training
+   * (findAthletesToCoachAfterMiss).
+   *
+   * Answered once: the record is cleared as it is read, and kept if the read
+   * fails. A caller that then cannot queue the coach for an athlete hands
+   * their plans back (keepAwaitingCoachAfterMiss), so the next tick asks
+   * again. It is held here rather than returned by markMissedPlanDays because
+   * the sweep also runs at boot, before the job queue is up; the first hourly
+   * tick picks those athletes up. Like the swept-zone record it is per
+   * instance, so a restart in between loses it and the athlete's next log
+   * brings the coach back instead.
+   */
+  async takeAthletesToCoachAfterMiss(now = new Date()): Promise<AthleteAwaitingCoach[]> {
+    const planIds = [...this.plansAwaitingCoachAfterMiss];
+    if (planIds.length === 0) return [];
+    const athletes = await findAthletesToCoachAfterMiss(planIds, now);
+    for (const planId of planIds) this.plansAwaitingCoachAfterMiss.delete(planId);
+    return athletes;
+  }
+
+  /**
+   * Put plans back on the list takeAthletesToCoachAfterMiss reads: the coach
+   * could not be queued for their athlete, and a miss nobody looked at is the
+   * plan carrying on as if the session had been done. The next tick asks for
+   * them again, with the same checks on the athlete.
+   */
+  keepAwaitingCoachAfterMiss(planIds: readonly string[]): void {
+    for (const planId of planIds) this.plansAwaitingCoachAfterMiss.add(planId);
   }
 
   /**

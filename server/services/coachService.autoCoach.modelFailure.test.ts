@@ -51,6 +51,7 @@ function adaptation(planDayId: string): PlanAdaptation {
       adaptedLogIds: ["log-1"],
     },
     baseline: { engineStateUpdatedAt: null, dayFingerprints: new Map([[planDayId, "fp"]]) },
+    heldDayIds: new Set(),
   };
 }
 

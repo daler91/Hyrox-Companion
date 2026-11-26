@@ -71,6 +71,7 @@ test_patterns = [
   # Shared fixture modules, named per-subject rather than by directory.
   "**/testFixtures.ts",
   "server/services/coachService.testFixtures.ts",
+  "server/services/workoutEngine/adaptation.testFixtures.ts",
   "server/services/coachService.dbMockState.ts",
   "server/services/nutrition/foodTestFixture.ts",
   "shared/nutritionTestFixtures.ts",

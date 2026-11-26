@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay, createMockTrainingPlan } from "../../../test/factories";
 import type { storage } from "../../storage";
-import { enqueueAutoCoachInBackground } from "../autoCoachQueue";
+import {
+  enqueueAutoCoachInBackground,
+  enqueueMissedSessionCoachInBackground,
+} from "../autoCoachQueue";
+import { previewMissedSessionFollowOn } from "../planAdaptationService";
 import { recordPlanDayMove } from "../planDayMoves";
 import { applyMissedSessionRecovery, getMissedSessionRecoveryPreview } from "./index";
 
@@ -36,7 +40,11 @@ vi.mock("../../storage", () => ({
     },
   },
 }));
-vi.mock("../autoCoachQueue", () => ({ enqueueAutoCoachInBackground: vi.fn() }));
+vi.mock("../autoCoachQueue", () => ({
+  enqueueAutoCoachInBackground: vi.fn(),
+  enqueueMissedSessionCoachInBackground: vi.fn(),
+}));
+vi.mock("../planAdaptationService", () => ({ previewMissedSessionFollowOn: vi.fn() }));
 vi.mock("../planDayMoves", () => ({ recordPlanDayMove: vi.fn() }));
 
 /** The write the service last handed to storage. */
@@ -132,6 +140,44 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+describe("getMissedSessionRecoveryPreview — what staying missed changes next", () => {
+  const followOn = {
+    applied: false,
+    changes: [{ exercise: "Back Squat", date: "2026-09-29", scheme: "5x5", from: 102.5, to: 100, unit: "kg" }],
+  };
+
+  it("asks the plan adaptation what it would hold, in the athlete's units and on their date", async () => {
+    mocks.getUser.mockResolvedValue({ userTimezone: "UTC", distanceUnit: "miles", weightUnit: "lbs", aiCoachEnabled: true } as never);
+    vi.mocked(previewMissedSessionFollowOn).mockResolvedValue(followOn);
+
+    const preview = await getMissedSessionRecoveryPreview(USER, "pd-missed");
+
+    expect(previewMissedSessionFollowOn).toHaveBeenCalledExactlyOnceWith(USER, "pd-missed", "2026-09-24", {
+      weightUnit: "lbs",
+      distanceUnit: "miles",
+    });
+    expect(preview.letGo.impact.followOn).toEqual([
+      "Tuesday's Back Squat will repeat 5x5 @ 100 kg instead of climbing to 102.5 kg.",
+      "The sessions after that follow one step behind.",
+    ]);
+  });
+
+  it("does not ask for an athlete whose plan nothing adapts (the AI coach is off)", async () => {
+    const preview = await getMissedSessionRecoveryPreview(USER, "pd-missed");
+
+    expect(previewMissedSessionFollowOn).not.toHaveBeenCalled();
+    expect(preview.letGo.impact).not.toHaveProperty("followOn");
+  });
+
+  it("is not worked out when a decision is applied", async () => {
+    mocks.getUser.mockResolvedValue({ userTimezone: "UTC", distanceUnit: "km", aiCoachEnabled: true } as never);
+
+    await applyMissedSessionRecovery(USER, "pd-missed", { action: "let_go" });
+
+    expect(previewMissedSessionFollowOn).not.toHaveBeenCalled();
+  });
 });
 
 describe("getMissedSessionRecoveryPreview", () => {
@@ -243,7 +289,12 @@ describe("applyMissedSessionRecovery", () => {
       },
     });
     expect(day).toMatchObject({ scheduledDate: "2026-09-24", recovery: "folded" });
-    expect(enqueueAutoCoachInBackground).toHaveBeenCalledWith(USER, "plan-day-rescheduled");
+    expect(enqueueMissedSessionCoachInBackground).toHaveBeenCalledWith(
+      expect.anything(),
+      USER,
+      "plan-1",
+      "plan-day-rescheduled",
+    );
     // The coach's record of plan changes lists it as the athlete's reschedule.
     expect(recordPlanDayMove).toHaveBeenCalledWith(USER, {
       planDayId: "pd-missed",
@@ -294,7 +345,7 @@ describe("applyMissedSessionRecovery", () => {
     mocks.getPlanDay.mockResolvedValue(shortened);
     // Sets 4 and 5 are gone now.
     mocks.getExerciseSetsByPlanDay.mockResolvedValue(intervalSets().slice(0, 3));
-    vi.mocked(enqueueAutoCoachInBackground).mockClear();
+    vi.mocked(enqueueMissedSessionCoachInBackground).mockClear();
 
     await applyMissedSessionRecovery(USER, "pd-missed", { action: "reopen" });
 
@@ -308,7 +359,12 @@ describe("applyMissedSessionRecovery", () => {
       recoveryUndo: null,
     });
     expect(undo.insertSets?.map((set) => set.id)).toEqual(["set-4", "set-5"]);
-    expect(enqueueAutoCoachInBackground).toHaveBeenCalledWith(USER, "plan-day-rescheduled");
+    expect(enqueueMissedSessionCoachInBackground).toHaveBeenCalledWith(
+      expect.anything(),
+      USER,
+      "plan-1",
+      "plan-day-rescheduled",
+    );
     expect(recordPlanDayMove).toHaveBeenLastCalledWith(USER, {
       planDayId: "pd-missed",
       fromDate: "2026-09-26",
@@ -344,8 +400,34 @@ describe("applyMissedSessionRecovery", () => {
       guard: { statuses: ["planned"], scheduledDate: "2026-09-22", recovery: null },
       update: { status: "missed", recovery: "let_go" },
     });
-    expect(enqueueAutoCoachInBackground).not.toHaveBeenCalled();
     expect(recordPlanDayMove).not.toHaveBeenCalled();
+  });
+
+  it("sends the coach over the sessions ahead once a session is let go", async () => {
+    // The sweep never marks a day that was let go before it got there, so
+    // this is the pass that holds the next sessions at the missed step.
+    await applyMissedSessionRecovery(USER, "pd-missed", { action: "let_go" });
+    // With the plan, so a send the queue refuses is retried on the hourly tick.
+    expect(enqueueMissedSessionCoachInBackground).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      USER,
+      "plan-1",
+      "missed-session-let-go",
+    );
+    expect(enqueueAutoCoachInBackground).not.toHaveBeenCalled();
+  });
+
+  it("does not send the coach when a let-go is refused or taken back", async () => {
+    mocks.applyPlanDayRecovery.mockResolvedValueOnce({ outcome: "conflict" });
+    await expect(applyMissedSessionRecovery(USER, "pd-missed", { action: "let_go" })).rejects.toMatchObject({
+      status: 409,
+    });
+
+    mocks.getPlanDay.mockResolvedValue({ ...missedDay, recovery: "let_go" });
+    await applyMissedSessionRecovery(USER, "pd-missed", { action: "reopen" });
+
+    expect(enqueueAutoCoachInBackground).not.toHaveBeenCalled();
+    expect(enqueueMissedSessionCoachInBackground).not.toHaveBeenCalled();
   });
 
   it("reopens only a decision the timeline shows", async () => {

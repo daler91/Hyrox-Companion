@@ -537,7 +537,8 @@ function parsedDistanceToMeters(value: number, sourceUnit: ParsedDistanceUnit): 
   return value * METERS_PER_MILE;
 }
 
-function metersToStoredDistance(meters: number, targetUnit: StoredDistanceUnit): number {
+/** Metres as a stored distance: metres themselves, or feet for a row stamped `ft`. */
+export function metersToStoredDistance(meters: number, targetUnit: StoredDistanceUnit): number {
   return targetUnit === "ft" ? meters * M_TO_FT : meters;
 }
 

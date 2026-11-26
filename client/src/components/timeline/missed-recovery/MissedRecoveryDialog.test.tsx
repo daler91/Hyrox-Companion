@@ -109,7 +109,7 @@ const preview: MissedSessionRecoveryPreview = {
   },
   letGo: {
     impact: {
-      summary: "Threshold run stays missed, and the rest of the plan carries on as it is.",
+      summary: "Threshold run stays missed, and no session moves to make up for it.",
       keptFraction: 0,
       keptMinutes: 0,
       day: null,
@@ -208,7 +208,7 @@ describe("MissedRecoveryDialog", () => {
     renderDialog("let_go");
 
     expect(await screen.findByTestId("missed-recovery-impact")).toHaveTextContent(
-      "Threshold run stays missed, and the rest of the plan carries on as it is.",
+      "Threshold run stays missed, and no session moves to make up for it.",
     );
     expect(screen.getByTestId("missed-recovery-week-2026-09-21")).toHaveTextContent("3h 20m → 2h 30m · load −24%");
     expect(screen.getByTestId("missed-recovery-key-sessions")).toHaveTextContent("2 → 1 of 2");
@@ -216,6 +216,33 @@ describe("MissedRecoveryDialog", () => {
 
     await user.click(screen.getByTestId("missed-recovery-confirm"));
     await waitFor(() => expect(apiMocks.applyMissedRecovery).toHaveBeenCalledWith("pd-1", { action: "let_go" }));
+  });
+
+  it("says what staying missed changes in the sessions after it", async () => {
+    apiMocks.getMissedRecovery.mockResolvedValue({
+      ...preview,
+      letGo: {
+        impact: {
+          ...preview.letGo.impact,
+          followOn: [
+            "Tuesday's Back Squat will repeat 5x5 @ 100 kg instead of climbing to 102.5 kg.",
+            "The sessions after that follow one step behind.",
+          ],
+        },
+      },
+    });
+    renderDialog("let_go");
+
+    const followOn = await screen.findByTestId("missed-recovery-follow-on");
+    expect(followOn).toHaveTextContent("Tuesday's Back Squat will repeat 5x5 @ 100 kg instead of climbing to 102.5 kg.");
+    expect(followOn).toHaveTextContent("The sessions after that follow one step behind.");
+  });
+
+  it("shows no such list when nothing is held", async () => {
+    renderDialog("let_go");
+
+    await screen.findByTestId("missed-recovery-impact");
+    expect(screen.queryByTestId("missed-recovery-follow-on")).toBeNull();
   });
 
   it("explains an option that is not available", async () => {

@@ -226,6 +226,7 @@ function registerRecoverySchemas(registry: OpenAPIRegistry) {
     day: d(z.object({ date: day("YYYY-MM-DD the session lands on"), minutesAfter: z.number() }).nullable(), "Where the session lands and that day's training minutes with it; null when it does not move"),
     weeks: d(z.array(WeekImpact), "Every week whose numbers the option changes, oldest first"),
     notes: z.array(z.object({ code: z.enum(recoveryNoteCodes), tone: z.enum(["warning", "info"]), message: z.string() })),
+    followOn: d(z.array(z.string()).optional(), "What the option leaves changed in later sessions (loads held at the missed step), one plain sentence each; only letting go has any"),
   });
 
   const PlanDayRecoveryTarget = named(registry, "PlanDayRecoveryTarget", "A day the missed session could move to, and what moving it there does", {

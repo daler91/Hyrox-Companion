@@ -125,6 +125,37 @@ describe("coachService triggerAutoCoach structured exercise writes", () => {
     expect(updatePayload.aiInputsUsed?.replacedPrescription).toEqual(original);
   });
 
+  // The line says which loads were held after a missed session. A replace
+  // swaps out the sets it was written on, so it would describe a session that
+  // is no longer there.
+  it("drops the missed-session hold line when the day's prescription is replaced", async () => {
+    mockBaseAutoCoachDeps(storage, buildTrainingContext, [
+      makeTimelineEntry({
+        aiInputsUsed: {
+          missedSessionHold: {
+            kind: "missed",
+            date: "2026-01-13",
+            changes: [{ exercise: "back_squat", kind: "hold", from: 102.5, to: 100, unit: "kg" }],
+          },
+        },
+        exerciseDetails: [
+          { exerciseName: "back_squat", category: "strength", setNumber: 1, reps: 5, weight: 100 },
+        ],
+      }),
+    ]);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      makeSuggestion({ recommendation: "Easy bike 30 min" }),
+    ]);
+    vi.mocked(parseExercisesFromText).mockResolvedValue([
+      { exerciseName: "bike", category: "conditioning", confidence: 95, sets: [{ setNumber: 1, time: 30 }] },
+    ]);
+    vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
+
+    expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+    const updatePayload = vi.mocked(storage.plans).updatePlanDay.mock.calls[0][1];
+    expect(updatePayload.aiInputsUsed).not.toHaveProperty("missedSessionHold");
+  });
+
   // AI13 (CODEBASE_ANALYSIS_2026-10-03): the table's rows carry no main or
   // accessory section, so an accessory-only replace could only be written by
   // deleting the whole table — the main work with it.

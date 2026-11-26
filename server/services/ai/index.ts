@@ -683,7 +683,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     stationGaps,
     // Unconditional like its neighbours; the renderer self-suppresses on empty.
     recentSkips: collectRecentSkips(timeline),
-    recentMisses: collectRecentMisses(timeline),
+    recentMisses: collectRecentMisses(timeline, today),
     planPhase,
     weeklyVolume,
     progressionFlags,

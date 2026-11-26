@@ -5,7 +5,7 @@
 This document shows how the auto-coach updates workouts after new training evidence arrives. The current flow has three decision layers:
 
 - **Load governor:** deterministic UTSS, ACWR, and biomechanical-overlap rules.
-- **Plan adaptation:** the workout engine moves upcoming loads and paces to follow what the athlete actually logged (beat, met, missed, missed twice, returning from a break, a new best run). See [Workout Engine → Adapting the plan](ai-and-rag.md#adapting-the-plan-to-logged-sessions).
+- **Plan adaptation:** the workout engine moves upcoming loads and paces to follow what the athlete actually logged (beat, met, missed, missed twice, returning from a break, a new best run) and the sessions that never happened (missed or skipped: the next one repeats the step). See [Workout Engine → Adapting the plan](ai-and-rag.md#adapting-the-plan-to-logged-sessions).
 - **Provider coach:** AI-generated suggestions and review notes using the same training context, RAG materials, and training-style prompt rules.
 
 The two rule-based layers run first, in that order: the adaptation skips any day the governor rewrote, and provider suggestions and review notes are filtered out for every day either rewrote, so deterministic edits from the athlete's own data are not overwritten by the model. The AI budget gates the provider layer only.
@@ -27,6 +27,11 @@ Passes from two windows can still run at once on two instances. They never write
 | `plan-day-completed` | `updatePlanDayStatus`, on the transition into completed |
 | `plan-day-rescheduled` | `updatePlanDayWithCleanup` / `updatePlanDayStatus`, on a date change; folding or shortening a missed session, and undoing that (`server/services/missedRecovery/index.ts`) |
 | `logged-sets-edited` | a set added, patched, or deleted on an existing workout log, when the athlete has the AI coach on |
+| `plan-day-missed` | the hourly tick, for each athlete the missed-session sweep marked a key or supporting session for (`coachAthletesAfterMissedSweep`); `updatePlanDayStatus`, when such a session is marked missed directly or a missed one is put back to planned without a new date |
+| `plan-day-skipped` | `updatePlanDayStatus`, when a key or supporting session is skipped or a skip is taken back |
+| `missed-session-let-go` | letting a missed session go (`server/services/missedRecovery/index.ts`) |
+
+The last three are what make the plan answer a session that did not happen. Before them a miss started nothing: the sweep flipped the day to `missed`, and the sessions after it were looked at again only when the athlete next logged. The sweep (`markMissedPlanDays`) remembers the plans that lost a session the plan leans on, and the tick that follows asks for their athletes once (`takeAthletesToCoachAfterMiss`): only those with the AI coach on and a workout logged in the last two weeks, so an abandoned plan, which misses a session every night, does not run the model for nobody. The sweep also runs at boot, before the queue is up; those athletes wait for the first tick. Each of those sends is awaited: an athlete the queue refuses has their plans put back on the list (`keepAwaitingCoachAfterMiss`), so the next tick tries again rather than leaving the miss unanswered until they next log. Skipping an optional session or a rest day queues nothing, and neither does taking a let-go back, which changes nothing the adaptation reads. Every trigger that comes from a session the plan follows stopping, or starting, being one that is not happening is retried the same way, whatever it is called: a skip or a skip taken back, a day marked missed, a let-go, and a missed or skipped session moved, folded, shortened or put back (`statusChangeCoachTrigger`'s `followed`, `enqueueCoachAfterPlanDayMove`, `server/services/missedRecovery/index.ts`). They come from a request, with no log on its way to bring the coach back, so a send the queue refuses puts the plan on the same waiting list (`enqueueMissedSessionCoachInBackground`) and the next tick queues the pass.
 
 `logged-sets-edited` is what keeps a corrected session honest. Editing a completed workout's sets used to drop the analytics caches and stop there, leaving the coach note and the adherence percentage describing the sets that were replaced — so the only way to re-run either was to reopen the day, which on a Strava-linked day splits the recording back out into its own entry. The re-derivation lives in `refreshDerivedStateAfterLoggedSetChange`, which also rewrites the adherence snapshot.
 
@@ -297,11 +302,18 @@ flowchart TD
     W2 --> W
     A --> BR["Lifts not trained for 2+ weeks:<br/>return at the last load, less 2.5%<br/>per further week off, 10% at most"]
     BR --> W2
+    MS["Key or supporting sessions that never happened<br/>(missed, skipped) in the last 14 days,<br/>not in engine_state.adaptedMisses"] --> MH["Per lift: hold the next session that climbs<br/>past the missed load at that load;<br/>later ones follow at 2.5%/week"]
+    MH --> W
+    MS --> ML["Long run: the next one that builds past the<br/>missed distance repeats it;<br/>later ones follow at 8%/week"]
+    ML --> LR["Rewrite the long-run row's distance<br/>and the day's text where it states it once"]
+    LR --> Z
+    MB["A held session is back in the plan<br/>(folded, un-skipped, logged late)"] --> MR["Restore the loads the hold lowered,<br/>where a set still reads what it wrote"]
+    MR --> W
     A --> RUN{"New best run effort?"}
     RUN -- "Yes, not fatigued" --> P["Rescale every written pace<br/>in the remaining plan"]
     W --> Z["plan_days: aiSource progression,<br/>aiRationale, progressionChanges"]
     P --> Z
-    Z --> S["engine_state: adaptedLogIds, runVdot"]
+    Z --> S["engine_state: adaptedLogIds, runVdot,<br/>adaptedMisses, missHolds"]
 ```
 
 ---
@@ -322,7 +334,8 @@ flowchart TD
 | Deterministic load math + ACWR/restrictions | `server/services/trainingLoadService.ts` (daily loads, restrictions), `server/services/trainingLoad/stressScores.ts` (SSS, CSS), `server/services/trainingLoad/loadDynamics.ts` (EWMAs, ACWR and its zones) |
 | Load-governor suggestion builder (`buildLoadGovernorSuggestions`) | `server/services/trainingLoadGovernor.ts` |
 | Plan adaptation stage (reads, writes) | `server/services/planAdaptationService.ts` |
-| Plan adaptation rules (pure) | `server/services/workoutEngine/adaptation.ts`, `server/services/workoutEngine/paceRewrite.ts`, `shared/progression.ts` |
+| Plan adaptation rules (pure) | `server/services/workoutEngine/adaptation.ts` (logs, breaks, runs), `server/services/workoutEngine/missedSessions.ts` and `missedLongRun.ts` (sessions that never happened: lifts, and the long run), `server/services/workoutEngine/adaptationWorking.ts` (applying a decision), `server/services/workoutEngine/paceRewrite.ts`, `shared/progression.ts` |
+| Coach pass after the missed-session sweep | `server/storage/plans.ts` (`markMissedPlanDays`, `takeAthletesToCoachAfterMiss`, `keepAwaitingCoachAfterMiss`), `server/services/autoCoachQueue.ts` (`coachAthletesAfterMissedSweep`), `server/emailScheduler.ts` |
 | Plan engine state (`training_plans.engine_state`) | `shared/schema/tables.ts`, `shared/schema/types/plans.ts`, `migrations/0103_training_plans_engine_state.sql` |
 | Exercise load tag schema | `shared/schema/tables.ts`, `migrations/0049_exercise_load_tags.sql` |
 | Coach-note metadata type | `shared/schema/types/plans.ts` |
@@ -343,6 +356,9 @@ flowchart TD
 - The AI budget gates only the provider layer: over budget, the governor and the adaptation still apply.
 - A failed model call is never read as "nothing to change" (AI8, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)). When the suggestions call fails, the pass writes the governor, the adaptation and any safety note, writes no review notes, and fails the job so pg-boss retries it. When only the review-note call fails, the model's changes stand, the unchanged days get no note this pass, and the job completes, since a retry would re-run the suggestions on days they already changed. With no text provider configured for the reasoning model (a missing API key, no reasoning model, or `AI_FEATURES_ENABLED=false`) the model is not called: the rule-based stages apply and the job completes, as over budget. A configuration error the call itself runs into ends the same way, without a retry.
 - Each logged workout is adapted into the plan once (`engine_state.adaptedLogIds`); a plan's own recent history is marked as already reflected when it is generated.
+- Each session that never happened is followed once too (`engine_state.adaptedMisses`), so a load the athlete puts back after a hold is not lowered again. One with a step no session in range answers yet stays uncounted and is asked again on later passes, without holding a second time what it already holds. A hold only lowers loads, so it applies while fatigued and inside a taper; it is taken back when the session returns to the plan ahead of the sessions held for it, and only on sets that still read what it wrote (`engine_state.missHolds`).
+- A held day says so on its card for as long as the hold is the engine's last word on it: `aiInputsUsed.missedSessionHold` survives the review notes and model edits written on the day afterwards, the same way `lastModification` does.
+- A missed session never adds work. The model may repeat a step or convert one nearby session into a shorter version of a lost key session, replacing that session's work; it may not put the missed session back or grow a week past what was planned (`SUGGESTIONS_PROMPT` hard constraints).
 - The adaptation never raises a load while the governor reports yellow/danger load or the RPE trend flags fatigue, nor inside a taper or race week, and one session moves loads by at most +5% / -10%. A pass that adapts several logs together still raises a load by at most +5%, and each custom lift is matched by its label, never by the shared name "custom".
 - ACWR yellow now creates a medium-priority, short-window soft downshift for high-intensity sessions instead of only surfacing passive metadata.
 - The visible timeline note keeps the rationale and input audit metadata on `plan_days.aiRationale` and `plan_days.aiInputsUsed`.

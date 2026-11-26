@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { afterEach,beforeEach,describe, expect, it, vi } from "vitest";
 
@@ -270,7 +271,7 @@ describe("PlanStorage.markMissedPlanDays", () => {
   // Mock the three chains the sweep drives: the distinct-zone read, the
   // per-zone plan-id subquery (never executed — it is passed to inArray), and
   // the UPDATE whose WHERE we capture to prove which date each zone compared.
-  function primeSweep(zones: { tz: string }[], updatedPerZone = 1) {
+  function primeSweep(zones: { tz: string }[], updatedPerZone = 1, swept?: unknown[]) {
     vi.mocked(db.selectDistinct).mockReturnValue({
       from: vi.fn().mockResolvedValue(zones),
     } as never);
@@ -282,7 +283,9 @@ describe("PlanStorage.markMissedPlanDays", () => {
     } as never);
     const returningMock = vi
       .fn()
-      .mockResolvedValue(Array.from({ length: updatedPerZone }, (_, i) => ({ id: `pd-${i}` })));
+      .mockResolvedValue(
+        swept ?? Array.from({ length: updatedPerZone }, (_, i) => ({ id: `pd-${i}` })),
+      );
     whereMock = vi.fn((clause: unknown) => {
       whereClauses.push(clause);
       return { returning: returningMock };
@@ -398,6 +401,131 @@ describe("PlanStorage.markMissedPlanDays", () => {
     await storage.markMissedPlanDays();
 
     expect(await new PlanStorage().markMissedPlanDays()).toBe(1);
+  });
+
+  describe("takeAthletesToCoachAfterMiss", () => {
+    const sweptDay = (planId: string, overrides: Record<string, unknown> = {}) => ({
+      id: `pd-${planId}`,
+      planId,
+      priority: null,
+      focus: "Lower Strength",
+      mainWorkout: "A) Back Squat 5x5 @ 100 kg",
+      ...overrides,
+    });
+
+    /** Stub the owner lookup; returns its WHERE so a test can read what it asked. */
+    function primeOwners(owners: { userId: string; planId: string }[] | Error) {
+      const where = vi.fn(() =>
+        owners instanceof Error ? Promise.reject(owners) : Promise.resolve(owners),
+      );
+      vi.mocked(db.select).mockReturnValue({
+        from: () => ({
+          // The lookup itself: plans joined to their athletes.
+          innerJoin: () => ({ where }),
+          // The "still training" subquery: its own WHERE is kept for the test to read.
+          where: (clause: unknown) => {
+            activeClauses.push(clause);
+            return sql`select 1`;
+          },
+        }),
+      } as never);
+      return where;
+    }
+
+    let activeClauses: unknown[];
+    beforeEach(() => {
+      activeClauses = [];
+    });
+
+    function rendered(where: ReturnType<typeof primeOwners>) {
+      const [clause] = where.mock.calls[0] as unknown as [unknown];
+      return new PgDialect().sqlToQuery(clause as never);
+    }
+
+    it("asks for nobody when no sweep lost a session", async () => {
+      primeSweep([{ tz: "UTC" }]);
+      await storage.markMissedPlanDays();
+      const where = primeOwners([{ userId: "u1", planId: "plan-a" }]);
+
+      expect(await storage.takeAthletesToCoachAfterMiss()).toEqual([]);
+      expect(where).not.toHaveBeenCalled();
+    });
+
+    it("hands over the athletes of plans that lost a session the plan leans on, once", async () => {
+      primeSweep([{ tz: "UTC" }], 1, [
+        sweptDay("plan-key", { priority: "key" }),
+        sweptDay("plan-supporting"),
+        sweptDay("plan-second"),
+        // Nothing after an optional session or a rest day depends on it.
+        sweptDay("plan-optional", { priority: "optional" }),
+        sweptDay("plan-rest", { focus: "Rest", mainWorkout: "Rest day" }),
+      ]);
+      expect(await storage.markMissedPlanDays()).toBe(5);
+      const where = primeOwners([
+        { userId: "u1", planId: "plan-key" },
+        { userId: "u2", planId: "plan-supporting" },
+        { userId: "u1", planId: "plan-second" },
+      ]);
+
+      // One entry an athlete, with every plan that put them on the list.
+      expect(await storage.takeAthletesToCoachAfterMiss()).toEqual([
+        { userId: "u1", planIds: ["plan-key", "plan-second"] },
+        { userId: "u2", planIds: ["plan-supporting"] },
+      ]);
+
+      const query = rendered(where);
+      expect(query.params).toContain("plan-key");
+      expect(query.params).toContain("plan-supporting");
+      expect(query.params).not.toContain("plan-optional");
+      expect(query.params).not.toContain("plan-rest");
+      // Only athletes with the coach on...
+      expect(query.sql).toContain('"users"."ai_coach_enabled" = $');
+      expect(query.params).toContain(true);
+      // ...who logged a workout in the last two weeks (a day spare for timezones).
+      expect(query.sql).toContain("exists");
+      const active = new PgDialect().sqlToQuery(activeClauses[0] as never);
+      expect(active.sql).toContain('"workout_logs"."date" >= $');
+      expect(active.params).toContain("2026-07-06");
+
+      // Answered once.
+      expect(await storage.takeAthletesToCoachAfterMiss()).toEqual([]);
+      expect(where).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the athletes for the next tick when the lookup fails", async () => {
+      primeSweep([{ tz: "UTC" }], 1, [sweptDay("plan-a")]);
+      await storage.markMissedPlanDays();
+
+      primeOwners(new Error("connection reset"));
+      await expect(storage.takeAthletesToCoachAfterMiss()).rejects.toThrow("connection reset");
+
+      primeOwners([{ userId: "u1", planId: "plan-a" }]);
+      expect(await storage.takeAthletesToCoachAfterMiss()).toEqual([
+        { userId: "u1", planIds: ["plan-a"] },
+      ]);
+    });
+
+    it("asks again for the plans a caller hands back, and only those", async () => {
+      primeSweep([{ tz: "UTC" }], 1, [sweptDay("plan-a"), sweptDay("plan-b")]);
+      await storage.markMissedPlanDays();
+      primeOwners([
+        { userId: "u1", planId: "plan-a" },
+        { userId: "u2", planId: "plan-b" },
+      ]);
+      const [first] = await storage.takeAthletesToCoachAfterMiss();
+
+      // The coach could not be queued for u1: their plan goes back on the list.
+      storage.keepAwaitingCoachAfterMiss(first?.planIds ?? []);
+
+      const where = primeOwners([{ userId: "u1", planId: "plan-a" }]);
+      expect(await storage.takeAthletesToCoachAfterMiss()).toEqual([
+        { userId: "u1", planIds: ["plan-a"] },
+      ]);
+      const query = rendered(where);
+      expect(query.params).toContain("plan-a");
+      expect(query.params).not.toContain("plan-b");
+      expect(await storage.takeAthletesToCoachAfterMiss()).toEqual([]);
+    });
   });
 });
 

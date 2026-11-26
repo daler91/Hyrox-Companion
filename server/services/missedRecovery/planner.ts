@@ -82,6 +82,29 @@ export interface PlannerMissedSession {
     readonly changes: readonly RecoveryShortenChange[];
     readonly notes: readonly RecoveryNote[];
   };
+  /**
+   * What leaving the session missed holds in the sessions after it, as the
+   * plan adaptation works it out (planAdaptationService). Absent when the
+   * athlete's plan is not adapted at all (the AI coach is off).
+   */
+  readonly followOn?: PlannerFollowOn;
+}
+
+/** One lift the plan holds at the missed step: the first session reached, and the load left there. */
+export interface PlannerFollowOnChange {
+  readonly exercise: string;
+  readonly date: string;
+  /** A lift's "4x6"; empty for a long run. */
+  readonly scheme: string;
+  readonly from: number;
+  readonly to: number;
+  readonly unit: string;
+}
+
+export interface PlannerFollowOn {
+  /** The plan already reads this way: a coach pass has followed the miss. */
+  readonly applied: boolean;
+  readonly changes: readonly PlannerFollowOnChange[];
 }
 
 export interface PlannerInput {
@@ -584,14 +607,41 @@ function recommend(input: PlannerInput, fold: RecoveryMoveOption, shorten: Recov
   return letGo("There's no clean slot for it, and a supporting session costs little to let go.");
 }
 
+/** A session with more lifts than this names the first few. */
+const MAX_FOLLOW_ON_LINES = 4;
+
+/**
+ * What staying missed does to the sessions after it, in sentences: each lift
+ * picks up from the missed step in its next session. "Stays at" once a coach
+ * pass has made it so; "will repeat" while that pass is still to come.
+ */
+function followOnLines(input: PlannerInput): string[] {
+  const followOn = input.missed.followOn;
+  if (!followOn || followOn.changes.length === 0) return [];
+  const lines = followOn.changes.slice(0, MAX_FOLLOW_ON_LINES).map((change) => {
+    const whose = `${capitalise(dayLabel(change.date, input.today))}'s ${change.exercise}`;
+    // A lift reads "5x5 @ 100 kg"; a long run is only its distance, "9 km".
+    const amount = `${change.to} ${change.unit}`;
+    const load = change.scheme ? `${change.scheme} @ ${amount}` : amount;
+    return followOn.applied
+      ? `${whose} stays at ${load} instead of ${change.from} ${change.unit}.`
+      : `${whose} will repeat ${load} instead of climbing to ${change.from} ${change.unit}.`;
+  });
+  return [...lines, "The sessions after that follow one step behind."];
+}
+
 function letGoImpact(input: PlannerInput): RecoveryImpact {
+  const followOn = followOnLines(input);
   return {
-    summary: `${capitalise(input.missed.focus || "The session")} stays missed, and the rest of the plan carries on as it is.`,
+    // Nothing moves — but the plan does not simply carry on: the adaptation
+    // holds the sessions after it at the missed step (workoutEngine/missedSessions.ts).
+    summary: `${capitalise(input.missed.focus || "The session")} stays missed, and no session moves to make up for it.`,
     keptFraction: 0,
     keptMinutes: 0,
     day: null,
     weeks: affectedWeeks(input, null),
     notes: [],
+    ...(followOn.length > 0 ? { followOn } : {}),
   };
 }
 

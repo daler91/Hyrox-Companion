@@ -23,7 +23,8 @@ import { storage } from "../../storage";
 import type { PlanDayRecoveryWrite } from "../../storage/plans";
 import { deriveRaceDayOverride } from "../../storage/raceDayView";
 import { getLocalDateStrSafe } from "../../timezone";
-import { enqueueAutoCoachInBackground } from "../autoCoachQueue";
+import { enqueueMissedSessionCoachInBackground } from "../autoCoachQueue";
+import { previewMissedSessionFollowOn } from "../planAdaptationService";
 import { recordPlanDayMove } from "../planDayMoves";
 import {
   planMissedSessionRecovery,
@@ -65,6 +66,13 @@ interface RecoveryContext {
   readonly sets: readonly ExerciseSet[];
   readonly input: PlannerInput;
   readonly shortenPlan: ShortenPlan;
+  /** What the preview needs of the athlete to say what a let-go changes next. */
+  readonly athlete: {
+    /** Off, nothing adapts the plan, so a miss changes nothing after it. */
+    readonly coachEnabled: boolean;
+    readonly weightUnit: string;
+    readonly distanceUnit: string;
+  };
 }
 
 function notMissed(message: string): AppError {
@@ -238,6 +246,18 @@ async function loadTimelinePages(userId: string, from: string, before: string, p
   return [...result.entries, ...(await loadTimelinePages(userId, from, next, page + 1))];
 }
 
+/** What the preview needs of the athlete; a missing row reads as the coach off, in kilograms. */
+function recoveryAthlete(
+  user: { aiCoachEnabled?: boolean | null; weightUnit?: string | null } | undefined,
+  distanceUnit: string,
+): RecoveryContext["athlete"] {
+  return {
+    coachEnabled: user?.aiCoachEnabled === true,
+    weightUnit: user?.weightUnit || "kg",
+    distanceUnit,
+  };
+}
+
 async function loadRecoveryContext(userId: string, planDayId: string): Promise<RecoveryContext> {
   const [day, user] = await Promise.all([
     storage.plans.getPlanDay(planDayId, userId),
@@ -296,6 +316,7 @@ async function loadRecoveryContext(userId: string, planDayId: string): Promise<R
     day,
     sets: daySets,
     shortenPlan,
+    athlete: recoveryAthlete(user, distanceUnit),
     input: {
       today,
       missed: {
@@ -329,7 +350,18 @@ export async function getMissedSessionRecoveryPreview(
   planDayId: string,
 ): Promise<MissedSessionRecoveryPreview> {
   const context = await loadRecoveryContext(userId, planDayId);
-  return planMissedSessionRecovery(context.input);
+  // Only the preview says what staying missed changes next; applying a
+  // decision re-plans without it, since none of the choices depend on it.
+  const followOn = context.athlete.coachEnabled
+    ? await previewMissedSessionFollowOn(userId, planDayId, context.input.today, {
+        weightUnit: context.athlete.weightUnit,
+        distanceUnit: context.athlete.distanceUnit,
+      })
+    : undefined;
+  return planMissedSessionRecovery({
+    ...context.input,
+    missed: { ...context.input.missed, ...(followOn ? { followOn } : {}) },
+  });
 }
 
 async function writeRecovery(userId: string, planDayId: string, write: PlanDayRecoveryWrite): Promise<PlanDay> {
@@ -396,8 +428,9 @@ async function moveMissedSession(
     toDate: updated.scheduledDate,
     kind: action === "fold" ? "folded" : "shortened",
   });
-  // The upcoming schedule changed shape: let the coach look at it again.
-  enqueueAutoCoachInBackground(userId, "plan-day-rescheduled");
+  // The session is one again: the coach looks at the new shape of the week,
+  // and the pass gives the sessions held for it their loads back.
+  enqueueMissedSessionCoachInBackground(storage, userId, day.planId, "plan-day-rescheduled");
   return updated;
 }
 
@@ -454,8 +487,9 @@ async function undoMove(userId: string, day: PlanDay): Promise<PlanDay> {
     toDate: restored.scheduledDate,
     kind: "recovery_undone",
   });
-  // The upcoming schedule changed shape again.
-  enqueueAutoCoachInBackground(userId, "plan-day-rescheduled");
+  // Back on the day it was missed, and stored `missed`, so the sweep will
+  // never mark it: this pass is the one that holds the sessions after it again.
+  enqueueMissedSessionCoachInBackground(storage, userId, day.planId, "plan-day-rescheduled");
   return restored;
 }
 
@@ -472,6 +506,8 @@ async function reopenDecision(userId: string, planDayId: string): Promise<PlanDa
   // only set by a move, so it still says it was moved once. Whether it was
   // shortened on the way is lost, and "folded" is the honest remainder — what
   // matters is that the planner doesn't chase it as if it had never moved.
+  // No coach pass: the session is as missed as it was, so nothing the plan
+  // adaptation reads has changed.
   return writeRecovery(userId, planDayId, {
     guard: guardFor(day),
     update: { recovery: day.missedOn ? "folded" : null },
@@ -495,10 +531,17 @@ export async function applyMissedSessionRecovery(
   if (body.action === "let_go") {
     // A past day the sweep has not reached yet is stored `planned`; it is
     // missed all the same, so the decision writes the status with it.
-    return writeRecovery(userId, planDayId, {
+    const letGo = await writeRecovery(userId, planDayId, {
       guard: guardFor(context.day),
       update: { status: "missed", recovery: "let_go" },
     });
+    // Settled as not happening: the coach follows it into the sessions still
+    // ahead (the plan adaptation holds them at its step). The overnight sweep
+    // does this for a day it marks, but a day let go before the sweep reached
+    // it is never one the sweep marks. A send the queue refuses is retried on
+    // the hourly tick.
+    enqueueMissedSessionCoachInBackground(storage, userId, letGo.planId, "missed-session-let-go");
+    return letGo;
   }
   return moveMissedSession(userId, context, body.action, body.targetDate);
 }

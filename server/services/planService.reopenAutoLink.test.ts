@@ -36,7 +36,11 @@ vi.mock("../storage", () => ({
 }));
 vi.mock("../storage/planSlot", () => ({ planSlotForMove: vi.fn().mockResolvedValue({}) }));
 vi.mock("./planDayMoves", () => ({ recordPlanDayMove: vi.fn() }));
-vi.mock("./autoCoachQueue", () => ({ enqueueAutoCoachInBackground: vi.fn() }));
+vi.mock("./autoCoachQueue", () => ({
+  enqueueAutoCoachInBackground: vi.fn(),
+  enqueueCoachAfterPlanDayMove: vi.fn(),
+  enqueueMissedSessionCoachInBackground: vi.fn(),
+}));
 vi.mock("./analyticsRouteCache", () => ({ invalidateAnalyticsCachesForUser: vi.fn() }));
 // Which set an auto link synthesised, and which the athlete corrected, is
 // covered in deviceActivityLink.test.ts; here none is, unless a test says

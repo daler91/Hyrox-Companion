@@ -1,5 +1,8 @@
+import { resolveSessionPriority } from "@shared/sessionPriority";
+
 import { logger } from "../logger";
 import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
+import type { IStorage } from "../storage";
 
 /**
  * Single producer-side entry point for the auto-coach job.
@@ -37,7 +40,13 @@ export type AutoCoachTrigger =
   | "workout-date-changed"
   | "logged-sets-edited"
   | "plan-day-completed"
-  | "plan-day-rescheduled";
+  | "plan-day-rescheduled"
+  // A session that is not going to happen: swept to missed overnight, skipped
+  // (or un-skipped) by the athlete, or a missed one they let go. The plan
+  // adaptation holds the sessions after it at the step that was not done.
+  | "plan-day-missed"
+  | "plan-day-skipped"
+  | "missed-session-let-go";
 
 /**
  * Enqueue an auto-coach pass, returning the send promise so callers that hold
@@ -69,4 +78,106 @@ export function enqueueAutoCoachInBackground(userId: string, trigger: AutoCoachT
     // bearer:disable javascript_lang_logger_leak
     logger.error({ err, trigger }, "Failed to queue auto-coach job");
   });
+}
+
+/**
+ * The background variant for the passes a session that is not happening asks
+ * for from a request: a skip (or one taken back) and a missed session let go.
+ * For the other triggers a lost pass only leaves a note stale until the next
+ * log. Here no log is on its way: the pass is what moves the sessions after
+ * the miss, and nothing else brings the coach back. So a send the queue
+ * refuses also puts the plan on the missed-session sweep's waiting list, and
+ * the next hourly tick queues the pass (coachAthletesAfterMissedSweep), with
+ * that list's checks on the athlete.
+ */
+export function enqueueMissedSessionCoachInBackground(
+  storage: IStorage,
+  userId: string,
+  planId: string | null | undefined,
+  trigger: AutoCoachTrigger,
+): void {
+  enqueueAutoCoach(userId, trigger).catch((err) => {
+    if (planId) storage.plans.keepAwaitingCoachAfterMiss([planId]);
+    // bearer:disable javascript_lang_logger_leak
+    logger.error({ err, trigger }, "Failed to queue auto-coach job");
+  });
+}
+
+/** What the queue reads of a plan day to tell whether the plan adaptation follows it. */
+interface FollowablePlanDay {
+  readonly planId: string | null;
+  readonly status: string | null;
+  readonly priority?: string | null;
+  readonly focus: string | null | undefined;
+  readonly mainWorkout: string | null | undefined;
+}
+
+/**
+ * Whether the plan adaptation is following this day as a session that is not
+ * happening: skipped or missed, and one the plan leans on (key or
+ * supporting). The sessions after such a day are held at its step.
+ */
+export function isFollowedAsNotHappening(day: FollowablePlanDay): boolean {
+  if (day.status !== "skipped" && day.status !== "missed") return false;
+  const priority = resolveSessionPriority(day);
+  return priority === "key" || priority === "supporting";
+}
+
+/**
+ * Queue the coach after a plan day moved to another date. `moved` is the day
+ * as it was before the move. When the adaptation was following it as not
+ * happening, the move has brought it back, and the pass is what gives the
+ * sessions after it their loads back: a refused send is retried like the
+ * other missed-session triggers. Any other move is the plain background
+ * trigger.
+ */
+export function enqueueCoachAfterPlanDayMove(
+  storage: IStorage,
+  userId: string,
+  moved: FollowablePlanDay | null | undefined,
+): void {
+  if (moved && isFollowedAsNotHappening(moved)) {
+    enqueueMissedSessionCoachInBackground(storage, userId, moved.planId, "plan-day-rescheduled");
+    return;
+  }
+  enqueueAutoCoachInBackground(userId, "plan-day-rescheduled");
+}
+
+/**
+ * Queue a coach pass for every athlete the missed-session sweep left waiting
+ * for one (storage.plans.takeAthletesToCoachAfterMiss), so the sessions after
+ * a missed one are looked at overnight rather than whenever the athlete next
+ * logs. Returns how many were queued.
+ *
+ * Each send is awaited: the storage has already taken those athletes off its
+ * list, so one the queue refuses is handed back for the next tick to try
+ * again. Dropped instead, their plan would carry on as if the missed session
+ * had been done until they next logged a workout.
+ *
+ * Never throws: it rides on the hourly email tick, and that tick's emails do
+ * not wait on the coach. A failed read keeps the athletes for the next tick.
+ */
+export async function coachAthletesAfterMissedSweep(storage: IStorage): Promise<number> {
+  try {
+    const athletes = await storage.plans.takeAthletesToCoachAfterMiss();
+    const queued = await Promise.all(
+      athletes.map(async ({ userId, planIds }) => {
+        try {
+          await enqueueAutoCoach(userId, "plan-day-missed");
+          return true;
+        } catch (err) {
+          storage.plans.keepAwaitingCoachAfterMiss(planIds);
+          // bearer:disable javascript_lang_logger_leak
+          logger.error({ err, trigger: "plan-day-missed" }, "Failed to queue auto-coach job");
+          return false;
+        }
+      }),
+    );
+    return queued.filter(Boolean).length;
+  } catch (err) {
+    // A failed read of plan and user ids; no row content is logged.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err }, "Could not queue coach passes after the missed-session sweep");
+    return 0;
+  }
 }
