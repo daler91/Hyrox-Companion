@@ -299,7 +299,9 @@ function Sidebar({
 }
 
 function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar();
+  const { toggleSidebar, open, openMobile, isMobile } = useSidebar();
+  const isOpen = isMobile ? openMobile : open;
+  const label = isOpen ? "Close sidebar" : "Open sidebar";
 
   return (
     <TooltipProvider>
@@ -310,7 +312,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
             data-slot="sidebar-trigger"
             variant="ghost"
             size="icon"
-            aria-label="Toggle Sidebar"
+            aria-label={label}
             // 44x44 on touch (WCAG 2.5.5 / Apple HIG); the trigger sits in the
             // mobile sticky header where mis-taps are common. Compact on >=md only
             // because the desktop sidebar is persistent and the trigger is hidden.
@@ -322,24 +324,24 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
             {...props}
           >
             <PanelLeftIcon aria-hidden="true" />
-            <span className="sr-only">Toggle Sidebar</span>
+            <span className="sr-only">{label}</span>
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Toggle Sidebar</TooltipContent>
+        <TooltipContent>{label}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar } = useSidebar();
+  const { toggleSidebar, open } = useSidebar();
 
   // Note: Tailwind v3.4 doesn't support "in-" selectors. So the rail won't work perfectly.
   return (
     <button
       data-sidebar="rail"
       data-slot="sidebar-rail"
-      aria-label="Toggle Sidebar"
+      aria-label={open ? "Close sidebar" : "Open sidebar"}
       tabIndex={-1}
       onClick={toggleSidebar}
       className={cn(
