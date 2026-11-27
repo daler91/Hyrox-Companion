@@ -583,6 +583,7 @@ private fun RecoveryOptions(preview: PlanDayRecoveryPreview, saving: Boolean, on
         targets.firstOrNull { it.date == targetDate }?.let { Text(it.impact.summary, style = type.bodySm, color = colors.textMuted) }
     } else if (choice == RecoveryChoice.LetGo) {
         Text(preview.letGo.impact.summary, style = type.bodySm, color = colors.textMuted)
+        preview.letGo.impact.followOn?.takeIf { it.isNotEmpty() }?.let { FollowOnList(it) }
     }
 
     val action: RecoveryAction? = when (choice) {
@@ -598,6 +599,32 @@ private fun RecoveryOptions(preview: PlanDayRecoveryPreview, saving: Boolean, on
     }
     FitaiButton(label, onClick = { action?.let(onAction) }, enabled = action != null, loading = saving, modifier = Modifier.fillMaxWidth())
 }
+
+/**
+ * What staying missed changes in the sessions after it, a line each: "Thursday's
+ * Back Squat will repeat 5x5 @ 100 kg instead of climbing to 102.5 kg." The
+ * server writes them from the plan adaptation's own rule, so the sheet and the
+ * plan cannot disagree.
+ */
+@Composable
+private fun FollowOnList(lines: List<String>) {
+    val colors = FitaiTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+        lines.forEach { line ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                Icon(
+                    LucideIcons.CornerDownRight,
+                    contentDescription = null,
+                    tint = colors.textMuted,
+                    modifier = Modifier.padding(top = Spacing.Xxs).size(FOLLOW_ON_ICON),
+                )
+                Text(line, style = FitaiTheme.typography.bodySm, color = colors.text)
+            }
+        }
+    }
+}
+
+private val FOLLOW_ON_ICON = 14.dp
 
 @Composable
 private fun OptionChip(

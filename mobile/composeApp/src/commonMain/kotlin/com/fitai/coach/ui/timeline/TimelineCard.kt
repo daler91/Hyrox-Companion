@@ -107,7 +107,9 @@ class CardActions(
  * A session on the timeline, laid out as the web's card: the "done" circle
  * (or a done session's tick) ahead of everything; the status, tier, plan and
  * weekday as badges; the title; then the prescription, notes, targets and the
- * coach's note. The move menu sits in the top corner, over the badge rows.
+ * coach's note, with what a missed session changed on either side of it
+ * (MissedSessionNotes.kt). The move menu sits in the top corner, over the
+ * badge rows.
  */
 @Composable
 fun TimelineCard(
@@ -127,6 +129,8 @@ fun TimelineCard(
     distanceUnit: String? = null,
     /** The athlete's date, for how long ago the coach's note changed; null leaves that out. */
     today: String? = null,
+    /** On a missed or skipped session: what the plan changed after it; null with nothing to say. */
+    aftermath: MissedAftermath? = null,
 ) {
     FitaiCard(Modifier.fillMaxWidth(), onClick = onOpen, tone = cardTone(entry), contentPadding = Spacing.Lg) {
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
@@ -135,8 +139,10 @@ fun TimelineCard(
                 CardHeader(entry, pending, strava, actions)
                 CardBody(entry, chips, fuelling, mafCeiling, distanceUnit)
                 strava?.options?.suggestion?.let { suggestion -> LinkSuggestion(suggestion, strava) }
+                holdLine(entry)?.let { MissedSessionHoldNote(it) }
                 entry.aiRationale?.takeIf { it.isNotBlank() }?.let { CardCoachNote(entry, it, today) }
                 RecoveryNote(entry, actions.onUndoRecovery)
+                aftermath?.let { MissedAftermathNote(it) }
             }
         }
     }

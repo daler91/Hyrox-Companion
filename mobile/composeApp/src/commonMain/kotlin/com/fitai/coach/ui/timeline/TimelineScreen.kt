@@ -489,6 +489,7 @@ private fun DayContent(
             mafCeiling = state.mafCeiling,
             distanceUnit = state.units.distanceUnit,
             today = state.today,
+            aftermath = state.aftermath[entry.id],
             strava = stravaControls(
                 entry,
                 day.entries,

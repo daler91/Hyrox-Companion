@@ -66,6 +66,8 @@ data class TimelineUiState(
     val week: WeekSummary? = null,
     /** All-time personal records, for the trophies on exercise chips. */
     val records: Map<String, PersonalRecord> = emptyMap(),
+    /** What the plan changed after each recent missed or skipped session, by its entry's id. */
+    val aftermath: Map<String, MissedAftermath> = emptyMap(),
     /** The auto-coach is reviewing a workout and may change upcoming sessions. */
     val coachReviewing: Boolean = false,
     /** Sunday evening to Tuesday: the nudge into last week's review, unless dismissed for that week. */
@@ -168,6 +170,8 @@ class TimelineViewModel(
             ).withAnnotations(more.annotations, today),
             week = weekSummary(entries, plans.orEmpty(), shown.planId, summary, today),
             records = more.records,
+            // From every entry, not the rows shown: a status filter hides the sessions a miss changed.
+            aftermath = missedAftermath(entries, today, prefs?.userTimezone),
             coachReviewing = more.coachReviewing,
             reviewPrompt = reviewPrompt(today, hourIn(prefs?.userTimezone))?.takeIf { it.weekStart != more.dismissedPrompt },
             // Archived plans after the live ones: still there to look back on, or restore.
