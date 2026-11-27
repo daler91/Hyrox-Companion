@@ -24,8 +24,15 @@ export function GarminConnectForm({
   isConnecting,
   onConnect,
 }: GarminConnectFormProps) {
+  const canConnect = Boolean(email) && Boolean(password) && !isConnecting && !garminLoading;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (canConnect) onConnect();
+  };
+
   return (
-    <div className="space-y-3 pt-2">
+    <form onSubmit={handleSubmit} className="space-y-3 pt-2">
       <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
         <div className="flex items-start gap-2">
           <AlertTriangle
@@ -75,10 +82,10 @@ export function GarminConnectForm({
         />
       </div>
       <Button
+        type="submit"
         variant="outline"
         size="sm"
-        onClick={onConnect}
-        disabled={!email || !password || isConnecting || garminLoading}
+        disabled={!canConnect}
         aria-busy={isConnecting}
         data-testid="button-connect-garmin"
       >
@@ -89,6 +96,6 @@ export function GarminConnectForm({
         )}
         Connect Garmin
       </Button>
-    </div>
+    </form>
   );
 }
