@@ -37,7 +37,10 @@ private val loggedToday =
     """{"id":"log-w0","date":"${FakeApi.today}","type":"logged","status":"completed","focus":"Morning Run",""" +
         """"mainWorkout":"5 km easy\nThen 4 x 400 m\nThen strides","workoutLogId":"w0"}"""
 
-/** The timeline's coach cues, MAF ceiling, offline and pending-sync marks, empty states, and the way back to today. */
+/**
+ * The timeline's coach cues, MAF ceiling, offline and pending-sync marks, empty states, the way back to today, and
+ * what a session that was not done changed.
+ */
 @OptIn(ExperimentalTestApi::class)
 class TimelineStatusUiTest {
     @Test
@@ -153,6 +156,28 @@ class TimelineStatusUiTest {
             waitUntil(timeoutMillis = 10_000) {
                 onAllNodes(hasContentDescription("Today is below — jump to today")).fetchSemanticsNodes().isEmpty()
             }
+        }
+    }
+
+    @Test
+    fun aSessionHeldAfterASkipSaysSoAndSoDoesTheSkippedOne() {
+        // Skipped this morning; the plan held this evening's squats at the step that was not done.
+        val skipped =
+            """{"id":"plan-d1","date":"${FakeApi.today}","type":"planned","status":"skipped","focus":"Morning squats",""" +
+                """"mainWorkout":"Back Squat 5x5 @ 100 kg","planDayId":"d1","priority":"key"}"""
+        val held =
+            """{"id":"plan-d2","date":"${FakeApi.today}","type":"planned","status":"planned","focus":"Evening lift",""" +
+                """"mainWorkout":"Back Squat 5x5 @ 100 kg","planDayId":"d2","priority":"key",""" +
+                """"aiInputsUsed":{"missedSessionHold":{"kind":"skipped","date":"${FakeApi.today}",""" +
+                """"changes":[{"exercise":"back_squat","kind":"hold","from":102.5,"to":100,"unit":"kg"}]}}}"""
+        val api = FakeApi().apply { establishedAccount(skipped, held) }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
+            awaitNode(hasText("Evening lift"))
+            // On the held session, without opening a coach's note.
+            awaitNode(hasText("Adjusted after the session you skipped", substring = true))
+            // On the skipped session's own card.
+            awaitNode(hasText("What your plan changed after this"))
+            awaitNode(hasText("Evening lift — Back Squat: 102.5 → 100 kg", substring = true))
         }
     }
 }

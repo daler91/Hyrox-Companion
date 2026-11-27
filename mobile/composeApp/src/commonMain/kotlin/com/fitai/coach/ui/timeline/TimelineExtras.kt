@@ -10,7 +10,6 @@ import com.fitai.coach.core.api.generated.TrainingOverviewSummary
 import com.fitai.coach.core.api.generated.TrainingPlan
 import com.fitai.coach.core.dates.dayDiff
 import com.fitai.coach.core.exercises.generated.EXERCISE_DEFINITIONS
-import com.fitai.coach.core.exercises.knownExerciseLabel
 import com.fitai.coach.core.plans.PlanPhase
 import com.fitai.coach.core.plans.TrainingPhase
 import com.fitai.coach.core.plans.computeCurrentWeek
@@ -361,12 +360,7 @@ fun basedOnChips(inputs: CoachNoteInputs?): List<String> {
 
 /** Each load or pace an auto-progression moved: "Front Squat: 85 → 90 kg". */
 fun progressionChanges(inputs: CoachNoteInputs?): List<String> = inputs?.progressionChanges.orEmpty().map { change ->
-    if (change.kind == CoachNoteInputs.ProgressionChangesItem.Kind.Pace) {
-        "Run paces: fitness ${formatNumber(change.from)} → ${formatNumber(change.to)} (VDOT)"
-    } else {
-        val label = knownExerciseLabel(change.exercise) ?: change.exercise.replace('_', ' ')
-        "$label: ${formatNumber(change.from)} → ${formatNumber(change.to)} ${change.unit}"
-    }
+    changeText(change.exercise, change.kind == CoachNoteInputs.ProgressionChangesItem.Kind.Pace, change.from, change.to, change.unit)
 }
 
 private fun nextPhases(phase: TrainingPhase): String? {

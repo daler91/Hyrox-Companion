@@ -33,6 +33,13 @@ Every gap below already has a server endpoint, so closing one is client work onl
 - [x] "This week" card: today's session, plan week and phase, race countdown, station radar.
 - [x] PR trophies on exercise chips — `GET /personal-records`.
 - [x] Coach note with its "based on" chips.
+- [x] What a missed session changed (web: `MissedSessionHoldNote`, `MissedAftermathNote`, the recovery sheet's follow-on
+  list; app: `MissedSessionNotes.kt`):
+  - on a held session, the always-visible line "Adjusted after the session you missed on Tue Nov 24 · Back Squat:
+    102.5 → 100 kg", from `aiInputsUsed.missedSessionHold`;
+  - on the missed or skipped session's own card, which upcoming sessions were held for it and how many others the coach
+    has gone over since, worked out from the timeline's entries;
+  - under "Let it go" in the recovery sheet, what staying missed changes — the preview's `followOn` lines.
 - [x] "Coach reviewing" banner while the auto-coach runs.
 - [x] Strava badge:
   - link or unlink an activity — `POST`/`DELETE /workouts/{id}/device-link`;
