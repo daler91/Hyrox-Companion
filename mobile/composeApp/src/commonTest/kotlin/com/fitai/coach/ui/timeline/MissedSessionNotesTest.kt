@@ -12,11 +12,21 @@ class MissedSessionNotesTest {
     private val missedOn = "2026-11-24"
     private val utc = "UTC"
 
+    // Sessions still ahead, and what the hold reads as on them.
+    private val saturday = "2026-11-28"
+    private val nextTuesday = "2026-12-01"
+    private val tuesdayAfter = "2026-12-08"
+    private val strength = "Lower Strength"
+    private val squatHeld = "Back Squat: 102.5 → 100 kg"
+
+    /** The source of a note the coach wrote without changing the session. */
+    private val reviewNote = "review"
+
     private fun entry(
         id: String,
         date: String,
         status: TimelineEntry.Status = TimelineEntry.Status.Planned,
-        focus: String = "Lower Strength",
+        focus: String = strength,
         priority: TimelineEntry.Priority? = TimelineEntry.Priority.Key,
     ) = TimelineEntry(
         id = id,
@@ -56,10 +66,10 @@ class MissedSessionNotesTest {
 
     @Test
     fun aHeldSessionSaysWhichSessionItFollowsAndWhatMoved() {
-        val session = entry("next", "2026-12-01").copy(aiInputsUsed = held())
+        val session = entry("next", nextTuesday).copy(aiInputsUsed = held())
 
         assertEquals(
-            HoldLine("Adjusted after the session you missed on Tue Nov 24", "Back Squat: 102.5 → 100 kg"),
+            HoldLine("Adjusted after the session you missed on Tue Nov 24", squatHeld),
             holdLine(session),
         )
     }
@@ -81,7 +91,7 @@ class MissedSessionNotesTest {
     @Test
     fun aLongListNamesTheFirstFewChanges() {
         val changes = listOf(squat(102.5, 100.0), squat(60.0, 57.5), squat(40.0, 37.5), squat(30.0, 27.5), squat(20.0, 17.5))
-        val session = entry("next", "2026-12-01").copy(aiInputsUsed = held(hold(changes = changes)))
+        val session = entry("next", nextTuesday).copy(aiInputsUsed = held(hold(changes = changes)))
 
         assertEquals(
             "Back Squat: 102.5 → 100 kg · Back Squat: 60 → 57.5 kg · Back Squat: 40 → 37.5 kg · and 2 more",
@@ -92,11 +102,11 @@ class MissedSessionNotesTest {
     @Test
     fun onlyASessionStillToComeCarriesTheLine() {
         val done = entry("done", "2026-11-25", status = TimelineEntry.Status.Completed).copy(aiInputsUsed = held())
-        val nothingMoved = entry("same", "2026-12-01").copy(aiInputsUsed = held(hold(changes = emptyList())))
+        val nothingMoved = entry("same", nextTuesday).copy(aiInputsUsed = held(hold(changes = emptyList())))
 
         assertNull(holdLine(done))
         assertNull(holdLine(nothingMoved))
-        assertNull(holdLine(entry("plain", "2026-12-01")))
+        assertNull(holdLine(entry("plain", nextTuesday)))
     }
 
     // --- The missed session's own card ---
@@ -104,18 +114,18 @@ class MissedSessionNotesTest {
     @Test
     fun aMissedCardListsTheSessionsHeldForItSoonestFirst() {
         val miss = entry("miss", missedOn, status = TimelineEntry.Status.Missed)
-        val later = entry("later", "2026-12-08").copy(aiInputsUsed = held(hold(changes = listOf(squat(105.0, 102.5)))))
-        val next = entry("next", "2026-12-01").copy(aiInputsUsed = held())
+        val later = entry("later", tuesdayAfter).copy(aiInputsUsed = held(hold(changes = listOf(squat(105.0, 102.5)))))
+        val next = entry("next", nextTuesday).copy(aiInputsUsed = held())
         // Held for another day's miss: that miss lists it.
-        val other = entry("other", "2026-11-28").copy(aiInputsUsed = held(hold(date = "2026-11-21")))
+        val other = entry("other", saturday).copy(aiInputsUsed = held(hold(date = "2026-11-21")))
 
         val aftermath = missedAftermath(listOf(later, miss, other, next), today, utc)
 
         assertEquals(setOf("miss"), aftermath.keys)
         assertEquals(
             listOf(
-                HeldSession("next", "2026-12-01", "Lower Strength", listOf("Back Squat: 102.5 → 100 kg")),
-                HeldSession("later", "2026-12-08", "Lower Strength", listOf("Back Squat: 105 → 102.5 kg")),
+                HeldSession("next", nextTuesday, strength, listOf(squatHeld)),
+                HeldSession("later", tuesdayAfter, strength, listOf("Back Squat: 105 → 102.5 kg")),
             ),
             aftermath["miss"]?.held,
         )
@@ -129,14 +139,14 @@ class MissedSessionNotesTest {
         val entries = listOf(
             earlier,
             miss,
-            coached("kept", "2026-11-26", "review", afterTheMiss),
+            coached("kept", "2026-11-26", reviewNote, afterTheMiss),
             coached("changed", "2026-11-27", "rag", afterTheMiss),
             // Written before the miss: the coach had not seen the plan without it.
-            coached("stale", "2026-11-28", "review", "2026-11-23T06:00:00.000Z"),
+            coached("stale", saturday, reviewNote, "2026-11-23T06:00:00.000Z"),
             // Further out than the coach looks.
-            coached("far", "2026-12-08", "review", afterTheMiss),
+            coached("far", tuesdayAfter, reviewNote, afterTheMiss),
             // Held for the miss: listed as that, not counted again.
-            coached("held", "2026-12-01", "progression", afterTheMiss).copy(aiInputsUsed = held()),
+            coached("held", nextTuesday, "progression", afterTheMiss).copy(aiInputsUsed = held()),
         )
 
         val aftermath = missedAftermath(entries, today, utc)
@@ -151,9 +161,9 @@ class MissedSessionNotesTest {
     fun aNoteIsDatedByTheAthletesOwnDayNotUtcs() {
         val miss = entry("miss", missedOn, status = TimelineEntry.Status.Missed)
         // 5 pm on the 24th in Los Angeles, the day of the miss, though already the 25th in UTC.
-        val thatEvening = coached("evening", "2026-11-26", "review", "2026-11-25T01:00:00.000Z")
+        val thatEvening = coached("evening", "2026-11-26", reviewNote, "2026-11-25T01:00:00.000Z")
         // 1 am on the 25th in Los Angeles: the coach has seen the plan without the session.
-        val nextMorning = coached("morning", "2026-11-27", "review", "2026-11-25T09:00:00.000Z")
+        val nextMorning = coached("morning", "2026-11-27", reviewNote, "2026-11-25T09:00:00.000Z")
 
         val entries = listOf(miss, thatEvening, nextMorning)
 
@@ -164,7 +174,7 @@ class MissedSessionNotesTest {
 
     @Test
     fun aMissThePlanDoesNotFollowHasNoAftermath() {
-        val next = entry("next", "2026-12-01").copy(aiInputsUsed = held())
+        val next = entry("next", nextTuesday).copy(aiInputsUsed = held())
         fun aftermathOf(miss: TimelineEntry) = missedAftermath(listOf(miss, next), today, utc)
         val miss = entry("miss", missedOn, status = TimelineEntry.Status.Missed)
 
@@ -176,7 +186,7 @@ class MissedSessionNotesTest {
         assertEquals(emptySet(), aftermathOf(miss.copy(status = TimelineEntry.Status.Completed)).keys)
         // More than a week back, its weekday no longer names it.
         val old = entry("miss", "2026-11-18", status = TimelineEntry.Status.Missed)
-        val heldForOld = entry("next", "2026-12-01").copy(aiInputsUsed = held(hold(date = "2026-11-18")))
+        val heldForOld = entry("next", nextTuesday).copy(aiInputsUsed = held(hold(date = "2026-11-18")))
         assertEquals(emptySet(), missedAftermath(listOf(old, heldForOld), today, utc).keys)
     }
 
@@ -184,9 +194,9 @@ class MissedSessionNotesTest {
     fun theMissedCardNamesEachHeldSessionByItsDay() {
         val aftermath = MissedAftermath(
             held = listOf(
-                HeldSession("a", "2026-12-01", "Lower Strength", listOf("Back Squat: 102.5 → 100 kg", "Deadlift: 140 → 137.5 kg")),
+                HeldSession("a", nextTuesday, strength, listOf(squatHeld, "Deadlift: 140 → 137.5 kg")),
                 // Named for its one exercise: it is said once.
-                HeldSession("b", "2026-11-28", "Long run", listOf("Long Run: 10 → 9 km")),
+                HeldSession("b", saturday, "Long run", listOf("Long Run: 10 → 9 km")),
             ),
             reviewed = null,
         )
@@ -206,7 +216,7 @@ class MissedSessionNotesTest {
 
     @Test
     fun aLongListOfHeldSessionsIsCutShort() {
-        val held = (1..5).map { HeldSession("s$it", "2026-12-0$it", "Lower Strength", listOf("Back Squat: 102.5 → 100 kg")) }
+        val held = (1..5).map { HeldSession("s$it", "2026-12-0$it", strength, listOf(squatHeld)) }
 
         val text = aftermathText(MissedAftermath(held, reviewed = null))
 
@@ -217,7 +227,7 @@ class MissedSessionNotesTest {
 
     @Test
     fun whatElseTheCoachWentOverIsOneSentence() {
-        val session = HeldSession("a", "2026-12-01", "Lower Strength", listOf("Back Squat: 102.5 → 100 kg"))
+        val session = HeldSession("a", nextTuesday, strength, listOf(squatHeld))
 
         assertEquals(
             "Your coach also went over 3 more upcoming sessions: 1 adjusted, 2 kept as planned.",
