@@ -97,4 +97,15 @@ describe("crypto with the v1 key retired", () => {
     const both = await loadCrypto({ ENCRYPTION_KEY: KEY_V1, ENCRYPTION_KEY_V2: KEY_V2 });
     expect(both.needsMissingKey(v1Cipher)).toBe(false);
   });
+
+  it("flags neither an empty value nor one that is not ciphertext", async () => {
+    // With v1 retired a malformed value must not read as "its key is missing":
+    // it never had one. Same answer as needsReencryption gives.
+    const retired = await loadCrypto({ ENCRYPTION_KEY_V2: KEY_V2 });
+
+    expect(retired.needsMissingKey("")).toBe(false);
+    expect(retired.needsMissingKey("not-a-ciphertext")).toBe(false);
+    expect(retired.needsMissingKey("v9:aa:bb:cc")).toBe(false);
+    expect(retired.needsReencryption("not-a-ciphertext")).toBe(false);
+  });
 });
