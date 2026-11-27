@@ -1,8 +1,9 @@
 import type { Food, ParseMealResponse } from "@shared/schema";
 import { MEAL_TYPES, type MealType } from "@shared/schema/enums";
 import { ChevronLeft, ChevronRight, CopyPlus, Loader2 } from "lucide-react";
-import { type ReactNode, useCallback, useState } from "react";
+import { type ReactNode, Suspense, useCallback, useState } from "react";
 
+import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,24 +24,30 @@ import {
 } from "@/hooks/useNutrition";
 import { queryLoadState } from "@/lib/queryLoadState";
 
-import { BarcodeScanner } from "./nutrition/BarcodeScanner";
-import { CustomFoodDialog, type CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
+import type { CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
 import { DailyTotalsHeader } from "./nutrition/DailyTotalsHeader";
-import { DescribeMealDialog } from "./nutrition/DescribeMealDialog";
 import { EnergyBalanceCard } from "./nutrition/EnergyBalanceCard";
 import { FirstRunStarter } from "./nutrition/FirstRunStarter";
 import { FoodSearch } from "./nutrition/FoodSearch";
+import {
+  BarcodeScanner,
+  CustomFoodDialog,
+  DescribeMealDialog,
+  LogFoodDialog,
+  MealTargetDialog,
+  ParsedMealReviewSheet,
+  RecipeBuilderDialog,
+  TargetsDialog,
+} from "./nutrition/lazyDialogs";
 import { LogFoodActions } from "./nutrition/LogFoodActions";
-import { type LogDialogState, LogFoodDialog } from "./nutrition/LogFoodDialog";
+import type { LogDialogState } from "./nutrition/LogFoodDialog";
 import { MealSection } from "./nutrition/MealSection";
-import { MealTargetDialog, type MealTargetDialogState } from "./nutrition/MealTargetDialog";
+import type { MealTargetDialogState } from "./nutrition/MealTargetDialog";
 import { MicronutrientPanel } from "./nutrition/MicronutrientPanel";
 import { MyFoodsSection } from "./nutrition/MyFoodsSection";
 import { NutritionInsightsPanel } from "./nutrition/NutritionInsightsPanel";
-import { ParsedMealReviewSheet } from "./nutrition/ParsedMealReviewSheet";
 import { QuickAddBar } from "./nutrition/QuickAddBar";
-import { RecipeBuilderDialog, type RecipePrefill } from "./nutrition/RecipeBuilderDialog";
-import { TargetsDialog } from "./nutrition/TargetsDialog";
+import type { RecipePrefill } from "./nutrition/RecipeBuilderDialog";
 import { useQuickLog } from "./nutrition/useQuickLog";
 import { addDays, formatDateLabel, MEAL_LABELS, todayStr } from "./nutrition/utils";
 
@@ -438,54 +445,61 @@ export default function Nutrition() {
         <NutritionInsightsPanel />
       </div>
 
-      <LogFoodDialog
-        state={dialog}
-        date={date}
-        onClose={() => setDialog(null)}
-        todayTotals={summary?.totals ?? EMPTY_TOTALS}
-        effectiveTarget={summary?.effectiveTarget ?? null}
-      />
-      <BarcodeScanner
-        open={barcodeOpen}
-        onClose={() => setBarcodeOpen(false)}
-        onResolved={(food) => openCreateDialog(food, "barcode")}
-      />
-      <CustomFoodDialog
-        state={customFood}
-        onClose={() => setCustomFood(null)}
-        // "Save & log" (label-scan flow): chain into LogFoodDialog with the
-        // just-created food, exactly like a resolved barcode.
-        onCreated={openCreateDialog}
-      />
-      <RecipeBuilderDialog
-        open={recipe.open}
-        recipeId={recipe.id}
-        prefill={recipe.prefill ?? null}
-        onClose={() => setRecipe({ open: false, id: null })}
-      />
-      <ParsedMealReviewSheet
-        result={mealReview?.result ?? null}
-        date={date}
-        entryMethod={mealReview?.entryMethod ?? "nl"}
-        onClose={() => setMealReview(null)}
-      />
-      {/* Page-level describe dialog so the first-run starter can open it. */}
-      <DescribeMealDialog
-        open={describeOpen}
-        onOpenChange={setDescribeOpen}
-        onParsed={(r) => setMealReview({ result: r, entryMethod: "nl" })}
-      />
-      <TargetsDialog
-        open={targetsOpen}
-        current={currentTarget}
-        onClose={() => setTargetsOpen(false)}
-      />
-      <MealTargetDialog
-        state={mealTargetEdit}
-        onClose={() => {
-          setMealTargetEdit(null);
-        }}
-      />
+      {/* Lazy (see ./nutrition/lazyDialogs): all eight share one chunk, fetched
+          once the page has rendered. Open state lives above, so nothing is
+          lost if a tap lands first. */}
+      <FeatureErrorBoundaryWrapper featureName="Nutrition dialogs">
+        <Suspense fallback={null}>
+          <LogFoodDialog
+            state={dialog}
+            date={date}
+            onClose={() => setDialog(null)}
+            todayTotals={summary?.totals ?? EMPTY_TOTALS}
+            effectiveTarget={summary?.effectiveTarget ?? null}
+          />
+          <BarcodeScanner
+            open={barcodeOpen}
+            onClose={() => setBarcodeOpen(false)}
+            onResolved={(food) => openCreateDialog(food, "barcode")}
+          />
+          <CustomFoodDialog
+            state={customFood}
+            onClose={() => setCustomFood(null)}
+            // "Save & log" (label-scan flow): chain into LogFoodDialog with the
+            // just-created food, exactly like a resolved barcode.
+            onCreated={openCreateDialog}
+          />
+          <RecipeBuilderDialog
+            open={recipe.open}
+            recipeId={recipe.id}
+            prefill={recipe.prefill ?? null}
+            onClose={() => setRecipe({ open: false, id: null })}
+          />
+          <ParsedMealReviewSheet
+            result={mealReview?.result ?? null}
+            date={date}
+            entryMethod={mealReview?.entryMethod ?? "nl"}
+            onClose={() => setMealReview(null)}
+          />
+          {/* Page-level describe dialog so the first-run starter can open it. */}
+          <DescribeMealDialog
+            open={describeOpen}
+            onOpenChange={setDescribeOpen}
+            onParsed={(r) => setMealReview({ result: r, entryMethod: "nl" })}
+          />
+          <TargetsDialog
+            open={targetsOpen}
+            current={currentTarget}
+            onClose={() => setTargetsOpen(false)}
+          />
+          <MealTargetDialog
+            state={mealTargetEdit}
+            onClose={() => {
+              setMealTargetEdit(null);
+            }}
+          />
+        </Suspense>
+      </FeatureErrorBoundaryWrapper>
     </PageContainer>
   );
 }
