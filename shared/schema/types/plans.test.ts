@@ -6,6 +6,8 @@ import {
   updatePlanDayRouteSchema,
   updateTrainingPlanRetirementSchema,
 } from "./plans";
+import { planDayReparseBodySchema } from "./plansRequests";
+import { MAX_WORKOUT_TEXT_LEN } from "./workouts";
 
 // CL9 (CODEBASE_ANALYSIS_2026-10-03): a past race date (a mistyped year) built
 // a template plan whose every day read as post-race recovery, and nothing can
@@ -138,5 +140,26 @@ describe("plan dates that reach a date column", () => {
   it("refuses an impossible day in a coach proposal's reschedule", () => {
     expect(reschedules("2026-02-30")).toBe(false);
     expect(reschedules("2026-03-02")).toBe(true);
+  });
+});
+
+// A plan day's free text had no ceiling while the same fields on a workout log
+// did, so one PATCH could store text only the body parser bounded, and every
+// coach prompt that listed the day carried it.
+describe("plan day text length", () => {
+  const TEXT_FIELDS = ["focus", "mainWorkout", "accessory", "notes"] as const;
+
+  it.each(TEXT_FIELDS)("caps %s at the workout text ceiling on a PATCH", (field) => {
+    const patches = (length: number) =>
+      updatePlanDayRouteSchema.safeParse({ [field]: "x".repeat(length) }).success;
+    expect(patches(MAX_WORKOUT_TEXT_LEN)).toBe(true);
+    expect(patches(MAX_WORKOUT_TEXT_LEN + 1)).toBe(false);
+  });
+
+  it.each(["mainWorkout", "accessory"] as const)("caps %s on a reparse", (field) => {
+    const reparses = (length: number) =>
+      planDayReparseBodySchema.safeParse({ [field]: "x".repeat(length) }).success;
+    expect(reparses(MAX_WORKOUT_TEXT_LEN)).toBe(true);
+    expect(reparses(MAX_WORKOUT_TEXT_LEN + 1)).toBe(false);
   });
 });

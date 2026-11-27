@@ -4,6 +4,7 @@ import { type planDayMoves, planDays, trainingPlans } from "../tables";
 import { createInsertSchema, z } from "../zod";
 import type { PlanDayRecoveryUndo } from "./recovery";
 import { calendarDateSchema, dateStringSchema } from "./requests";
+import { MAX_WORKOUT_TEXT_LEN } from "./workouts";
 // Training plan types and schemas
 export const insertTrainingPlanSchema = createInsertSchema(trainingPlans)
   .omit({
@@ -119,6 +120,14 @@ export const insertPlanDaySchema = createInsertSchema(planDays)
   })
   .extend({
     status: z.enum(["planned", "completed", "missed", "skipped"]).default("planned"),
+    // 🛡️ Sentinel: cap the day's free text, as the same fields on a workout log
+    // are (W12). The generated schema took any length, so a PATCH could store
+    // text bounded only by the body parser, and every coach prompt, reminder
+    // email and push that names the day then carried it.
+    focus: z.string().max(MAX_WORKOUT_TEXT_LEN),
+    mainWorkout: z.string().max(MAX_WORKOUT_TEXT_LEN),
+    accessory: z.string().max(MAX_WORKOUT_TEXT_LEN).nullable().optional(),
+    notes: z.string().max(MAX_WORKOUT_TEXT_LEN).nullable().optional(),
     // The generated schema took any string, so "next tuesday" or "2026-02-30"
     // reached the date column and came back as a 500 (C50,
     // CODEBASE_ANALYSIS_2026-10-03). Null unschedules the day.
