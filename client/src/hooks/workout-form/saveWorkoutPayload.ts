@@ -1,7 +1,7 @@
 import type { ParsedExercise, StructureBlockInput } from "@shared/schema";
 import { lintWorkoutStructure, type StructureLintIssue } from "@shared/schema/structureLint";
 
-import { configToStructureBlock } from "@/components/workout-structure";
+import { configToStructureBlock } from "@/components/workout-structure/configToStructureBlocks";
 import { exerciseToPayload, generateSummary } from "@/hooks/useWorkoutEditor";
 import { getMissingFieldWarnings } from "@/lib/exerciseWarnings";
 import { parseOptionalDistanceMeters, parseOptionalInt, validateManualMetrics } from "@/lib/manualMetrics";
