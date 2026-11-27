@@ -171,7 +171,7 @@ class TimelineViewModel(
             week = weekSummary(entries, plans.orEmpty(), shown.planId, summary, today),
             records = more.records,
             // From every entry, not the rows shown: a status filter hides the sessions a miss changed.
-            aftermath = missedAftermath(entries, today),
+            aftermath = missedAftermath(entries, today, prefs?.userTimezone),
             coachReviewing = more.coachReviewing,
             reviewPrompt = reviewPrompt(today, hourIn(prefs?.userTimezone))?.takeIf { it.weekStart != more.dismissedPrompt },
             // Archived plans after the live ones: still there to look back on, or restore.

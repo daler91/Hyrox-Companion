@@ -10,6 +10,7 @@ class MissedSessionNotesTest {
     /** A Wednesday. Tuesday's squats (the 24th) are the session that never happened. */
     private val today = "2026-11-25"
     private val missedOn = "2026-11-24"
+    private val utc = "UTC"
 
     private fun entry(
         id: String,
@@ -108,7 +109,7 @@ class MissedSessionNotesTest {
         // Held for another day's miss: that miss lists it.
         val other = entry("other", "2026-11-28").copy(aiInputsUsed = held(hold(date = "2026-11-21")))
 
-        val aftermath = missedAftermath(listOf(later, miss, other, next), today)
+        val aftermath = missedAftermath(listOf(later, miss, other, next), today, utc)
 
         assertEquals(setOf("miss"), aftermath.keys)
         assertEquals(
@@ -138,7 +139,7 @@ class MissedSessionNotesTest {
             coached("held", "2026-12-01", "progression", afterTheMiss).copy(aiInputsUsed = held()),
         )
 
-        val aftermath = missedAftermath(entries, today)
+        val aftermath = missedAftermath(entries, today, utc)
 
         assertEquals(CoachReview(adjusted = 1, kept = 1), aftermath["miss"]?.reviewed)
         assertEquals(listOf("held"), aftermath["miss"]?.held?.map { it.id })
@@ -147,9 +148,24 @@ class MissedSessionNotesTest {
     }
 
     @Test
+    fun aNoteIsDatedByTheAthletesOwnDayNotUtcs() {
+        val miss = entry("miss", missedOn, status = TimelineEntry.Status.Missed)
+        // 5 pm on the 24th in Los Angeles, the day of the miss, though already the 25th in UTC.
+        val thatEvening = coached("evening", "2026-11-26", "review", "2026-11-25T01:00:00.000Z")
+        // 1 am on the 25th in Los Angeles: the coach has seen the plan without the session.
+        val nextMorning = coached("morning", "2026-11-27", "review", "2026-11-25T09:00:00.000Z")
+
+        val entries = listOf(miss, thatEvening, nextMorning)
+
+        assertEquals(CoachReview(adjusted = 0, kept = 1), missedAftermath(entries, today, "America/Los_Angeles")["miss"]?.reviewed)
+        // Read in UTC, both fall on the 25th.
+        assertEquals(CoachReview(adjusted = 0, kept = 2), missedAftermath(entries, today, utc)["miss"]?.reviewed)
+    }
+
+    @Test
     fun aMissThePlanDoesNotFollowHasNoAftermath() {
         val next = entry("next", "2026-12-01").copy(aiInputsUsed = held())
-        fun aftermathOf(miss: TimelineEntry) = missedAftermath(listOf(miss, next), today)
+        fun aftermathOf(miss: TimelineEntry) = missedAftermath(listOf(miss, next), today, utc)
         val miss = entry("miss", missedOn, status = TimelineEntry.Status.Missed)
 
         assertEquals(setOf("miss"), aftermathOf(miss).keys)
@@ -161,7 +177,7 @@ class MissedSessionNotesTest {
         // More than a week back, its weekday no longer names it.
         val old = entry("miss", "2026-11-18", status = TimelineEntry.Status.Missed)
         val heldForOld = entry("next", "2026-12-01").copy(aiInputsUsed = held(hold(date = "2026-11-18")))
-        assertEquals(emptySet(), missedAftermath(listOf(old, heldForOld), today).keys)
+        assertEquals(emptySet(), missedAftermath(listOf(old, heldForOld), today, utc).keys)
     }
 
     @Test

@@ -18,6 +18,7 @@ import com.fitai.coach.core.api.generated.CoachNoteInputs
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.dates.dayDiff
 import com.fitai.coach.core.dates.isIsoCalendarDate
+import com.fitai.coach.core.dates.localDateOf
 import com.fitai.coach.core.exercises.knownExerciseLabel
 import com.fitai.coach.ui.format.formatNumber
 import com.fitai.coach.ui.format.shortDate
@@ -132,15 +133,18 @@ data class MissedAftermath(val held: List<HeldSession>, val reviewed: CoachRevie
 /**
  * The aftermath of each recent missed or skipped session that has one, by the
  * entry's id, worked out from every entry the timeline holds. A miss with
- * nothing to report is left out.
+ * nothing to report is left out. [today] is the athlete's own date and
+ * [timeZone] the zone it is told in (the `userTimezone` preference; the
+ * device's when null): the coach's notes are stamped with an instant, and
+ * which day that was depends on where the athlete is.
  */
-fun missedAftermath(entries: List<TimelineEntry>, today: String): Map<String, MissedAftermath> {
+fun missedAftermath(entries: List<TimelineEntry>, today: String, timeZone: String?): Map<String, MissedAftermath> {
     val upcoming = entries.filter { isUpcoming(it, today) }.sortedBy { it.date }
     val misses = entries.filter { isFollowedMiss(it, today) }.sortedWith(compareByDescending<TimelineEntry> { it.date }.thenBy { it.id })
     val latestId = misses.firstOrNull()?.id
     return misses.mapNotNull { miss ->
         val held = heldFor(miss, upcoming)
-        val reviewed = if (miss.id == latestId) reviewedSince(miss, upcoming, today) else null
+        val reviewed = if (miss.id == latestId) reviewedSince(miss, upcoming, today, timeZone) else null
         if (held.isEmpty() && reviewed == null) null else miss.id to MissedAftermath(held, reviewed)
     }.toMap()
 }
@@ -163,17 +167,21 @@ private fun heldFor(miss: TimelineEntry, upcoming: List<TimelineEntry>): List<He
         ?.let { hold -> HeldSession(entry.id, entry.date, entry.focus, hold.changes.map(::holdChangeText)) }
 }
 
-/** The day the coach last wrote on a session, as its timestamp's date; null with none. */
-private fun noteDay(entry: TimelineEntry): String? = entry.aiNoteUpdatedAt?.take(NOTE_DAY_LENGTH)?.takeIf { it.length == NOTE_DAY_LENGTH }
+/**
+ * The athlete's own calendar day the coach last wrote on a session; null with
+ * no note. Not the timestamp's leading date, which is the UTC day: an evening
+ * note west of UTC would count as written the day after a miss it preceded.
+ */
+private fun noteDay(entry: TimelineEntry, timeZone: String?): String? = entry.aiNoteUpdatedAt?.let { localDateOf(it, timeZone) }
 
-private fun reviewedSince(miss: TimelineEntry, upcoming: List<TimelineEntry>, today: String): CoachReview? {
+private fun reviewedSince(miss: TimelineEntry, upcoming: List<TimelineEntry>, today: String, timeZone: String?): CoachReview? {
     val reviewed = upcoming.filter { entry ->
         // The coach looks a week ahead, so that is where its reviews are.
         val inReach = dayDiff(today, entry.date)?.let { it <= REVIEW_AHEAD_DAYS } == true
         // A session held for a miss, this one or another, is listed under that miss.
         val listedAsHeld = entry.aiInputsUsed?.missedSessionHold != null
         // Written after the day of the miss: the coach has seen the plan without it.
-        val writtenSince = noteDay(entry)?.let { it > miss.date } == true
+        val writtenSince = noteDay(entry, timeZone)?.let { it > miss.date } == true
         inReach && !listedAsHeld && writtenSince
     }
     val kept = reviewed.count { it.aiSource == REVIEW_SOURCE }
@@ -184,7 +192,6 @@ private fun reviewedSince(miss: TimelineEntry, upcoming: List<TimelineEntry>, to
 /** How far back a miss still gets a say on its card: within the week, so its weekday names it. */
 private const val AFTERMATH_DAYS = 6
 private const val REVIEW_AHEAD_DAYS = 7
-private const val NOTE_DAY_LENGTH = 10
 private const val REVIEW_SOURCE = "review"
 
 /** Sources that mean the coach changed the session, not just read it and left it alone. */
