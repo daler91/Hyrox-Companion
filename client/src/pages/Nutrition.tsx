@@ -24,23 +24,28 @@ import {
 import { queryLoadState } from "@/lib/queryLoadState";
 
 import { BarcodeScanner } from "./nutrition/BarcodeScanner";
-import { CustomFoodDialog, type CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
+import type { CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
 import { DailyTotalsHeader } from "./nutrition/DailyTotalsHeader";
 import { DescribeMealDialog } from "./nutrition/DescribeMealDialog";
 import { EnergyBalanceCard } from "./nutrition/EnergyBalanceCard";
 import { FirstRunStarter } from "./nutrition/FirstRunStarter";
 import { FoodSearch } from "./nutrition/FoodSearch";
+import {
+  LazyCustomFoodDialog,
+  LazyMealTargetDialog,
+  LazyRecipeBuilderDialog,
+  LazyTargetsDialog,
+} from "./nutrition/LazyNutritionDialogs";
 import { LogFoodActions } from "./nutrition/LogFoodActions";
 import { type LogDialogState, LogFoodDialog } from "./nutrition/LogFoodDialog";
 import { MealSection } from "./nutrition/MealSection";
-import { MealTargetDialog, type MealTargetDialogState } from "./nutrition/MealTargetDialog";
+import type { MealTargetDialogState } from "./nutrition/MealTargetDialog";
 import { MicronutrientPanel } from "./nutrition/MicronutrientPanel";
 import { MyFoodsSection } from "./nutrition/MyFoodsSection";
 import { NutritionInsightsPanel } from "./nutrition/NutritionInsightsPanel";
 import { ParsedMealReviewSheet } from "./nutrition/ParsedMealReviewSheet";
 import { QuickAddBar } from "./nutrition/QuickAddBar";
-import { RecipeBuilderDialog, type RecipePrefill } from "./nutrition/RecipeBuilderDialog";
-import { TargetsDialog } from "./nutrition/TargetsDialog";
+import type { RecipePrefill } from "./nutrition/RecipeBuilderDialog";
 import { useQuickLog } from "./nutrition/useQuickLog";
 import { addDays, formatDateLabel, MEAL_LABELS, todayStr } from "./nutrition/utils";
 
@@ -450,14 +455,14 @@ export default function Nutrition() {
         onClose={() => setBarcodeOpen(false)}
         onResolved={(food) => openCreateDialog(food, "barcode")}
       />
-      <CustomFoodDialog
+      <LazyCustomFoodDialog
         state={customFood}
         onClose={() => setCustomFood(null)}
         // "Save & log" (label-scan flow): chain into LogFoodDialog with the
         // just-created food, exactly like a resolved barcode.
         onCreated={openCreateDialog}
       />
-      <RecipeBuilderDialog
+      <LazyRecipeBuilderDialog
         open={recipe.open}
         recipeId={recipe.id}
         prefill={recipe.prefill ?? null}
@@ -475,12 +480,12 @@ export default function Nutrition() {
         onOpenChange={setDescribeOpen}
         onParsed={(r) => setMealReview({ result: r, entryMethod: "nl" })}
       />
-      <TargetsDialog
+      <LazyTargetsDialog
         open={targetsOpen}
         current={currentTarget}
         onClose={() => setTargetsOpen(false)}
       />
-      <MealTargetDialog
+      <LazyMealTargetDialog
         state={mealTargetEdit}
         onClose={() => {
           setMealTargetEdit(null);
