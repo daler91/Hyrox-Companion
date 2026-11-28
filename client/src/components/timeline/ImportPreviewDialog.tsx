@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface CsvPreviewData {
   fileName: string;
@@ -71,8 +72,17 @@ export default function ImportPreviewDialog({
                       <td className="p-2">{row.weekNumber}</td>
                       <td className="p-2">{row.dayName}</td>
                       <td className="p-2">{row.focus}</td>
-                      <td className="p-2 max-w-[200px] truncate" title={row.mainWorkout}>
-                        {row.mainWorkout}
+                      <td className="p-2 max-w-[200px]">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="block truncate">{row.mainWorkout}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs">
+                              {row.mainWorkout}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </td>
                     </tr>
                   ))}
